@@ -3,7 +3,8 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertTriangle } from "lucide-react";
 import DashboardModule from "@/components/DashboardModule";
-import { MODULES, type DatabaseOption, apiFetch } from "@/config/api";
+import { MODULES } from "@/config/api";
+import { type DatabaseOption, fetchHealth } from "@/services/api";
 
 const DB_OPTIONS: { value: DatabaseOption; label: string }[] = [
   { value: "COBwebRCBAUTOS", label: "COBwebRCBAUTOS" },
@@ -17,7 +18,7 @@ export default function Index() {
 
   useEffect(() => {
     setHealthOk(true);
-    apiFetch(`/health/db/${db}`)
+    fetchHealth(db)
       .then(() => setHealthOk(true))
       .catch(() => setHealthOk(false));
   }, [db]);
