@@ -6,6 +6,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, LabelList } from "recharts";
 import { type ModuleConfig, type DatabaseOption, apiFetch } from "@/config/api";
 import { AlertTriangle } from "lucide-react";
+import {
+  type ApiEnvelope,
+  type AcordoRow,
+  type DatabaseOption,
+  fetchAcordos,
+} from "@/services/api";
 
 const BAR_COLORS = [
   "hsl(217, 71%, 53%)",
@@ -34,7 +40,7 @@ interface DashboardModuleProps {
 }
 
 export default function DashboardModule({ config, db }: DashboardModuleProps) {
-  const [data, setData] = useState<Record<string, unknown>[] | null>(null);
+  const [envelope, setEnvelope] = useState<ApiEnvelope<AcordoRow> | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [visibleCols, setVisibleCols] = useState<Set<string>>(new Set());
@@ -44,13 +50,15 @@ export default function DashboardModule({ config, db }: DashboardModuleProps) {
     setLoading(true);
     setError(null);
 
-    apiFetch<unknown>(`${config.endpoint}/${db}`)
+    fetchAcordos(db)
       .then((res) => {
         if (cancelled) return;
         const arr = Array.isArray(res) ? res : [res];
         setData(arr as Record<string, unknown>[]);
         if (arr.length > 0) {
-          setVisibleCols(new Set(Object.keys(arr[0] as object)));
+          setVisibleCols(new Set(Object.keys(arr[0])));
+        } else {
+          setVisibleCols(new Set());
         }
       })
       .catch((e) => {
@@ -60,18 +68,48 @@ export default function DashboardModule({ config, db }: DashboardModuleProps) {
         if (!cancelled) setLoading(false);
       });
 
-    return () => { cancelled = true; };
-  }, [config.endpoint, db]);
+    return () => {
+      cancelled = true;
+    };
+  }, [db]);
+
+  const rawData = envelope?.data ?? [];
+  const data = useMemo(() => {
+    if (rawData.length === 0) return [];
+    if (rawData[0].banco_origem) return rawData;
+    // Quando a consulta e por banco especifico, garante a coluna de origem na tabela.
+    const sourceName = db === "todos" ? "consolidado" : db;
+    return rawData.map((row) => ({ ...row, banco_origem: sourceName }));
+  }, [rawData, db]);
+  const groupedData = useMemo(() => {
+    const byAcordo = new Map<string, AcordoRow & { parcelas_no_acordo?: number }>();
+    for (const row of data) {
+      const key = `${row.banco_origem ?? "sem_origem"}|${row.acordo}`;
+      const existing = byAcordo.get(key);
+      if (!existing) {
+        byAcordo.set(key, { ...row, parcelas_no_acordo: 1 });
+      } else {
+        byAcordo.set(key, { ...existing, parcelas_no_acordo: (existing.parcelas_no_acordo ?? 1) + 1 });
+      }
+    }
+    return Array.from(byAcordo.values());
+  }, [data]);
+  const tableData = useMemo(() => groupedData.slice(0, MAX_TABLE_ROWS), [groupedData]);
 
   const allColumns = useMemo(() => {
-    if (!data || data.length === 0) return [];
-    return Object.keys(data[0]);
+    if (data.length === 0) return [];
+    const cols = Object.keys(data[0]);
+    // Mantem banco_origem sempre como primeira coluna.
+    if (cols.includes("banco_origem")) {
+      return ["banco_origem", ...cols.filter((c) => c !== "banco_origem")];
+    }
+    return cols;
   }, [data]);
 
   const numericColumns = useMemo(() => {
-    if (!data || data.length === 0) return [];
+    if (data.length === 0) return [];
     return allColumns.filter((col) => {
-      const val = data[0][col];
+      const val = data[0][col as keyof AcordoRow];
       return typeof val === "number";
     });
   }, [data, allColumns]);
@@ -88,7 +126,7 @@ export default function DashboardModule({ config, db }: DashboardModuleProps) {
 
     const sums: Record<string, number> = {};
     numericColumns.forEach((col) => {
-      sums[col] = data.reduce((acc, row) => acc + (Number(row[col]) || 0), 0);
+      sums[col] = data.reduce((acc, row) => acc + (Number(row[col as keyof AcordoRow]) || 0), 0);
     });
 
     return numericColumns.map((col, i) => ({
@@ -132,7 +170,7 @@ export default function DashboardModule({ config, db }: DashboardModuleProps) {
     );
   }
 
-  if (!data || data.length === 0) {
+  if (data.length === 0) {
     return (
       <Card>
         <CardHeader><CardTitle>{config.title}</CardTitle></CardHeader>
@@ -215,21 +253,30 @@ export default function DashboardModule({ config, db }: DashboardModuleProps) {
         </div>
 
         {/* Data table */}
-        <div className="overflow-auto max-h-80">
+        <div className="overflow-auto max-h-80 border rounded-md">
           <Table>
             <TableHeader>
               <TableRow>
                 {displayedCols.map((col) => (
-                  <TableHead key={col}>{col}</TableHead>
+                  <TableHead
+                    key={col}
+                    className={
+                      col === "banco_origem"
+                        ? "sticky top-0 left-0 z-30 bg-background"
+                        : "sticky top-0 z-20 bg-background"
+                    }
+                  >
+                    {col}
+                  </TableHead>
                 ))}
               </TableRow>
             </TableHeader>
             <TableBody>
-              {data.map((row, i) => (
+              {tableData.map((row, i) => (
                 <TableRow key={i}>
                   {displayedCols.map((col) => (
-                    <TableCell key={col}>
-                      {row[col] != null ? String(row[col]) : "—"}
+                    <TableCell key={col} className={col === "banco_origem" ? "sticky left-0 z-10 bg-background" : ""}>
+                      {row[col as keyof AcordoRow] != null ? String(row[col as keyof AcordoRow]) : "—"}
                     </TableCell>
                   ))}
                 </TableRow>
