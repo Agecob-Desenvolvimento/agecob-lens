@@ -3,8 +3,8 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { FunnelChart, Funnel, LabelList, Tooltip, ResponsiveContainer, Cell } from "recharts";
-import { type ModuleConfig } from "@/config/api";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, LabelList } from "recharts";
+import { type ModuleConfig, type DatabaseOption, apiFetch } from "@/config/api";
 import { AlertTriangle } from "lucide-react";
 import {
   type ApiEnvelope,
@@ -13,16 +13,25 @@ import {
   fetchAcordos,
 } from "@/services/api";
 
-const MAX_TABLE_ROWS = 150;
-const FUNNEL_COLORS = [
+const BAR_COLORS = [
+  "hsl(217, 71%, 53%)",
   "hsl(210, 60%, 50%)",
-  "hsl(180, 50%, 45%)",
-  "hsl(150, 45%, 50%)",
-  "hsl(270, 40%, 55%)",
-  "hsl(330, 50%, 50%)",
-  "hsl(40, 60%, 50%)",
-  "hsl(0, 50%, 50%)",
-  "hsl(200, 55%, 55%)",
+  "hsl(200, 55%, 48%)",
+  "hsl(190, 50%, 45%)",
+  "hsl(180, 45%, 42%)",
+  "hsl(170, 40%, 40%)",
+  "hsl(160, 38%, 38%)",
+  "hsl(150, 35%, 36%)",
+];
+
+const BAR_LABELS = [
+  "Valor",
+  "Valor Atualizado da Dívida",
+  "Valor Total do Acordo",
+  "Desconto Concedido",
+  "Valor da Parcela",
+  "Quantidade de Parcelas",
+  "Número da Parcela",
 ];
 
 interface DashboardModuleProps {
@@ -44,9 +53,8 @@ export default function DashboardModule({ config, db }: DashboardModuleProps) {
     fetchAcordos(db)
       .then((res) => {
         if (cancelled) return;
-        setEnvelope(res);
-        const arr = res.data;
-        // Default: show all columns
+        const arr = Array.isArray(res) ? res : [res];
+        setData(arr as Record<string, unknown>[]);
         if (arr.length > 0) {
           setVisibleCols(new Set(Object.keys(arr[0])));
         } else {
@@ -106,30 +114,25 @@ export default function DashboardModule({ config, db }: DashboardModuleProps) {
     });
   }, [data, allColumns]);
 
-  // Build funnel data from the first row's numeric fields (summary view)
-  // or aggregate if multiple rows
-  const funnelData = useMemo(() => {
-    if (data.length === 0 || numericColumns.length === 0) return [];
+  const chartData = useMemo(() => {
+    if (!data || data.length === 0 || numericColumns.length === 0) return [];
 
-    // If single row, use its numeric fields as funnel stages
     if (data.length === 1) {
-      return numericColumns
-        .map((col) => ({
-          name: col,
-          value: Number(data[0][col as keyof AcordoRow]) || 0,
-        }))
-        .sort((a, b) => b.value - a.value);
+      return numericColumns.map((col, i) => ({
+        name: BAR_LABELS[i] || col,
+        value: Number(data[0][col]) || 0,
+      }));
     }
 
-    // Multiple rows: sum each numeric column
     const sums: Record<string, number> = {};
     numericColumns.forEach((col) => {
       sums[col] = data.reduce((acc, row) => acc + (Number(row[col as keyof AcordoRow]) || 0), 0);
     });
 
-    return numericColumns
-      .map((col) => ({ name: col, value: sums[col] }))
-      .sort((a, b) => b.value - a.value);
+    return numericColumns.map((col, i) => ({
+      name: BAR_LABELS[i] || col,
+      value: sums[col],
+    }));
   }, [data, numericColumns]);
 
   const toggleCol = (col: string) => {
@@ -179,10 +182,7 @@ export default function DashboardModule({ config, db }: DashboardModuleProps) {
   }
 
   const displayedCols = allColumns.filter((c) => visibleCols.has(c));
-  const totalAcordos = new Set(data.map((row) => row.acordo)).size;
-  const totalValorParcelas = data.reduce((sum, row) => sum + Number(row.valor_parcela || 0), 0);
-  const paidCount = data.filter((row) => row.situacao_pagamento === "PAGO").length;
-  const openCount = data.length - paidCount;
+  const maxValue = Math.max(...chartData.map((d) => d.value), 1);
 
   return (
     <Card>
@@ -190,50 +190,28 @@ export default function DashboardModule({ config, db }: DashboardModuleProps) {
         <CardTitle>{config.title}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* Summary cards */}
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
-          <Card className="bg-muted/30">
-            <CardContent className="p-4">
-              <p className="text-xs text-muted-foreground">Total de linhas</p>
-              <p className="text-xl font-semibold">{envelope?.meta.total_rows ?? data.length}</p>
-            </CardContent>
-          </Card>
-          <Card className="bg-muted/30">
-            <CardContent className="p-4">
-              <p className="text-xs text-muted-foreground">Acordos únicos</p>
-              <p className="text-xl font-semibold">{totalAcordos}</p>
-            </CardContent>
-          </Card>
-          <Card className="bg-muted/30">
-            <CardContent className="p-4">
-              <p className="text-xs text-muted-foreground">Parcelas pagas</p>
-              <p className="text-xl font-semibold">{paidCount}</p>
-            </CardContent>
-          </Card>
-          <Card className="bg-muted/30">
-            <CardContent className="p-4">
-              <p className="text-xs text-muted-foreground">Parcelas em aberto</p>
-              <p className="text-xl font-semibold">{openCount}</p>
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="text-sm text-muted-foreground">
-          Total de valor de parcelas:{" "}
-          <span className="font-medium text-foreground">
-            {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(totalValorParcelas)}
-          </span>
-        </div>
-        <div className="text-sm text-muted-foreground">
-          Exibindo <span className="font-medium text-foreground">{Math.min(groupedData.length, MAX_TABLE_ROWS)}</span> de{" "}
-          <span className="font-medium text-foreground">{groupedData.length}</span> acordos agrupados.
-        </div>
-
-        {/* Funnel Chart */}
-        {funnelData.length > 0 && (
-          <div className="h-64">
+        {/* Horizontal Bar Chart - centered */}
+        {chartData.length > 0 && (
+          <div style={{ height: chartData.length * 50 + 40 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <FunnelChart>
+              <BarChart
+                data={chartData}
+                layout="vertical"
+                margin={{ top: 5, right: 60, left: 160, bottom: 5 }}
+              >
+                <XAxis
+                  type="number"
+                  domain={[0, maxValue]}
+                  hide
+                />
+                <YAxis
+                  type="category"
+                  dataKey="name"
+                  width={150}
+                  tick={{ fill: "hsl(210, 20%, 80%)", fontSize: 13 }}
+                  axisLine={false}
+                  tickLine={false}
+                />
                 <Tooltip
                   contentStyle={{
                     backgroundColor: "hsl(220, 18%, 13%)",
@@ -241,20 +219,22 @@ export default function DashboardModule({ config, db }: DashboardModuleProps) {
                     borderRadius: "0.5rem",
                     color: "hsl(210, 20%, 90%)",
                   }}
+                  formatter={(value: number) => value.toLocaleString("pt-BR")}
                 />
-                <Funnel dataKey="value" data={funnelData} isAnimationActive>
-                  {funnelData.map((_, i) => (
-                    <Cell key={i} fill={FUNNEL_COLORS[i % FUNNEL_COLORS.length]} />
+                <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={30}>
+                  {chartData.map((_, i) => (
+                    <Cell key={i} fill={BAR_COLORS[i % BAR_COLORS.length]} />
                   ))}
                   <LabelList
-                    position="right"
-                    fill="hsl(210, 20%, 90%)"
-                    stroke="none"
-                    dataKey="name"
+                    dataKey="value"
+                    position="insideRight"
+                    fill="hsl(0, 0%, 100%)"
                     fontSize={12}
+                    fontWeight={600}
+                    formatter={(v: number) => v.toLocaleString("pt-BR")}
                   />
-                </Funnel>
-              </FunnelChart>
+                </Bar>
+              </BarChart>
             </ResponsiveContainer>
           </div>
         )}
