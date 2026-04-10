@@ -1,26 +1,35 @@
-import { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { AppSidebar } from "@/components/AppSidebar";
-import { Undo2, Redo2, RefreshCw, List, Share2, ChevronDown, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AlertTriangle } from "lucide-react";
+import DashboardModule from "@/components/DashboardModule";
+import { MODULES } from "@/config/api";
+import { type DatabaseOption, fetchHealth } from "@/services/api";
 
-const EMPTY_MSG =
-  "Nenhum dado retornado para esta exibição. Isso pode ter acontecido porque o filtro aplicado exclui todos os dados.";
-
-function EmptyState({ short = false }: { short?: boolean }) {
-  return (
-    <p className="text-sm text-muted-foreground text-center py-8">
-      {short ? "Nenhum dado retornado para esta exibição" : EMPTY_MSG}
-    </p>
-  );
-}
+const DB_OPTIONS: { value: DatabaseOption; label: string }[] = [
+  { value: "COBwebRCBAUTOS", label: "COBwebRCBAUTOS" },
+  { value: "COBwebRCBCONSUMER", label: "COBwebRCBCONSUMER" },
+  { value: "todos", label: "Todos" },
+];
 
 export default function Index() {
   const [category, setCategory] = useState("Todas");
-  const [carteira, setCarteira] = useState("Todas");
-  const [assessoria, setAssessoria] = useState("");
+  const [carteira, setCarteira] = useState("Geral");
+  const [assessoria, setAssessoria] = useState("963:AGECOB_LP");
+
+  useEffect(() => {
+    setHealthOk(true);
+    fetchHealth(db)
+      .then(() => setHealthOk(true))
+      .catch(() => setHealthOk(false));
+  }, [db]);
+
+  const today = new Date().toLocaleDateString("pt-BR", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
 
   return (
     <SidebarProvider>
