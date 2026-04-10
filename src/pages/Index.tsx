@@ -13,8 +13,6 @@ const DB_OPTIONS: { value: DatabaseOption; label: string }[] = [
 ];
 
 export default function Index() {
-  const [db, setDb] = useState<DatabaseOption>("todos");
-  const [healthOk, setHealthOk] = useState(true);
   const [category, setCategory] = useState("Todas");
   const [carteira, setCarteira] = useState("Geral");
   const [assessoria, setAssessoria] = useState("963:AGECOB_LP");
@@ -34,53 +32,223 @@ export default function Index() {
   });
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b border-border px-6 py-4 flex items-center justify-between">
-        <h1 className="text-xl font-bold tracking-tight text-foreground">Agecob</h1>
-        <span className="text-sm text-muted-foreground capitalize">{today}</span>
-      </header>
+    <SidebarProvider>
+      <div className="min-h-screen flex w-full">
+        <AppSidebar />
 
-      <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
-        {/* Database selector */}
-        <Tabs value={db} onValueChange={(v) => setDb(v as DatabaseOption)}>
-          <TabsList>
-            {DB_OPTIONS.map((opt) => (
-              <TabsTrigger key={opt.value} value={opt.value}>
-                {opt.label}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </Tabs>
+        <div className="flex-1 flex flex-col min-w-0">
+          {/* ── Top Bar ── */}
+          <header className="border-b border-border bg-card px-4 py-3 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <SidebarTrigger />
+              <Undo2 className="h-4 w-4 text-muted-foreground cursor-pointer hover:text-foreground" />
+              <Redo2 className="h-4 w-4 text-muted-foreground cursor-pointer hover:text-foreground" />
+              <RefreshCw className="h-4 w-4 text-muted-foreground cursor-pointer hover:text-foreground" />
+              <List className="h-4 w-4 text-muted-foreground cursor-pointer hover:text-foreground" />
+            </div>
 
-        {/* Filter cards */}
-        <FilterBar
-          category={category}
-          onCategoryChange={setCategory}
-          carteira={carteira}
-          onCarteiraChange={setCarteira}
-          assessoria={assessoria}
-          onAssessoriaChange={setAssessoria}
-        />
+            <h1 className="text-sm font-semibold text-foreground tracking-tight">
+              Dashboard SpecOps Supervisor : Produtividade Escritórios
+            </h1>
 
-        {/* Health warning */}
-        {!healthOk && (
-          <Alert className="border-[hsl(var(--warning))] bg-[hsl(var(--warning)/0.1)]">
-            <AlertTriangle className="h-4 w-4 text-[hsl(var(--warning))]" />
-            <AlertDescription className="text-[hsl(var(--warning))]">
-              Atenção: não foi possível conectar ao banco de dados selecionado.
-            </AlertDescription>
-          </Alert>
-        )}
+            <div className="flex items-center gap-2">
+              <Share2 className="h-4 w-4 text-muted-foreground cursor-pointer hover:text-foreground" />
+              <ChevronDown className="h-4 w-4 text-muted-foreground cursor-pointer hover:text-foreground" />
+              <X className="h-4 w-4 text-muted-foreground cursor-pointer hover:text-foreground" />
+            </div>
+          </header>
 
-        {/* Logo */}
-        <div className="text-center py-2">
-          <span className="text-2xl font-bold tracking-widest text-foreground">AGECOB</span>
+          {/* ── Main Content ── */}
+          <div className="flex-1 bg-background p-6 space-y-6 overflow-auto">
+            {/* ── Filters Row ── */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Category */}
+              <Card>
+                <CardHeader className="pb-2 pt-3 px-4">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">Category</CardTitle>
+                </CardHeader>
+                <CardContent className="px-4 pb-3 flex gap-2">
+                  {["Todas", "Autos"].map((opt) => (
+                    <Button
+                      key={opt}
+                      size="sm"
+                      variant={category === opt ? "default" : "outline"}
+                      onClick={() => setCategory(opt)}
+                      className={
+                        category === opt
+                          ? "flex-1 bg-green-200 text-green-900 hover:bg-green-300 border-green-300"
+                          : "flex-1"
+                      }
+                    >
+                      {opt}
+                    </Button>
+                  ))}
+                </CardContent>
+              </Card>
+
+              {/* Carteira */}
+              <Card>
+                <CardHeader className="pb-2 pt-3 px-4">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">Carteira</CardTitle>
+                </CardHeader>
+                <CardContent className="px-4 pb-3 flex gap-2">
+                  {["Todas", "Others"].map((opt) => (
+                    <Button
+                      key={opt}
+                      size="sm"
+                      variant={carteira === opt ? "default" : "outline"}
+                      onClick={() => setCarteira(opt)}
+                      className={
+                        carteira === opt
+                          ? "flex-1 bg-green-200 text-green-900 hover:bg-green-300 border-green-300"
+                          : "flex-1"
+                      }
+                    >
+                      {opt}
+                    </Button>
+                  ))}
+                </CardContent>
+              </Card>
+
+              {/* Assessoria */}
+              <Card>
+                <CardHeader className="pb-2 pt-3 px-4">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">Assessoria</CardTitle>
+                </CardHeader>
+                <CardContent className="px-4 pb-3">
+                  <Select value={assessoria} onValueChange={setAssessoria}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="963:AGECOB_LP">963:AGECOB_LP</SelectItem>
+                      <SelectItem value="todos">Todos</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* ── Center Title / Logo ── */}
+            <div className="text-center py-3 space-y-1">
+              <div className="flex items-center justify-center gap-2">
+                <div className="h-8 w-8 rounded-md bg-gradient-to-br from-green-500 to-blue-500" />
+                <span className="text-xl font-bold tracking-wide text-foreground">
+                  ITAPEVA
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground">Dashboard SpecOps Supervisor</p>
+            </div>
+
+            {/* ── KPI Cards Row ── */}
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+              {[
+                { label: "Valor de Acordos Total", value: "R$0" },
+                { label: "Valor de Acordos Projetado", value: "R$0" },
+                { label: "% Meta", value: "" },
+                { label: "% Projetada", value: "" },
+                { label: "Meta de Geração", value: "R$0" },
+              ].map((kpi) => (
+                <Card key={kpi.label}>
+                  <CardHeader className="pb-1 pt-3 px-4">
+                    <CardTitle className="text-xs font-medium text-muted-foreground leading-tight">
+                      {kpi.label}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="px-4 pb-3">
+                    <span className="text-2xl font-bold text-foreground">
+                      {kpi.value || "—"}
+                    </span>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+
+            {/* ── Productivity Metrics Row ── */}
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+              {/* Produtividade */}
+              <Card className="md:col-span-3">
+                <CardHeader className="pb-2 pt-3 px-4">
+                  <CardTitle className="text-sm font-medium">Produtividade</CardTitle>
+                </CardHeader>
+                <CardContent className="px-4 pb-3 space-y-2">
+                  {[
+                    { label: "Negociadores", value: "0" },
+                    { label: "Acionamento/Neg", value: "0" },
+                    { label: "CPC/Neg", value: "0" },
+                    { label: "Acordos/Neg", value: "0,00" },
+                  ].map((row) => (
+                    <div key={row.label} className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">{row.label}</span>
+                      <span className="font-semibold text-foreground">{row.value}</span>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+
+              {/* Referência */}
+              <Card className="md:col-span-2">
+                <CardHeader className="pb-2 pt-3 px-4">
+                  <CardTitle className="text-sm font-medium truncate">Referê...</CardTitle>
+                </CardHeader>
+                <CardContent className="px-4 pb-3">
+                  <EmptyState short />
+                </CardContent>
+              </Card>
+
+              {/* Viés */}
+              <Card className="md:col-span-2">
+                <CardHeader className="pb-2 pt-3 px-4">
+                  <CardTitle className="text-sm font-medium">Viés</CardTitle>
+                </CardHeader>
+                <CardContent className="px-4 pb-3 space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">—</span>
+                    <span className="text-foreground">-</span>
+                  </div>
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">—</span>
+                      <span className="text-destructive font-semibold">-100,0% ▼</span>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+
+              {/* Dispersão da Produtividade */}
+              <Card className="md:col-span-5">
+                <CardHeader className="pb-2 pt-3 px-4">
+                  <CardTitle className="text-sm font-medium">Dispersão da Produtividade</CardTitle>
+                </CardHeader>
+                <CardContent className="px-4 pb-3">
+                  <EmptyState />
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* ── Bottom Charts Row ── */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Card>
+                <CardHeader className="pb-2 pt-3 px-4">
+                  <CardTitle className="text-sm font-medium">Negociadores Logados</CardTitle>
+                </CardHeader>
+                <CardContent className="px-4 pb-3">
+                  <EmptyState />
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="pb-2 pt-3 px-4">
+                  <CardTitle className="text-sm font-medium">Distribuição de Acordos</CardTitle>
+                </CardHeader>
+                <CardContent className="px-4 pb-3">
+                  <EmptyState />
+                </CardContent>
+              </Card>
+            </div>
+          </div>
         </div>
-
-        {/* Agent comparison dashboard */}
-        <AgentComparisonDashboard db={db} />
       </div>
-    </div>
+    </SidebarProvider>
   );
 }
