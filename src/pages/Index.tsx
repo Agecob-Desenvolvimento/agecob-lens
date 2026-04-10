@@ -15,6 +15,9 @@ const DB_OPTIONS: { value: DatabaseOption; label: string }[] = [
 export default function Index() {
   const [db, setDb] = useState<DatabaseOption>("todos");
   const [healthOk, setHealthOk] = useState(true);
+  const [category, setCategory] = useState("Todas");
+  const [carteira, setCarteira] = useState("Geral");
+  const [assessoria, setAssessoria] = useState("963:AGECOB_LP");
 
   useEffect(() => {
     setHealthOk(true);
@@ -50,6 +53,16 @@ export default function Index() {
           </TabsList>
         </Tabs>
 
+        {/* Filter cards */}
+        <FilterBar
+          category={category}
+          onCategoryChange={setCategory}
+          carteira={carteira}
+          onCarteiraChange={setCarteira}
+          assessoria={assessoria}
+          onAssessoriaChange={setAssessoria}
+        />
+
         {/* Health warning */}
         {!healthOk && (
           <Alert className="border-[hsl(var(--warning))] bg-[hsl(var(--warning)/0.1)]">
@@ -60,12 +73,13 @@ export default function Index() {
           </Alert>
         )}
 
-        {/* Module grid */}
-        <div className="grid grid-cols-1 gap-6">
-          {MODULES.map((mod) => (
-            <DashboardModule key={mod.id} config={mod} db={db} />
-          ))}
+        {/* Logo */}
+        <div className="text-center py-2">
+          <span className="text-2xl font-bold tracking-widest text-foreground">AGECOB</span>
         </div>
+
+        {/* Agent comparison dashboard */}
+        <AgentComparisonDashboard db={db} />
       </div>
     </div>
   );
