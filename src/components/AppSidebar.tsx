@@ -14,10 +14,10 @@ import {
 } from "@/components/ui/sidebar";
 
 const navItems = [
-  { title: "Produtividade Escritórios", url: "/", icon: TrendingUp },
-  { title: "Comparação Agentes", url: "/comparacao-agentes", icon: Users },
-  { title: "Detalhamento Agentes", url: "/detalhamento-agentes", icon: UserCheck },
-  { title: "Análise de Produtividade", url: "/analise-produtividade", icon: BarChart3 },
+  { title: "Produtividade Escritórios", url: "/", icon: TrendingUp, enabled: true },
+  { title: "Comparação Agentes", url: "/comparacao-agentes", icon: Users, enabled: true },
+  { title: "Detalhamento Agentes", url: "/detalhamento-agentes", icon: UserCheck, enabled: true },
+  { title: "Análise de Produtividade", url: "/analise-produtividade", icon: BarChart3, enabled: true },
 ];
 
 export function AppSidebar() {
@@ -55,17 +55,27 @@ export function AppSidebar() {
                 const active = location.pathname === item.url;
                 return (
                   <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton asChild isActive={active}>
-                      <NavLink
-                        to={item.url}
-                        end
-                        className="text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors"
-                        activeClassName="!bg-primary/10 !text-primary font-medium"
+                    {item.enabled ? (
+                      <SidebarMenuButton asChild isActive={active}>
+                        <NavLink
+                          to={item.url}
+                          end
+                          className="text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors"
+                          activeClassName="!bg-primary/10 !text-primary font-medium"
+                        >
+                          <item.icon className="h-4 w-4" />
+                          <span>{item.title}</span>
+                        </NavLink>
+                      </SidebarMenuButton>
+                    ) : (
+                      <SidebarMenuButton
+                        disabled
+                        className="cursor-not-allowed text-sidebar-foreground/35 opacity-70"
                       >
                         <item.icon className="h-4 w-4" />
                         <span>{item.title}</span>
-                      </NavLink>
-                    </SidebarMenuButton>
+                      </SidebarMenuButton>
+                    )}
                   </SidebarMenuItem>
                 );
               })}

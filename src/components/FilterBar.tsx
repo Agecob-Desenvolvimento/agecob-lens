@@ -22,6 +22,7 @@ export default function FilterBar({
       <Card>
         <CardHeader className="pb-2 pt-3 px-4">
           <CardTitle className="text-sm font-medium text-muted-foreground">Category</CardTitle>
+          <p className="text-[10px] text-amber-300">Placeholder: BusinessPending (decisão de negócio pendente)</p>
         </CardHeader>
         <CardContent className="px-4 pb-3 flex gap-2">
           {["Todas", "Autos"].map((opt) => (
@@ -42,6 +43,7 @@ export default function FilterBar({
       <Card>
         <CardHeader className="pb-2 pt-3 px-4">
           <CardTitle className="text-sm font-medium text-muted-foreground">Carteira</CardTitle>
+          <p className="text-[10px] text-amber-300">Placeholder: BusinessPending (decisão de negócio pendente)</p>
         </CardHeader>
         <CardContent className="px-4 pb-3 flex gap-2">
           {["Geral", "Others"].map((opt) => (

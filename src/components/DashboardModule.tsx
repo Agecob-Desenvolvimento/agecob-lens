@@ -4,7 +4,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, LabelList } from "recharts";
-import { type ModuleConfig, type DatabaseOption, apiFetch } from "@/config/api";
+import { type ModuleConfig } from "@/config/api";
 import { AlertTriangle } from "lucide-react";
 import {
   type ApiEnvelope,
@@ -13,6 +13,7 @@ import {
   fetchAcordos,
 } from "@/services/api";
 
+const MAX_TABLE_ROWS = 150;
 const BAR_COLORS = [
   "hsl(217, 71%, 53%)",
   "hsl(210, 60%, 50%)",
@@ -24,15 +25,20 @@ const BAR_COLORS = [
   "hsl(150, 35%, 36%)",
 ];
 
-const BAR_LABELS = [
-  "Valor",
-  "Valor Atualizado da Dívida",
-  "Valor Total do Acordo",
-  "Desconto Concedido",
-  "Valor da Parcela",
-  "Quantidade de Parcelas",
-  "Número da Parcela",
-];
+/** Apenas colunas monetárias no gráfico — somar acordo/qtd/parcela distorce a escala. */
+const CHART_MONEY_COLUMNS_ORDER = [
+  "valor_atualizado_divida",
+  "valor_total_acordo",
+  "desconto_concedido",
+  "valor_parcela",
+] as const;
+
+const CHART_MONEY_LABEL: Partial<Record<(typeof CHART_MONEY_COLUMNS_ORDER)[number], string>> = {
+  valor_atualizado_divida: "Valor atualizado da dívida",
+  valor_total_acordo: "Valor total do acordo",
+  desconto_concedido: "Desconto concedido",
+  valor_parcela: "Valor das parcelas (soma)",
+};
 
 interface DashboardModuleProps {
   config: ModuleConfig;
@@ -53,8 +59,8 @@ export default function DashboardModule({ config, db }: DashboardModuleProps) {
     fetchAcordos(db)
       .then((res) => {
         if (cancelled) return;
-        const arr = Array.isArray(res) ? res : [res];
-        setData(arr as Record<string, unknown>[]);
+        setEnvelope(res);
+        const arr = res.data;
         if (arr.length > 0) {
           setVisibleCols(new Set(Object.keys(arr[0])));
         } else {
@@ -106,34 +112,38 @@ export default function DashboardModule({ config, db }: DashboardModuleProps) {
     return cols;
   }, [data]);
 
-  const numericColumns = useMemo(() => {
-    if (data.length === 0) return [];
-    return allColumns.filter((col) => {
-      const val = data[0][col as keyof AcordoRow];
-      return typeof val === "number";
+  const chartMoneyColumns = useMemo(() => {
+    if (data.length === 0) return [] as string[];
+    return CHART_MONEY_COLUMNS_ORDER.filter((col) => {
+      if (!allColumns.includes(col)) return false;
+      return typeof data[0][col as keyof AcordoRow] === "number";
     });
   }, [data, allColumns]);
 
   const chartData = useMemo(() => {
-    if (!data || data.length === 0 || numericColumns.length === 0) return [];
+    if (!data || data.length === 0 || chartMoneyColumns.length === 0) return [];
 
     if (data.length === 1) {
-      return numericColumns.map((col, i) => ({
-        name: BAR_LABELS[i] || col,
-        value: Number(data[0][col]) || 0,
+      return chartMoneyColumns.map((col) => ({
+        name: CHART_MONEY_LABEL[col as keyof typeof CHART_MONEY_LABEL] ?? col,
+        value: Number(data[0][col as keyof AcordoRow]) || 0,
       }));
     }
 
     const sums: Record<string, number> = {};
-    numericColumns.forEach((col) => {
+    chartMoneyColumns.forEach((col) => {
       sums[col] = data.reduce((acc, row) => acc + (Number(row[col as keyof AcordoRow]) || 0), 0);
     });
 
-    return numericColumns.map((col, i) => ({
-      name: BAR_LABELS[i] || col,
+    return chartMoneyColumns.map((col) => ({
+      name: CHART_MONEY_LABEL[col as keyof typeof CHART_MONEY_LABEL] ?? col,
       value: sums[col],
     }));
-  }, [data, numericColumns]);
+  }, [data, chartMoneyColumns]);
+
+  const kpiValorTotalAcordos = useMemo(() => {
+    return groupedData.reduce((acc, row) => acc + (Number(row.valor_total_acordo) || 0), 0);
+  }, [groupedData]);
 
   const toggleCol = (col: string) => {
     setVisibleCols((prev) => {
@@ -190,14 +200,30 @@ export default function DashboardModule({ config, db }: DashboardModuleProps) {
         <CardTitle>{config.title}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* Horizontal Bar Chart - centered */}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className="rounded-lg border bg-muted/30 px-4 py-3">
+            <p className="text-xs font-medium text-muted-foreground">Registros retornados</p>
+            <p className="text-2xl font-semibold tabular-nums">{rawData.length.toLocaleString("pt-BR")}</p>
+          </div>
+          <div className="rounded-lg border bg-muted/30 px-4 py-3">
+            <p className="text-xs font-medium text-muted-foreground">Acordos únicos</p>
+            <p className="text-2xl font-semibold tabular-nums">{groupedData.length.toLocaleString("pt-BR")}</p>
+          </div>
+          <div className="rounded-lg border bg-muted/30 px-4 py-3">
+            <p className="text-xs font-medium text-muted-foreground">Valor total em acordos</p>
+            <p className="text-2xl font-semibold tabular-nums">
+              {kpiValorTotalAcordos.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+            </p>
+          </div>
+        </div>
+
         {chartData.length > 0 && (
-          <div style={{ height: chartData.length * 50 + 40 }}>
+          <div style={{ height: chartData.length * 56 + 48 }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
                 data={chartData}
                 layout="vertical"
-                margin={{ top: 5, right: 60, left: 160, bottom: 5 }}
+                margin={{ top: 8, right: 88, left: 168, bottom: 8 }}
               >
                 <XAxis
                   type="number"
@@ -219,19 +245,23 @@ export default function DashboardModule({ config, db }: DashboardModuleProps) {
                     borderRadius: "0.5rem",
                     color: "hsl(210, 20%, 90%)",
                   }}
-                  formatter={(value: number) => value.toLocaleString("pt-BR")}
+                  formatter={(value: number) =>
+                    value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
+                  }
                 />
-                <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={30}>
+                <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={32}>
                   {chartData.map((_, i) => (
                     <Cell key={i} fill={BAR_COLORS[i % BAR_COLORS.length]} />
                   ))}
                   <LabelList
                     dataKey="value"
-                    position="insideRight"
-                    fill="hsl(0, 0%, 100%)"
-                    fontSize={12}
+                    position="right"
+                    fill="hsl(210, 20%, 82%)"
+                    fontSize={11}
                     fontWeight={600}
-                    formatter={(v: number) => v.toLocaleString("pt-BR")}
+                    formatter={(v: number) =>
+                      v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })
+                    }
                   />
                 </Bar>
               </BarChart>

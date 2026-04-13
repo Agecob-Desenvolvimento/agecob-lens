@@ -1,90 +1,45 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
+import { useRefreshGuard } from "@/hooks/useRefreshGuard";
+import LazyVisibleSection from "@/components/performance/LazyVisibleSection";
+import { ROUTE_LOAD_PRIORITY } from "@/config/loadPriorities";
 import { Undo2, Redo2, RefreshCw, List, Share2, ChevronDown, X } from "lucide-react";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  Cell,
-  LabelList,
-} from "recharts";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useProdutividadeData } from "@/hooks/useProdutividadeData";
+import PlaceholderNotice from "@/components/PlaceholderNotice";
 
-/* ── Static data ── */
-const excecoesData = [
-  { name: "AGECOB_LP", valor: 21570, qtd: 2 },
-];
-
-const acordosEscData = [
-  { name: "AGECOB_LP", valor: 13427, qtd: 2 },
-];
-
-const acordosPortData = [
-  { name: "Santander Financeira XXVIII", valor: 8929, qtd: 1 },
-  { name: "Santander Financeira XXVII", valor: 4497, qtd: 1 },
-];
-
-const kpis = [
-  { label: "Qtd Exceções", value: "2" },
-  { label: "Valor Exceções", value: "R$21.570" },
-  { label: "Qtd Acordos", value: "2" },
-  { label: "Valor Acordos", value: "R$13.427" },
-  { label: "Valor Acordos (dentro ...", value: "R$1.050" },
-  { label: "Conversão", value: "2%" },
-];
-
-const fmt = (v: number) =>
-  v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 0 });
-
-/* ── Custom Tooltips ── */
-function ExcecoesTooltip({ active, payload }: any) {
-  if (!active || !payload?.[0]) return null;
-  const d = payload[0].payload;
-  return (
-    <div className="rounded-md border bg-card p-3 shadow-md text-sm space-y-1">
-      <p><span className="text-muted-foreground">Team Business Unit:</span> {d.name}</p>
-      <p><span className="text-muted-foreground">Valor Exceções:</span> {fmt(d.valor)}</p>
-      <p><span className="text-muted-foreground">Qtd Exceções:</span> {d.qtd}</p>
-    </div>
-  );
-}
-
-function AcordosEscTooltip({ active, payload }: any) {
-  if (!active || !payload?.[0]) return null;
-  const d = payload[0].payload;
-  return (
-    <div className="rounded-md border bg-card p-3 shadow-md text-sm space-y-1">
-      <p><span className="text-muted-foreground">Team Business Unit:</span> {d.name}</p>
-      <p><span className="text-muted-foreground">Valor Acordos:</span> {fmt(d.valor)}</p>
-      <p><span className="text-muted-foreground">Qtd Acordos:</span> {d.qtd}</p>
-    </div>
-  );
-}
-
-function AcordosPortTooltip({ active, payload }: any) {
-  if (!active || !payload?.[0]) return null;
-  const d = payload[0].payload;
-  return (
-    <div className="rounded-md border bg-card p-3 shadow-md text-sm space-y-1">
-      <p><span className="text-muted-foreground">Portfolioname:</span> {d.name}</p>
-      <p><span className="text-muted-foreground">Valor Acordos:</span> {fmt(d.valor)}</p>
-      <p><span className="text-muted-foreground">Qtd Acordos:</span> {d.qtd}</p>
-    </div>
-  );
-}
+const AnaliseChartsPanel = lazy(() => import("@/components/charts/AnaliseChartsPanel"));
 
 /* ── Page ── */
 export default function AnaliseProdutividade() {
   const [category, setCategory] = useState("(Todos)");
   const [carteira, setCarteira] = useState("(Todos)");
   const [teamBU, setTeamBU] = useState("(Todos)");
-  const [portfolio, setPortfolio] = useState("(Todos)");
+  const [portfolio, setPortfolio] = useState("all");
+  const { rows, refresh } = useProdutividadeData("todos");
+  const { guardedRefresh, refreshing, remainingMs } = useRefreshGuard(async () => {
+    await refresh();
+    window.dispatchEvent(new CustomEvent("dashboard:refresh", { detail: { route: "/analise-produtividade" } }));
+  });
+
+  const filteredRows = rows.filter((row) => (teamBU === "(Todos)" ? true : row.source === teamBU));
+  const totalAcordos = filteredRows.reduce((acc, row) => acc + row.qtd_acordos, 0);
+  const totalValorAcordos = filteredRows.reduce((acc, row) => acc + row.valor_acordos, 0);
+  const totalAcionamentos = filteredRows.reduce((acc, row) => acc + row.qtd_acionamentos, 0);
+  const totalContatos = filteredRows.reduce((acc, row) => acc + row.qtd_contatos, 0);
+  const conversion = totalAcionamentos ? (totalAcordos * 100) / totalAcionamentos : 0;
+  const kpis = [
+    { label: "Qtd Exceções", value: String(filteredRows.filter((row) => row.acordos_percentual < 1).length) },
+    { label: "Valor Exceções", value: filteredRows.reduce((acc, row) => acc + (row.acordos_percentual < 1 ? row.valor_acordos : 0), 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) },
+    { label: "Qtd Acordos", value: totalAcordos.toLocaleString("pt-BR") },
+    { label: "Valor Acordos", value: totalValorAcordos.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) },
+    { label: "Qtd Contatos", value: totalContatos.toLocaleString("pt-BR") },
+    { label: "Conversão", value: `${conversion.toFixed(2)}%` },
+  ];
 
   return (
     <SidebarProvider>
@@ -98,7 +53,17 @@ export default function AnaliseProdutividade() {
               <SidebarTrigger />
               <Undo2 className="h-4 w-4 text-muted-foreground cursor-pointer hover:text-foreground" />
               <Redo2 className="h-4 w-4 text-muted-foreground cursor-pointer hover:text-foreground" />
-              <RefreshCw className="h-4 w-4 text-muted-foreground cursor-pointer hover:text-foreground" />
+              <button
+                type="button"
+                onClick={guardedRefresh}
+                disabled={refreshing}
+                className="inline-flex items-center"
+                title={remainingMs > 0 ? `Aguarde ${Math.ceil(remainingMs / 1000)}s` : "Atualizar"}
+              >
+                <RefreshCw
+                  className={`h-4 w-4 ${refreshing ? "animate-spin" : ""} text-muted-foreground hover:text-foreground`}
+                />
+              </button>
               <List className="h-4 w-4 text-muted-foreground cursor-pointer hover:text-foreground" />
             </div>
             <h1 className="text-sm font-semibold text-foreground tracking-tight">
@@ -175,7 +140,9 @@ export default function AnaliseProdutividade() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="(Todos)">(Todos)</SelectItem>
-                      <SelectItem value="AGECOB_LP">AGECOB_LP</SelectItem>
+                      {Array.from(new Set(rows.map((row) => row.source))).map((source) => (
+                        <SelectItem key={source} value={source}>{source}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </CardContent>
@@ -192,15 +159,20 @@ export default function AnaliseProdutividade() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="(Todos)">(Todos)</SelectItem>
-                      <SelectItem value="param 1">param 1</SelectItem>
-                      <SelectItem value="param 2">param 2</SelectItem>
-                      <SelectItem value="param 3">param 3</SelectItem>
+                      <SelectItem value="all">Todos</SelectItem>
+                      {filteredRows.slice(0, 20).map((row) => (
+                        <SelectItem key={row.CHAVE} value={row.CHAVE}>{row.NOME}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </CardContent>
               </Card>
             </div>
+            <PlaceholderNotice
+              type="OutOfScope"
+              owner="Decisão de negócio"
+              reason="Métricas baseadas em tempo continuam fora do escopo desta entrega e seguem como placeholder."
+            />
 
             {/* ── Logo ── */}
             <div className="text-center py-3 space-y-1">
@@ -228,88 +200,16 @@ export default function AnaliseProdutividade() {
             </div>
 
             {/* ── Charts Row ── */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {/* Exceções Por Escritório */}
-              <Card>
-                <CardHeader className="pb-2 pt-3 px-4">
-                  <CardTitle className="text-sm font-medium text-center">Exceções Por Escritório</CardTitle>
-                </CardHeader>
-                <CardContent className="px-4 pb-4">
-                  <ResponsiveContainer width="100%" height={120}>
-                    <BarChart data={excecoesData} layout="vertical" margin={{ left: 20, right: 20 }}>
-                      <XAxis type="number" hide />
-                      <YAxis type="category" dataKey="name" width={90} tick={{ fontSize: 12 }} />
-                      <Tooltip content={<ExcecoesTooltip />} cursor={{ fill: "hsl(var(--muted))" }} />
-                      <Bar dataKey="valor" radius={[0, 4, 4, 0]} barSize={28}>
-                        {excecoesData.map((_, i) => (
-                          <Cell key={i} fill="#9b87f5" />
-                        ))}
-                        <LabelList
-                          dataKey="valor"
-                          position="insideRight"
-                          formatter={(v: number) => fmt(v)}
-                          style={{ fill: "#fff", fontSize: 12, fontWeight: 600 }}
-                        />
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </CardContent>
-              </Card>
-
-              {/* Acordos Por Escritório */}
-              <Card>
-                <CardHeader className="pb-2 pt-3 px-4">
-                  <CardTitle className="text-sm font-medium text-center">Acordos Por Escritório</CardTitle>
-                </CardHeader>
-                <CardContent className="px-4 pb-4">
-                  <ResponsiveContainer width="100%" height={120}>
-                    <BarChart data={acordosEscData} layout="vertical" margin={{ left: 20, right: 20 }}>
-                      <XAxis type="number" hide />
-                      <YAxis type="category" dataKey="name" width={90} tick={{ fontSize: 12 }} />
-                      <Tooltip content={<AcordosEscTooltip />} cursor={{ fill: "hsl(var(--muted))" }} />
-                      <Bar dataKey="valor" radius={[0, 4, 4, 0]} barSize={28}>
-                        {acordosEscData.map((_, i) => (
-                          <Cell key={i} fill="#2dd4a8" />
-                        ))}
-                        <LabelList
-                          dataKey="valor"
-                          position="insideRight"
-                          formatter={(v: number) => fmt(v)}
-                          style={{ fill: "#fff", fontSize: 12, fontWeight: 600 }}
-                        />
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </CardContent>
-              </Card>
-
-              {/* Acordos Por PortfolioName */}
-              <Card>
-                <CardHeader className="pb-2 pt-3 px-4">
-                  <CardTitle className="text-sm font-medium text-center">Acordos Por PortfolioName</CardTitle>
-                </CardHeader>
-                <CardContent className="px-4 pb-4">
-                  <ResponsiveContainer width="100%" height={140}>
-                    <BarChart data={acordosPortData} layout="vertical" margin={{ left: 10, right: 20 }}>
-                      <XAxis type="number" hide />
-                      <YAxis type="category" dataKey="name" width={160} tick={{ fontSize: 11 }} />
-                      <Tooltip content={<AcordosPortTooltip />} cursor={{ fill: "hsl(var(--muted))" }} />
-                      <Bar dataKey="valor" radius={[0, 4, 4, 0]} barSize={28}>
-                        {acordosPortData.map((_, i) => (
-                          <Cell key={i} fill="#7dd3fc" />
-                        ))}
-                        <LabelList
-                          dataKey="valor"
-                          position="insideRight"
-                          formatter={(v: number) => fmt(v)}
-                          style={{ fill: "#1a3c2a", fontSize: 12, fontWeight: 600 }}
-                        />
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </CardContent>
-              </Card>
-            </div>
+            <LazyVisibleSection
+              id="analise-charts"
+              scope="/analise-produtividade"
+              priority={ROUTE_LOAD_PRIORITY["/analise-produtividade"].charts}
+              fallback={<Skeleton className="h-64 w-full" />}
+            >
+              <Suspense fallback={<Skeleton className="h-64 w-full" />}>
+                <AnaliseChartsPanel rows={portfolio === "all" ? filteredRows : filteredRows.filter((row) => row.CHAVE === portfolio)} />
+              </Suspense>
+            </LazyVisibleSection>
           </div>
         </div>
       </div>

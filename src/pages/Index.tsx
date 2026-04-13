@@ -1,35 +1,53 @@
-import { useEffect, useState } from "react";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertTriangle } from "lucide-react";
-import DashboardModule from "@/components/DashboardModule";
-import { MODULES } from "@/config/api";
-import { type DatabaseOption, fetchHealth } from "@/services/api";
-
-const DB_OPTIONS: { value: DatabaseOption; label: string }[] = [
-  { value: "COBwebRCBAUTOS", label: "COBwebRCBAUTOS" },
-  { value: "COBwebRCBCONSUMER", label: "COBwebRCBCONSUMER" },
-  { value: "todos", label: "Todos" },
-];
+import { useEffect, useMemo, useState } from "react";
+import {
+  ChevronDown,
+  List,
+  Redo2,
+  RefreshCw,
+  Share2,
+  Undo2,
+  X,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { AppSidebar } from "@/components/AppSidebar";
+import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { useRefreshGuard } from "@/hooks/useRefreshGuard";
+import { useProdutividadeData } from "@/hooks/useProdutividadeData";
+import PlaceholderNotice from "@/components/PlaceholderNotice";
 
 export default function Index() {
   const [category, setCategory] = useState("Todas");
   const [carteira, setCarteira] = useState("Geral");
-  const [assessoria, setAssessoria] = useState("963:AGECOB_LP");
+  const [assessoria, setAssessoria] = useState("todos");
+  const { rows: produtividadeRows, error: loadError, refresh } = useProdutividadeData("todos");
 
-  useEffect(() => {
-    setHealthOk(true);
-    fetchHealth(db)
-      .then(() => setHealthOk(true))
-      .catch(() => setHealthOk(false));
-  }, [db]);
-
-  const today = new Date().toLocaleDateString("pt-BR", {
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
+  const { guardedRefresh, refreshing, remainingMs } = useRefreshGuard(async () => {
+    await refresh();
+    window.dispatchEvent(new CustomEvent("dashboard:refresh", { detail: { route: "/" } }));
   });
+
+  const kpis = useMemo(() => {
+    const totalValor = produtividadeRows.reduce((acc, row) => acc + row.valor_acordos, 0);
+    const totalAcordos = produtividadeRows.reduce((acc, row) => acc + row.qtd_acordos, 0);
+    const totalAcionamentos = produtividadeRows.reduce((acc, row) => acc + row.qtd_acionamentos, 0);
+    const totalContatos = produtividadeRows.reduce((acc, row) => acc + row.qtd_contatos, 0);
+    const cpc = totalAcionamentos > 0 ? (totalContatos * 100) / totalAcionamentos : 0;
+    const negociadores = produtividadeRows.length;
+    const acordosPorNeg = negociadores > 0 ? totalAcordos / negociadores : 0;
+    const acionamentosPorNeg = negociadores > 0 ? totalAcionamentos / negociadores : 0;
+    const topAgentes = [...produtividadeRows]
+      .sort((a, b) => b.valor_acordos - a.valor_acordos)
+      .slice(0, 5);
+    return { totalValor, totalAcordos, totalAcionamentos, cpc, negociadores, acordosPorNeg, acionamentosPorNeg, topAgentes };
+  }, [produtividadeRows]);
 
   return (
     <SidebarProvider>
@@ -43,7 +61,17 @@ export default function Index() {
               <SidebarTrigger />
               <Undo2 className="h-4 w-4 text-muted-foreground cursor-pointer hover:text-foreground" />
               <Redo2 className="h-4 w-4 text-muted-foreground cursor-pointer hover:text-foreground" />
-              <RefreshCw className="h-4 w-4 text-muted-foreground cursor-pointer hover:text-foreground" />
+              <button
+                type="button"
+                onClick={guardedRefresh}
+                disabled={refreshing}
+                className="inline-flex items-center"
+                title={remainingMs > 0 ? `Aguarde ${Math.ceil(remainingMs / 1000)}s` : "Atualizar"}
+              >
+                <RefreshCw
+                  className={`h-4 w-4 ${refreshing ? "animate-spin" : ""} text-muted-foreground hover:text-foreground`}
+                />
+              </button>
               <List className="h-4 w-4 text-muted-foreground cursor-pointer hover:text-foreground" />
             </div>
 
@@ -128,6 +156,11 @@ export default function Index() {
                 </CardContent>
               </Card>
             </div>
+            <PlaceholderNotice
+              type="BusinessPending"
+              owner="Decisão de negócio"
+              reason="Category e Carteira permanecem como placeholder até definição final das regras pelos gestores."
+            />
 
             {/* ── Center Title / Logo ── */}
             <div className="text-center py-3 space-y-1">
@@ -143,11 +176,11 @@ export default function Index() {
             {/* ── KPI Cards Row ── */}
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
               {[
-                { label: "Valor de Acordos Total", value: "R$0" },
-                { label: "Valor de Acordos Projetado", value: "R$0" },
-                { label: "% Meta", value: "" },
-                { label: "% Projetada", value: "" },
-                { label: "Meta de Geração", value: "R$0" },
+                { label: "Valor de Acordos Total", value: kpis.totalValor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) },
+                { label: "Qtd Acordos", value: kpis.totalAcordos.toLocaleString("pt-BR") },
+                { label: "Qtd Acionamentos", value: kpis.totalAcionamentos.toLocaleString("pt-BR") },
+                { label: "CPC %", value: `${kpis.cpc.toFixed(2)}%` },
+                { label: "Status", value: loadError ? "Erro" : "OK" },
               ].map((kpi) => (
                 <Card key={kpi.label}>
                   <CardHeader className="pb-1 pt-3 px-4">
@@ -173,10 +206,10 @@ export default function Index() {
                 </CardHeader>
                 <CardContent className="px-4 pb-3 space-y-2">
                   {[
-                    { label: "Negociadores", value: "0" },
-                    { label: "Acionamento/Neg", value: "0" },
-                    { label: "CPC/Neg", value: "0" },
-                    { label: "Acordos/Neg", value: "0,00" },
+                    { label: "Negociadores", value: kpis.negociadores.toLocaleString("pt-BR") },
+                    { label: "Acionamento/Neg", value: kpis.acionamentosPorNeg.toFixed(2) },
+                    { label: "CPC Médio", value: `${kpis.cpc.toFixed(2)}%` },
+                    { label: "Acordos/Neg", value: kpis.acordosPorNeg.toFixed(2) },
                   ].map((row) => (
                     <div key={row.label} className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">{row.label}</span>
@@ -192,7 +225,10 @@ export default function Index() {
                   <CardTitle className="text-sm font-medium truncate">Referê...</CardTitle>
                 </CardHeader>
                 <CardContent className="px-4 pb-3">
-                  <EmptyState short />
+                  <div className="text-sm space-y-1">
+                    <div className="flex justify-between"><span className="text-muted-foreground">Fonte</span><span>{produtividadeRows[0]?.source ?? "—"}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Registros</span><span>{produtividadeRows.length}</span></div>
+                  </div>
                 </CardContent>
               </Card>
 
@@ -202,16 +238,11 @@ export default function Index() {
                   <CardTitle className="text-sm font-medium">Viés</CardTitle>
                 </CardHeader>
                 <CardContent className="px-4 pb-3 space-y-2">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">—</span>
-                    <span className="text-foreground">-</span>
-                  </div>
-                  {[1, 2, 3].map((i) => (
-                    <div key={i} className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">—</span>
-                      <span className="text-destructive font-semibold">-100,0% ▼</span>
-                    </div>
-                  ))}
+                  <PlaceholderNotice
+                    type="BusinessPending"
+                    owner="Decisão de negócio"
+                    reason="A definição de viés e da lógica de pontuação está pendente de decisão dos gestores."
+                  />
                 </CardContent>
               </Card>
 
@@ -221,7 +252,11 @@ export default function Index() {
                   <CardTitle className="text-sm font-medium">Dispersão da Produtividade</CardTitle>
                 </CardHeader>
                 <CardContent className="px-4 pb-3">
-                  <EmptyState />
+                  <PlaceholderNotice
+                    type="DatasetPending"
+                    owner="Fonte de dados necessária"
+                    reason="Requer dataset dedicado para distribuição de produtividade por faixas e tempo."
+                  />
                 </CardContent>
               </Card>
             </div>
@@ -233,7 +268,14 @@ export default function Index() {
                   <CardTitle className="text-sm font-medium">Negociadores Logados</CardTitle>
                 </CardHeader>
                 <CardContent className="px-4 pb-3">
-                  <EmptyState />
+                  <div className="space-y-2">
+                    {kpis.topAgentes.slice(0, 4).map((item) => (
+                      <div key={`log-${item.CHAVE}`} className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">{item.NOME}</span>
+                        <span>{item.qtd_acionamentos}</span>
+                      </div>
+                    ))}
+                  </div>
                 </CardContent>
               </Card>
 
@@ -242,7 +284,14 @@ export default function Index() {
                   <CardTitle className="text-sm font-medium">Distribuição de Acordos</CardTitle>
                 </CardHeader>
                 <CardContent className="px-4 pb-3">
-                  <EmptyState />
+                  <div className="space-y-2">
+                    {kpis.topAgentes.slice(0, 4).map((item) => (
+                      <div key={`dist-${item.CHAVE}`} className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">{item.NOME}</span>
+                        <span>{item.qtd_acordos}</span>
+                      </div>
+                    ))}
+                  </div>
                 </CardContent>
               </Card>
             </div>

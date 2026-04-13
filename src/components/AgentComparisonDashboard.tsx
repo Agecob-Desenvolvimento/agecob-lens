@@ -7,7 +7,8 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, LabelList,
   PieChart, Pie,
 } from "recharts";
-import { type DatabaseOption, apiFetch } from "@/config/api";
+import { type DatabaseOption } from "@/services/api";
+import { useProdutividadeData } from "@/hooks/useProdutividadeData";
 import { AlertTriangle } from "lucide-react";
 
 const BAR_COLOR = "hsl(210, 60%, 50%)";
@@ -25,108 +26,84 @@ const METRIC_OPTIONS = [
   { value: "qtd_acionamentos", label: "Qtd Acionamentos" },
   { value: "qtd_acordos", label: "Qtd Acordos" },
   { value: "valor_acordos", label: "Valor Acordos" },
-  { value: "tempo_trabalhado", label: "Tempo Trabalhado" },
 ];
 
 // Vital columns for the simplified table
 const TABLE_COLUMNS = [
   { key: "agente", label: "Agente" },
-  { key: "tempo_trabalhado", label: "Tempo Trabalhado" },
   { key: "qtd_acionamentos", label: "Qtd Acionamentos" },
   { key: "qtd_contatos", label: "Qtd Contatos" },
+  { key: "cpc_percentual", label: "CPC %" },
+  { key: "qtd_acordos", label: "Qtd Acordos" },
   { key: "valor_acordos", label: "Valor Acordos" },
 ];
 
 interface AgentComparisonDashboardProps {
   db: DatabaseOption;
+  assessoria?: string;
 }
 
-export default function AgentComparisonDashboard({ db }: AgentComparisonDashboardProps) {
-  const [data, setData] = useState<Record<string, unknown>[] | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+export default function AgentComparisonDashboard({ db, assessoria = "todos" }: AgentComparisonDashboardProps) {
+  const { rows, loading, error, warnings } = useProdutividadeData(db, { assessoria });
   const [metric, setMetric] = useState("qtd_contatos");
-
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-
-    apiFetch<unknown>(`/dashboard/acordos-hoje/${db}`)
-      .then((res) => {
-        if (cancelled) return;
-        const arr = Array.isArray(res) ? res : [res];
-        setData(arr as Record<string, unknown>[]);
-      })
-      .catch((e) => {
-        if (!cancelled) setError(e.message);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => { cancelled = true; };
-  }, [db]);
 
   // Detect actual column keys from data
   const columnMap = useMemo(() => {
-    if (!data || data.length === 0) return {};
-    const keys = Object.keys(data[0]);
+    if (rows.length === 0) return {};
+    const keys = Object.keys(rows[0]);
     // Try to map known concepts to actual keys (case-insensitive partial match)
     const find = (patterns: string[]) =>
       keys.find((k) => patterns.some((p) => k.toLowerCase().includes(p))) || "";
     return {
-      agente: find(["agente", "nome", "name", "operador"]),
+      agente: find(["nome", "name", "operador"]),
       qtd_contatos: find(["contato"]),
       qtd_acionamentos: find(["acionamento"]),
       qtd_acordos: find(["acordo", "deals"]),
-      valor_acordos: find(["valor_acordo", "valor acordo", "value"]),
-      tempo_trabalhado: find(["tempo_trabalhado", "tempo trabalhado", "worked"]),
+      valor_acordos: find(["valor_acordo", "valor acordo", "value", "valor_acordos"]),
     };
-  }, [data]);
+  }, [rows]);
 
   // Top 5 agents by selected metric
   const top5Data = useMemo(() => {
-    if (!data || !columnMap[metric as keyof typeof columnMap]) return [];
+    if (!rows.length || !columnMap[metric as keyof typeof columnMap]) return [];
     const key = columnMap[metric as keyof typeof columnMap];
     if (!key) return [];
-    return [...data]
+    return [...rows]
       .sort((a, b) => (Number(b[key]) || 0) - (Number(a[key]) || 0))
       .slice(0, 5)
       .map((row) => ({
         name: String(row[columnMap.agente] || "—").split(" ").slice(0, 2).join(" "),
         value: Number(row[key]) || 0,
       }));
-  }, [data, metric, columnMap]);
+  }, [rows, metric, columnMap]);
 
-  // Donut data: Tempo Trabalhado vs Tempo em Pausa (aggregated)
+  // Donut data: contatos vs nao contatos
   const donutData = useMemo(() => {
-    if (!data || data.length === 0) return [];
-    const keys = Object.keys(data[0]);
-    const pausaKey = keys.find((k) => k.toLowerCase().includes("pausa")) || "";
-    const trabKey = columnMap.tempo_trabalhado;
-    if (!trabKey) return [];
-
-    // Sum up values (could be time strings or numbers)
-    const parseTime = (v: unknown): number => {
-      if (typeof v === "number") return v;
-      if (typeof v === "string" && v.includes(":")) {
-        const parts = v.split(":").map(Number);
-        return (parts[0] || 0) * 3600 + (parts[1] || 0) * 60 + (parts[2] || 0);
-      }
-      return Number(v) || 0;
-    };
-
-    const totalTrab = data.reduce((acc, row) => acc + parseTime(row[trabKey]), 0);
-    const totalPausa = pausaKey
-      ? data.reduce((acc, row) => acc + parseTime(row[pausaKey]), 0)
-      : 0;
+    if (!rows.length) return [];
+    const totalAcionamentos = rows.reduce((acc, row) => acc + row.qtd_acionamentos, 0);
+    const totalContatos = rows.reduce((acc, row) => acc + row.qtd_contatos, 0);
+    const noContato = Math.max(totalAcionamentos - totalContatos, 0);
 
     return [
-      { name: "Trabalhado", value: Math.round(totalTrab / 60) },
-      { name: "Pausa", value: Math.round(totalPausa / 60) },
+      { name: "Contatos", value: totalContatos },
+      { name: "Sem contato", value: noContato },
     ].filter((d) => d.value > 0);
-  }, [data, columnMap]);
+  }, [rows]);
+  const donutTotal = useMemo(
+    () => donutData.reduce((acc, item) => acc + item.value, 0),
+    [donutData],
+  );
+
+  const tableData = useMemo(() => {
+    return rows.map((row) => ({
+      agente: row.NOME,
+      qtd_acionamentos: row.qtd_acionamentos,
+      qtd_contatos: row.qtd_contatos,
+      cpc_percentual: row.cpc_percentual,
+      qtd_acordos: row.qtd_acordos,
+      valor_acordos: row.valor_acordos,
+    }));
+  }, [rows]);
 
   // Conditional formatting helper
   const getCellClass = (key: string, value: unknown): string => {
@@ -165,7 +142,7 @@ export default function AgentComparisonDashboard({ db }: AgentComparisonDashboar
     );
   }
 
-  if (!data || data.length === 0) {
+  if (!rows.length) {
     return (
       <Card>
         <CardContent className="py-6">
@@ -180,6 +157,13 @@ export default function AgentComparisonDashboard({ db }: AgentComparisonDashboar
   return (
     <div className="space-y-6">
       <h2 className="text-lg font-semibold text-center text-foreground">Comparação Agentes</h2>
+      {warnings.length > 0 && (
+        <Card className="border-yellow-400/40">
+          <CardContent className="py-3 text-xs text-yellow-200">
+            Fontes com falha parcial: {warnings.join(" | ")}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Charts row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -248,7 +232,7 @@ export default function AgentComparisonDashboard({ db }: AgentComparisonDashboar
         {/* Donut Chart */}
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Tempo Trabalhado vs. Pausa (min)</CardTitle>
+            <CardTitle className="text-sm font-medium">Contatos vs. Sem contato</CardTitle>
           </CardHeader>
           <CardContent className="flex items-center justify-center">
             {donutData.length > 0 ? (
@@ -263,7 +247,10 @@ export default function AgentComparisonDashboard({ db }: AgentComparisonDashboar
                       outerRadius={100}
                       paddingAngle={4}
                       dataKey="value"
-                      label={({ name, value }) => `${name}: ${value}min`}
+                      label={({ name, value }) => {
+                        const percent = donutTotal > 0 ? (value / donutTotal) * 100 : 0;
+                        return `${name}: ${percent.toFixed(2)}%`;
+                      }}
                     >
                       {donutData.map((_, i) => (
                         <Cell key={i} fill={DONUT_COLORS[i % DONUT_COLORS.length]} />
@@ -274,7 +261,13 @@ export default function AgentComparisonDashboard({ db }: AgentComparisonDashboar
                         backgroundColor: "hsl(220, 18%, 13%)",
                         border: "1px solid hsl(220, 15%, 20%)",
                         borderRadius: "0.5rem",
-                        color: "hsl(210, 20%, 90%)",
+                        color: "#ffffff",
+                      }}
+                      itemStyle={{ color: "#ffffff" }}
+                      labelStyle={{ color: "#ffffff" }}
+                      formatter={(value: number) => {
+                        const percent = donutTotal > 0 ? (value / donutTotal) * 100 : 0;
+                        return [`${percent.toFixed(2)}% (${value.toLocaleString("pt-BR")} minutos)`, "Participação"];
                       }}
                     />
                   </PieChart>
@@ -303,17 +296,24 @@ export default function AgentComparisonDashboard({ db }: AgentComparisonDashboar
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {data.map((row, i) => (
+                {tableData.map((row, i) => (
                   <TableRow key={i}>
                     {TABLE_COLUMNS.map((col) => {
-                      const actualKey = columnMap[col.key as keyof typeof columnMap] || "";
-                      const val = actualKey ? row[actualKey] : undefined;
+                      const val = row[col.key as keyof typeof row];
+                      const displayValue =
+                        col.key === "valor_acordos" && typeof val === "number"
+                          ? val.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
+                          : col.key === "cpc_percentual" && typeof val === "number"
+                            ? `${val.toFixed(2)}%`
+                            : val != null
+                              ? String(val)
+                              : "—";
                       return (
                         <TableCell
                           key={col.key}
                           className={getCellClass(col.key, val)}
                         >
-                          {val != null ? String(val) : "—"}
+                          {displayValue}
                         </TableCell>
                       );
                     })}

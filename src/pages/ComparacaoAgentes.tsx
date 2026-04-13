@@ -1,12 +1,13 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertTriangle } from "lucide-react";
 import FilterBar from "@/components/FilterBar";
-import AgentComparisonDashboard from "@/components/AgentComparisonDashboard";
-import { type DatabaseOption, apiFetch } from "@/config/api";
+import { type DatabaseOption } from "@/services/api";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
+import LazyVisibleSection from "@/components/performance/LazyVisibleSection";
+import { ROUTE_LOAD_PRIORITY } from "@/config/loadPriorities";
+
+const AgentComparisonDashboard = lazy(() => import("@/components/AgentComparisonDashboard"));
 
 const DB_OPTIONS: { value: DatabaseOption; label: string }[] = [
   { value: "COBwebRCBAUTOS", label: "COBwebRCBAUTOS" },
@@ -16,17 +17,9 @@ const DB_OPTIONS: { value: DatabaseOption; label: string }[] = [
 
 export default function ComparacaoAgentes() {
   const [db, setDb] = useState<DatabaseOption>("todos");
-  const [healthOk, setHealthOk] = useState(true);
   const [category, setCategory] = useState("Todas");
   const [carteira, setCarteira] = useState("Geral");
-  const [assessoria, setAssessoria] = useState("963:AGECOB_LP");
-
-  useEffect(() => {
-    setHealthOk(true);
-    apiFetch(`/health/db/${db}`)
-      .then(() => setHealthOk(true))
-      .catch(() => setHealthOk(false));
-  }, [db]);
+  const [assessoria, setAssessoria] = useState("todos");
 
   const today = new Date().toLocaleDateString("pt-BR", {
     weekday: "long",
@@ -69,20 +62,20 @@ export default function ComparacaoAgentes() {
               onAssessoriaChange={setAssessoria}
             />
 
-            {!healthOk && (
-              <Alert className="border-[hsl(var(--warning))] bg-[hsl(var(--warning)/0.1)]">
-                <AlertTriangle className="h-4 w-4 text-[hsl(var(--warning))]" />
-                <AlertDescription className="text-[hsl(var(--warning))]">
-                  Atenção: não foi possível conectar ao banco de dados selecionado.
-                </AlertDescription>
-              </Alert>
-            )}
-
             <div className="text-center py-2">
               <span className="text-2xl font-bold tracking-widest text-foreground">AGECOB</span>
             </div>
 
-            <AgentComparisonDashboard db={db} />
+            <LazyVisibleSection
+              id="comparacao-dashboard"
+              scope="/comparacao-agentes"
+              priority={ROUTE_LOAD_PRIORITY["/comparacao-agentes"].dashboard}
+              fallback={<div className="text-sm text-muted-foreground">Preparando dashboard...</div>}
+            >
+              <Suspense fallback={<div className="text-sm text-muted-foreground">Carregando comparacao...</div>}>
+                <AgentComparisonDashboard db={db} assessoria={assessoria} />
+              </Suspense>
+            </LazyVisibleSection>
           </div>
         </div>
       </div>
