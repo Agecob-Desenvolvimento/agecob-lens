@@ -289,8 +289,12 @@ export interface StatusCargaRow {
 
 export async function fetchPrimeiraParcelaDia(
   db: DatabaseOption,
+  assessoria?: string,
 ): Promise<ApiEnvelope<PrimeiraParcelaDiaRow>> {
-  return request<ApiEnvelope<PrimeiraParcelaDiaRow>>(`/dashboard/primeira-parcela-dia/${db}`);
+  const query = new URLSearchParams();
+  if (assessoria && assessoria !== "todos") query.set("assessoria", assessoria);
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<ApiEnvelope<PrimeiraParcelaDiaRow>>(`/dashboard/primeira-parcela-dia/${db}${suffix}`);
 }
 
 export async function fetchExcecoesPorPortfolio(
@@ -313,8 +317,12 @@ export async function fetchAcordosPorPortfolio(
 
 export async function fetchPrimeiraParcelaPorAgente(
   db: DatabaseOption,
+  assessoria?: string,
 ): Promise<ApiEnvelope<PrimeiraParcelaPorAgenteRow>> {
-  return request<ApiEnvelope<PrimeiraParcelaPorAgenteRow>>(`/dashboard/primeira-parcela-por-agente/${db}`);
+  const query = new URLSearchParams();
+  if (assessoria && assessoria !== "todos") query.set("assessoria", assessoria);
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<ApiEnvelope<PrimeiraParcelaPorAgenteRow>>(`/dashboard/primeira-parcela-por-agente/${db}${suffix}`);
 }
 
 export async function fetchStatusCarga(
@@ -330,9 +338,11 @@ export async function fetchStatusCarga(
 export async function fetchAcordosHojeAgente(
   db: DatabaseOption,
   agente?: string,
+  assessoria?: string,
 ): Promise<ApiEnvelope<AcordoHojeAgenteRow>> {
   const query = new URLSearchParams();
   if (agente && agente.trim() && agente.trim().toLowerCase() !== "todos") query.set("agente", agente.trim());
+  if (assessoria && assessoria !== "todos") query.set("assessoria", assessoria);
   const suffix = query.toString() ? `?${query.toString()}` : "";
   return request<ApiEnvelope<AcordoHojeAgenteRow>>(`/dashboard/acordos-hoje-agente/${db}${suffix}`);
 }

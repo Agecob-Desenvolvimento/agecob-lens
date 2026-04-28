@@ -11,7 +11,7 @@ import { ROUTE_LOAD_PRIORITY } from "@/config/loadPriorities";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useProdutividadeData } from "@/hooks/useProdutividadeData";
 import { useRefreshGuard } from "@/hooks/useRefreshGuard";
-import { type DatabaseOption, fetchPrimeiraParcelaDia } from "@/services/api";
+import { type DatabaseOption, fetchPrimeiraParcelaDia, fetchPrimeiraParcelaPorAgente } from "@/services/api";
 import { trackEvent } from "@/services/analytics";
 import ExecutiveHeader from "@/components/executive/ExecutiveHeader";
 import ExecutiveKpiStrip from "@/components/executive/ExecutiveKpiStrip";
@@ -33,6 +33,7 @@ export default function DetalhamentoAgentes() {
   const [selectedAgent, setSelectedAgent] = useState("Todos");
   const [agentFilter, setAgentFilter] = useState("");
   const [primeiraParcelaDia, setPrimeiraParcelaDia] = useState<{ total_valor: number; total_acordos: number } | null>(null);
+  const [primeiraParcelaPorAgente, setPrimeiraParcelaPorAgente] = useState<Record<string, number>>({});
 
   const selectedDatabase: DatabaseOption =
     category === "AUTOS"
@@ -58,14 +59,41 @@ export default function DetalhamentoAgentes() {
   });
 
   useEffect(() => {
+    let cancelled = false;
+    const assessoriaFilter = assessoria === "Todas" ? undefined : assessoria;
+
     setPrimeiraParcelaDia(null);
-    fetchPrimeiraParcelaDia(selectedDatabase)
-      .then((env) => {
-        const row = env.data[0];
-        if (row) setPrimeiraParcelaDia({ total_valor: Number(row.total_valor) || 0, total_acordos: Number(row.total_acordos) || 0 });
+    setPrimeiraParcelaPorAgente({});
+
+    Promise.all([
+      fetchPrimeiraParcelaDia(selectedDatabase, assessoriaFilter),
+      fetchPrimeiraParcelaPorAgente(selectedDatabase, assessoriaFilter),
+    ])
+      .then(([diaEnv, agenteEnv]) => {
+        if (cancelled) return;
+        const row = diaEnv.data[0];
+        if (row) {
+          setPrimeiraParcelaDia({
+            total_valor: Number(row.total_valor) || 0,
+            total_acordos: Number(row.total_acordos) || 0,
+          });
+        }
+        const byAgent = Object.fromEntries(
+          (agenteEnv.data ?? []).map((item) => [
+            String(item.agente || "").trim(),
+            Number(item.valor_primeira_parcela) || 0,
+          ]),
+        );
+        setPrimeiraParcelaPorAgente(byAgent);
       })
-      .catch(() => {});
-  }, [selectedDatabase]);
+      .catch(() => {
+        if (!cancelled) setPrimeiraParcelaPorAgente({});
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedDatabase, assessoria]);
 
   const agentNames = useMemo(
     () =>
@@ -87,6 +115,12 @@ export default function DetalhamentoAgentes() {
   );
 
   const totals = useMemo(() => aggregateTotals(filteredRows), [filteredRows]);
+  const primeiraParcelaSelecionada = useMemo(() => {
+    if (selectedAgent === "Todos") {
+      return primeiraParcelaDia?.total_valor ?? totals.valor_primeira_parcela;
+    }
+    return primeiraParcelaPorAgente[selectedAgent] ?? totals.valor_primeira_parcela;
+  }, [primeiraParcelaDia, primeiraParcelaPorAgente, selectedAgent, totals.valor_primeira_parcela]);
 
   const kpis: ExecutiveKpi[] = useMemo(() => {
     const cpc = calcCpc(totals);
@@ -97,12 +131,10 @@ export default function DetalhamentoAgentes() {
       { label: "Valor Acordos", value: totals.valor_acordos, unit: "BRL", priority: "primary", formula: "Σ valor_acordos" },
       {
         label: "1ª Parcela",
-        value: selectedAgent === "Todos"
-          ? (primeiraParcelaDia?.total_valor ?? totals.valor_primeira_parcela)
-          : totals.valor_primeira_parcela,
+        value: primeiraParcelaSelecionada,
         unit: "BRL",
         priority: "primary",
-        formula: selectedAgent === "Todos" ? "Σ primeira_parcela_do_dia" : "Σ valor_primeira_parcela",
+        formula: selectedAgent === "Todos" ? "Σ primeira_parcela_do_dia" : "Σ primeira_parcela_por_agente",
       },
       { label: "Qtd Acordos", value: totals.qtd_acordos, unit: "count", priority: "primary" },
       { label: "Ticket Médio", value: ticket, unit: "BRL", priority: "primary", formula: "valor_acordos / qtd_acordos" },
@@ -113,7 +145,7 @@ export default function DetalhamentoAgentes() {
       { label: "Qtd Exceções", value: totals.qtd_excecoes, unit: "count", priority: "secondary" },
       { label: "Exceções % (valor)", value: excPct, unit: "%", priority: "secondary", formula: "valor_excecoes / valor_acordos" },
     ];
-  }, [totals, selectedAgent, primeiraParcelaDia]);
+  }, [totals, selectedAgent, primeiraParcelaSelecionada]);
 
   const handleAgentChange = (agent: string) => {
     trackEvent("filter_changed", { page: "/detalhamento-agentes", filter_name: "agente", value: agent === "Todos" ? "todos" : "selecionado" });
@@ -247,7 +279,8 @@ export default function DetalhamentoAgentes() {
                     rows={rows}
                     selectedAgent={selectedAgent}
                     db={selectedDatabase}
-                    primeiraParcelaTotalDia={primeiraParcelaDia?.total_valor ?? null}
+                    assessoria={assessoria === "Todas" ? undefined : assessoria}
+                    primeiraParcelaSelecionada={primeiraParcelaSelecionada}
                   />
                 </Suspense>
               </LazyVisibleSection>
