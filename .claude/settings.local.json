@@ -1,0 +1,34 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c \"import ast; ast.parse\\(open\\('main.py', encoding='utf-8'\\).read\\(\\)\\); print\\('SYNTAX OK'\\)\")",
+      "Bash(npx tsc *)",
+      "Bash(echo \"---EXIT $?---\")",
+      "Bash(npm run *)",
+      "Bash(uvicorn main:app --host 127.0.0.1 --port 8000)",
+      "Bash(curl -s http://127.0.0.1:8000/health)",
+      "Bash(curl -s http://localhost:8000/health)",
+      "Bash(curl -s \"http://127.0.0.1:8000/dashboard/acordos-por-portfolio/todos\")",
+      "Bash(python -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(f'rows: {len\\(d[\\\\\"data\\\\\"]\\)}'\\); [print\\(r['portfolio_name'], r['valor_acordos']\\) for r in d['data'][:5]]\")",
+      "Bash(curl -s \"http://127.0.0.1:8000/dashboard/excecoes-por-portfolio/todos\")",
+      "Bash(python -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(f'rows: {len\\(d[\\\\\"data\\\\\"]\\)}'\\); [print\\(r\\) for r in d['data']]\")",
+      "Bash(curl -s \"http://127.0.0.1:8000/dashboard/produtividade-hoje/todos\")",
+      "Bash(python -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(f'rows: {len\\(d[\\\\\"data\\\\\"]\\)}'\\); [print\\(r.get\\('NOME'\\), r.get\\('qtd_acordos'\\), r.get\\('valor_acordos'\\)\\) for r in d['data'][:10]]\")",
+      "Bash(python -c \"import json,sys; raw=sys.stdin.read\\(\\); print\\(raw[:500]\\)\")",
+      "Bash(curl -s \"http://127.0.0.1:8000/dashboard/acordos-por-portfolio/COBwebRCBCONSUMER\")",
+      "Bash(python -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(f'rows={len\\(d[\\\\\"data\\\\\"]\\)}'\\); [print\\(r\\) for r in d['data']]\")",
+      "Bash(curl -s \"http://127.0.0.1:8000/dashboard/acordos-por-portfolio/COBwebRCBAUTOS\")",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); rows=[r for r in d['data'] if float\\(r.get\\('qtd_acordos',0\\)\\)>0]; print\\('agentes com acordos:',len\\(rows\\)\\); [print\\(' ',r['NOME'], r['qtd_acordos'], r['valor_acordos']\\) for r in rows]\")",
+      "Bash(tasklist /FI \"IMAGENAME eq python.exe\")",
+      "Bash(tasklist /FI \"IMAGENAME eq uvicorn.exe\")",
+      "Bash(tasklist)",
+      "Bash(netstat -ano)",
+      "Bash(wmic process *)",
+      "Bash(Stop-Process -Id 4352 -Force)",
+      "Bash(taskkill /PID 4352 /F)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(git branch *)"
+    ]
+  }
+}
