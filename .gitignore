@@ -1,0 +1,25 @@
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Logs
+logs/
+*.log
+scripts/.pids/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Node
+node_modules/
+agecob-lens/dist/
+agecob-lens/.vite/
+
+# IDE / local tooling
+.cursor/
+.vscode/
+.idea/

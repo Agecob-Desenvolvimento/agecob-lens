@@ -1,0 +1,60 @@
+Purpose & context
+Isaque works as a data scientist at Agecob, a debt collection and credit recovery company. The primary ongoing project is building internal dashboards to monitor and analyze agent performance in collections operations.
+The stack involves a FastAPI backend connected to two SQL Server databases — COBwebRCBCONSUMER and COBwebRCBAUTOS — and a React frontend originally scaffolded in Lovable. Isaque operates within the COBweb system and has data scientist-level authority over business rule definitions (e.g., CPC IDs are managed by Isaque directly). There is also a dedicated Agecob database available as a general-purpose storage layer — large datasets, reference data, and configurations should be stored there rather than hardcoded into the application or brought wholesale into the code.
+Key business rules (COBweb):
+
+Valid agreements (acordos válidos): ID_REC_STATUS IN (1, 3) → ATIVO + BAIXA POR PAGAMENTO
+Exception agreements: ID_REC_STATUS = 11 → EXCEÇÃO
+Average discount: VALOR_ACORDO / VR_SALDO * 100
+Conversion rate: Qtd Contatos / Qtd Acordos
+PARCELA starts at 0 — first installment = PARCELA = 0 (not 1); all queries filtering first installments must use this
+Same agent appearing in both CONSUMER and AUTOS databases is treated as two separate agents
+Portfolio display names come from CART_MASTER.APELIDO (e.g., BVFinanceira, Santander, Panamericano, Yamaha)
+
+Key REC_MASTER columns: DT_EMISSAO, DT_VENCIMENTO, DT_PAGAMENTO, PARCELA, PLANO, VALOR (sum of agreements), VR_PAGO (confirms payment)
+
+Current state
+Isaque is actively implementing Dashboard v2, a set of planned changes to the existing agent performance dashboard. The changes have been scoped and validated against the live database schema. A Claude Code implementation prompt and a follow-up consistency check prompt were produced to drive the agent implementation.
+Dashboard v2 planned changes:
+
+Remove the "Qtd Contatos" column from the productivity table
+Fix conversion rate formula to Qtd Contatos / Qtd Acordos
+Add a summary card: sum of first installments of the day (PARCELA = 0)
+Add 6 new charts via 4 new API endpoints:
+
+Exceções por portfolio (carteira)
+Exceções por agente
+Acordos aprovados por agente
+Acordos aprovados por portfolio
+Valor da primeira parcela
+Acordos de primeira parcela
+
+
+
+Implementation is being driven via Claude Code agents using English-language prompts (agents perform better in English).
+
+Key learnings & principles
+
+Validate schema before writing code — business assumptions (e.g., PARCELA starting at 0, correct column names like APELIDO vs DESCR) must be confirmed with live queries before any implementation begins
+Scope prompts with explicit "do not touch" guardrails — each change instruction must name the exact file or component to modify, and guard against agents altering working functionality
+Two-prompt strategy works well: a comprehensive implementation prompt followed by a shorter consistency-check audit prompt covering specific rules without adding features or refactoring
+Search precision matters for long-context retrieval — specific technical terms (e.g., query structure, column names, endpoint names) retrieve more relevant context than broad searches
+Use the Agecob database for persistence — large datasets, reference tables, and configuration data (e.g., CPC IDs, business rule mappings) should be stored in and retrieved from the Agecob database rather than hardcoded into the application or duplicated in the codebase
+
+
+Approach & patterns
+
+Validates business logic against the actual database before drafting any code or prompts
+Produces structured, scoped prompts for Claude Code agents with explicit boundaries per change
+Separates implementation from verification (two-stage prompting)
+Manages CPC IDs and core business rule definitions directly as data scientist; these can be persisted in the Agecob database rather than hardcoded when appropriate
+Leverages the Agecob database as a storage layer to avoid embedding large or frequently updated data directly in the code
+
+
+Tools & resources
+
+Backend: FastAPI + SQL Server (two operational DBs: COBwebRCBCONSUMER, COBwebRCBAUTOS)
+Agecob database: General-purpose storage layer for reference data, configurations, and large datasets — preferred over hardcoding or embedding data in the code
+Frontend: React (originated in Lovable)
+Agentic coding: Claude Code (prompted in English)
+Data system: COBweb

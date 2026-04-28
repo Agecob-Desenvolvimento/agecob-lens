@@ -1,0 +1,153 @@
+import type { ProdutividadeRowWithSource } from "@/hooks/useProdutividadeData";
+import type { MetricUnit } from "@/types/executive";
+
+/**
+ * Single source of truth for executive metric formulas.
+ * Definitions match docs/redesign_executivo_dashboard_v2.md.
+ */
+
+export interface MetricTotals {
+  qtd_acionamentos: number;
+  qtd_contatos: number;
+  qtd_acordos: number;
+  qtd_excecoes: number;
+  valor_acordos: number;
+  valor_primeira_parcela: number;
+  valor_excecoes: number;
+  agentes: number;
+}
+
+export function aggregateTotals(rows: ProdutividadeRowWithSource[]): MetricTotals {
+  return rows.reduce<MetricTotals>(
+    (acc, row) => {
+      acc.qtd_acionamentos += Number(row.qtd_acionamentos || 0);
+      acc.qtd_contatos += Number(row.qtd_contatos || 0);
+      acc.qtd_acordos += Number(row.qtd_acordos || 0);
+      acc.qtd_excecoes += Number(row.qtd_excecoes || 0);
+      acc.valor_acordos += Number(row.valor_acordos || 0);
+      acc.valor_primeira_parcela += Number(row.valor_primeira_parcela || 0);
+      acc.valor_excecoes += Number(row.valor_excecoes || 0);
+      return acc;
+    },
+    {
+      qtd_acionamentos: 0,
+      qtd_contatos: 0,
+      qtd_acordos: 0,
+      qtd_excecoes: 0,
+      valor_acordos: 0,
+      valor_primeira_parcela: 0,
+      valor_excecoes: 0,
+      agentes: rows.length,
+    },
+  );
+}
+
+/** CPC = qtd_contatos / qtd_acionamentos */
+export function calcCpc(t: Pick<MetricTotals, "qtd_contatos" | "qtd_acionamentos">): number {
+  if (t.qtd_acionamentos <= 0) return 0;
+  return (t.qtd_contatos * 100) / t.qtd_acionamentos;
+}
+
+/** Conversão = qtd_acordos / qtd_acionamentos */
+export function calcConversao(t: Pick<MetricTotals, "qtd_acordos" | "qtd_acionamentos">): number {
+  if (t.qtd_acionamentos <= 0) return 0;
+  return (t.qtd_acordos * 100) / t.qtd_acionamentos;
+}
+
+/** Ticket médio = valor_acordos / qtd_acordos */
+export function calcTicketMedio(t: Pick<MetricTotals, "valor_acordos" | "qtd_acordos">): number {
+  if (t.qtd_acordos <= 0) return 0;
+  return t.valor_acordos / t.qtd_acordos;
+}
+
+/** Exceções (% sobre valor) = valor_excecoes / valor_acordos * 100 */
+export function calcExcecoesPctValor(t: Pick<MetricTotals, "valor_excecoes" | "valor_acordos">): number {
+  if (t.valor_acordos <= 0) return 0;
+  return (t.valor_excecoes * 100) / t.valor_acordos;
+}
+
+/** Taxa de exceções (sobre quantidade) = qtd_excecoes / qtd_acordos * 100 */
+export function calcExcecoesPctQtd(t: Pick<MetricTotals, "qtd_excecoes" | "qtd_acordos">): number {
+  if (t.qtd_acordos <= 0) return 0;
+  return (t.qtd_excecoes * 100) / t.qtd_acordos;
+}
+
+/** Concentração: Top N pelo valor / total */
+export function calcConcentracao(rows: ProdutividadeRowWithSource[], topN = 3): number {
+  const total = rows.reduce((acc, r) => acc + Number(r.valor_acordos || 0), 0);
+  if (total <= 0) return 0;
+  const top = [...rows]
+    .sort((a, b) => Number(b.valor_acordos || 0) - Number(a.valor_acordos || 0))
+    .slice(0, topN)
+    .reduce((acc, r) => acc + Number(r.valor_acordos || 0), 0);
+  return (top * 100) / total;
+}
+
+/** Produtividade média por agente (BRL/agente) */
+export function calcProdutividadeMediaAgente(rows: ProdutividadeRowWithSource[]): number {
+  const ativos = rows.filter((r) => Number(r.qtd_acordos || 0) > 0).length;
+  if (ativos <= 0) return 0;
+  const total = rows.reduce((acc, r) => acc + Number(r.valor_acordos || 0), 0);
+  return total / ativos;
+}
+
+/**
+ * Operational Health Score: weighted normalized score 0–100.
+ * Weights:
+ *   - cpc            (target 35%)  weight 25%
+ *   - conversao      (target 8%)   weight 30%
+ *   - ticket         (target 1500) weight 20%
+ *   - exception_rate (target <=5%) weight 25% (inverted)
+ */
+export function calcHealthScore(t: MetricTotals): number {
+  const cpc = calcCpc(t);
+  const conv = calcConversao(t);
+  const ticket = calcTicketMedio(t);
+  const excPct = calcExcecoesPctQtd(t);
+  const norm = (v: number, target: number) => Math.min(1, Math.max(0, v / target));
+  const cpcN = norm(cpc, 35);
+  const convN = norm(conv, 8);
+  const ticketN = norm(ticket, 1500);
+  const excN = 1 - Math.min(1, Math.max(0, excPct / 25));
+  const score = cpcN * 25 + convN * 30 + ticketN * 20 + excN * 25;
+  return Math.round(score);
+}
+
+export function fmtBRL(v: number, options?: { compact?: boolean }): string {
+  const opts: Intl.NumberFormatOptions = {
+    style: "currency",
+    currency: "BRL",
+    maximumFractionDigits: options?.compact ? 1 : 2,
+  };
+  if (options?.compact) {
+    return v.toLocaleString("pt-BR", { ...opts, notation: "compact" });
+  }
+  return v.toLocaleString("pt-BR", opts);
+}
+
+export function fmtNum(v: number): string {
+  return v.toLocaleString("pt-BR");
+}
+
+export function fmtPct(v: number, fractionDigits = 1): string {
+  return `${v.toLocaleString("pt-BR", { minimumFractionDigits: fractionDigits, maximumFractionDigits: fractionDigits })}%`;
+}
+
+export function fmtByUnit(v: number, unit: MetricUnit): string {
+  if (unit === "BRL") return fmtBRL(v);
+  if (unit === "%") return fmtPct(v);
+  return fmtNum(v);
+}
+
+export function shortAgentName(fullName: string): string {
+  const cleaned = (fullName || "").trim();
+  if (!cleaned) return "";
+  const parts = cleaned.split(/\s+/).filter(Boolean);
+  const firstName = parts[0];
+  const lastName = parts.length > 1 ? parts[parts.length - 1] : "";
+  return lastName ? `${firstName} ${lastName.charAt(0).toUpperCase()}.` : firstName;
+}
+
+export function buFromSource(source: string): "AUTOS" | "CONSUMER" {
+  return source.toUpperCase().includes("AUTO") ? "AUTOS" : "CONSUMER";
+}
