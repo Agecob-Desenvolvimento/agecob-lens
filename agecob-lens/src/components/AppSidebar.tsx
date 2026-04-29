@@ -41,11 +41,13 @@ export function AppSidebar() {
           {/* Dashboard context */}
           <div className="px-4 pb-3">
             <div className="flex items-center gap-3 min-w-0">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary/10">
-                <BarChart3 className="h-5 w-5 text-primary" />
-              </div>
-              <span className="text-base font-bold text-sidebar-foreground truncate min-w-0" title="Dashboard SpecOps Supervisor">
-                Dashboard SpecOps Supervisor
+              <img
+                src="/logo-empresa.png"
+                alt="AgDash"
+                className="h-9 w-9 shrink-0 rounded-md object-contain"
+              />
+              <span className="text-base font-bold text-sidebar-foreground truncate min-w-0" title="AgDash">
+                AgDash
               </span>
             </div>
           </div>

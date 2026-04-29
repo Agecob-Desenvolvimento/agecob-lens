@@ -2150,216 +2150,142 @@ _EF_AGENT_FILTER = (
 _EF_DB_A = "COBwebRCBAUTOS"
 _EF_DB_C = "COBwebRCBCONSUMER"
 _EF_STATUS = STATUS_APROVADOS_SQL  # (1, 3, 12)
+_EF_DB_VARIANTS = ["todos", _EF_DB_A, _EF_DB_C]
 
-QUERY_EF_DIARIA_PRIMEIRA = f"""
-SELECT
-    CAST(DT_EMISSAO AS DATE) AS Dia_Emissao,
-    COUNT(*) AS Boletos_Gerados,
-    SUM({_EF_PAID}) AS Pagos_No_Prazo,
-    {_EF_CONV} AS Conversao_Prazo_5d
-FROM (
-    SELECT DT_EMISSAO, VR_PAGO, DT_PAGAMENTO, DT_VENCIMENTO
-    FROM {_EF_DB_A}.dbo.REC_MASTER (NOLOCK)
-    WHERE PARCELA = 0 AND ID_REC_STATUS IN {_EF_STATUS} AND YEAR(DT_EMISSAO) >= 2026
-    UNION ALL
-    SELECT DT_EMISSAO, VR_PAGO, DT_PAGAMENTO, DT_VENCIMENTO
-    FROM {_EF_DB_C}.dbo.REC_MASTER (NOLOCK)
-    WHERE PARCELA = 0 AND ID_REC_STATUS IN {_EF_STATUS} AND YEAR(DT_EMISSAO) >= 2026
-) AS T
-GROUP BY CAST(DT_EMISSAO AS DATE)
-ORDER BY Dia_Emissao
+
+def _ef_inner_simple(db: str, parcela_cond: str, date_col: str, extra_cols: str = "") -> str:
+    """Builds the inner SELECT(s) for simple (non-agent) efetividade queries."""
+    sel = f"SELECT {date_col}, VR_PAGO, DT_PAGAMENTO"
+    if "DT_VENCIMENTO" not in date_col and "DT_VENCIMENTO" not in extra_cols:
+        sel += ", DT_VENCIMENTO"
+    sel += extra_cols
+    where = f"WHERE PARCELA {parcela_cond} AND ID_REC_STATUS IN {_EF_STATUS} AND YEAR({date_col.split(' AS ')[0].strip().replace('CAST(', '').replace(' AS DATE)', '')}) >= 2026"
+    if db == "todos":
+        return (
+            f"{sel} FROM {_EF_DB_A}.dbo.REC_MASTER (NOLOCK) {where}\n"
+            f"    UNION ALL\n"
+            f"    {sel} FROM {_EF_DB_C}.dbo.REC_MASTER (NOLOCK) {where}"
+        )
+    return f"{sel} FROM {db}.dbo.REC_MASTER (NOLOCK) {where}"
+
+
+def _ef_inner_agent(db: str, parcela_cond: str, date_col: str) -> str:
+    """Builds the inner SELECT(s) for agent efetividade queries."""
+    def _one(database: str) -> str:
+        return (
+            f"SELECT R.{date_col}, R.VR_PAGO, R.DT_PAGAMENTO, R.DT_VENCIMENTO,\n"
+            f"           U.CHAVE AS Agente, YEAR(R.{date_col}) AS Ano, MONTH(R.{date_col}) AS Mes\n"
+            f"    FROM {database}.dbo.REC_MASTER (NOLOCK) R\n"
+            f"    INNER JOIN {database}.dbo.USU_MASTER (NOLOCK) U ON R.ID_USUARIO = U.ID_USUARIO\n"
+            f"    WHERE R.PARCELA {parcela_cond} AND R.ID_REC_STATUS IN {_EF_STATUS} AND YEAR(R.{date_col}) >= 2026\n"
+            f"      {_EF_AGENT_FILTER}"
+        )
+    if db == "todos":
+        return f"{_one(_EF_DB_A)}\n    UNION ALL\n    {_one(_EF_DB_C)}"
+    return _one(db)
+
+
+def _build_ef_diaria_primeira(db: str) -> str:
+    inner = _ef_inner_simple(db, "= 0", "DT_EMISSAO", ", DT_VENCIMENTO")
+    return f"""
+SELECT CAST(DT_EMISSAO AS DATE) AS Dia_Emissao, COUNT(*) AS Boletos_Gerados,
+    SUM({_EF_PAID}) AS Pagos_No_Prazo, {_EF_CONV} AS Conversao_Prazo_5d
+FROM ({inner}) AS T
+GROUP BY CAST(DT_EMISSAO AS DATE) ORDER BY Dia_Emissao
 """
 
-QUERY_EF_MENSAL_PRIMEIRA = f"""
-SELECT
-    YEAR(DT_EMISSAO) AS Ano,
-    MONTH(DT_EMISSAO) AS Mes,
-    COUNT(*) AS Boletos_Gerados,
-    SUM({_EF_PAID}) AS Pagos_No_Prazo,
-    {_EF_CONV} AS Conversao_Prazo_5d
-FROM (
-    SELECT DT_EMISSAO, VR_PAGO, DT_PAGAMENTO, DT_VENCIMENTO
-    FROM {_EF_DB_A}.dbo.REC_MASTER (NOLOCK)
-    WHERE PARCELA = 0 AND ID_REC_STATUS IN {_EF_STATUS} AND YEAR(DT_EMISSAO) >= 2026
-    UNION ALL
-    SELECT DT_EMISSAO, VR_PAGO, DT_PAGAMENTO, DT_VENCIMENTO
-    FROM {_EF_DB_C}.dbo.REC_MASTER (NOLOCK)
-    WHERE PARCELA = 0 AND ID_REC_STATUS IN {_EF_STATUS} AND YEAR(DT_EMISSAO) >= 2026
-) AS T
-GROUP BY YEAR(DT_EMISSAO), MONTH(DT_EMISSAO)
-ORDER BY Ano, Mes
+
+def _build_ef_mensal_primeira(db: str) -> str:
+    inner = _ef_inner_simple(db, "= 0", "DT_EMISSAO", ", DT_VENCIMENTO")
+    return f"""
+SELECT YEAR(DT_EMISSAO) AS Ano, MONTH(DT_EMISSAO) AS Mes, COUNT(*) AS Boletos_Gerados,
+    SUM({_EF_PAID}) AS Pagos_No_Prazo, {_EF_CONV} AS Conversao_Prazo_5d
+FROM ({inner}) AS T
+GROUP BY YEAR(DT_EMISSAO), MONTH(DT_EMISSAO) ORDER BY Ano, Mes
 """
 
-QUERY_EF_DIARIA_COLCHAO = f"""
-SELECT
-    CAST(DT_EMISSAO AS DATE) AS Dia_Emissao,
-    COUNT(*) AS Boletos_Gerados_Colchao,
-    SUM({_EF_PAID}) AS Pagos_No_Prazo,
-    {_EF_CONV} AS Conversao_Colchao
-FROM (
-    SELECT DT_EMISSAO, VR_PAGO, DT_PAGAMENTO, DT_VENCIMENTO
-    FROM {_EF_DB_A}.dbo.REC_MASTER (NOLOCK)
-    WHERE PARCELA > 0 AND ID_REC_STATUS IN {_EF_STATUS} AND YEAR(DT_EMISSAO) >= 2026
-    UNION ALL
-    SELECT DT_EMISSAO, VR_PAGO, DT_PAGAMENTO, DT_VENCIMENTO
-    FROM {_EF_DB_C}.dbo.REC_MASTER (NOLOCK)
-    WHERE PARCELA > 0 AND ID_REC_STATUS IN {_EF_STATUS} AND YEAR(DT_EMISSAO) >= 2026
-) AS T
-GROUP BY CAST(DT_EMISSAO AS DATE)
-ORDER BY Dia_Emissao
+
+def _build_ef_diaria_colchao(db: str) -> str:
+    inner = _ef_inner_simple(db, "> 0", "DT_EMISSAO", ", DT_VENCIMENTO")
+    return f"""
+SELECT CAST(DT_EMISSAO AS DATE) AS Dia_Emissao, COUNT(*) AS Boletos_Gerados_Colchao,
+    SUM({_EF_PAID}) AS Pagos_No_Prazo, {_EF_CONV} AS Conversao_Colchao
+FROM ({inner}) AS T
+GROUP BY CAST(DT_EMISSAO AS DATE) ORDER BY Dia_Emissao
 """
 
-QUERY_EF_MENSAL_COLCHAO = f"""
-SELECT
-    YEAR(DT_EMISSAO) AS Ano,
-    MONTH(DT_EMISSAO) AS Mes,
-    COUNT(*) AS Boletos_Gerados_Colchao,
-    SUM({_EF_PAID}) AS Pagos_No_Prazo,
-    {_EF_CONV} AS Conversao_Colchao
-FROM (
-    SELECT DT_EMISSAO, VR_PAGO, DT_PAGAMENTO, DT_VENCIMENTO
-    FROM {_EF_DB_A}.dbo.REC_MASTER (NOLOCK)
-    WHERE PARCELA > 0 AND ID_REC_STATUS IN {_EF_STATUS} AND YEAR(DT_EMISSAO) >= 2026
-    UNION ALL
-    SELECT DT_EMISSAO, VR_PAGO, DT_PAGAMENTO, DT_VENCIMENTO
-    FROM {_EF_DB_C}.dbo.REC_MASTER (NOLOCK)
-    WHERE PARCELA > 0 AND ID_REC_STATUS IN {_EF_STATUS} AND YEAR(DT_EMISSAO) >= 2026
-) AS T
-GROUP BY YEAR(DT_EMISSAO), MONTH(DT_EMISSAO)
-ORDER BY Ano, Mes
+
+def _build_ef_mensal_colchao(db: str) -> str:
+    inner = _ef_inner_simple(db, "> 0", "DT_EMISSAO", ", DT_VENCIMENTO")
+    return f"""
+SELECT YEAR(DT_EMISSAO) AS Ano, MONTH(DT_EMISSAO) AS Mes, COUNT(*) AS Boletos_Gerados_Colchao,
+    SUM({_EF_PAID}) AS Pagos_No_Prazo, {_EF_CONV} AS Conversao_Colchao
+FROM ({inner}) AS T
+GROUP BY YEAR(DT_EMISSAO), MONTH(DT_EMISSAO) ORDER BY Ano, Mes
 """
 
-QUERY_EF_MENSAL_AGENTE_PRIMEIRA = f"""
-SELECT
-    Agente,
-    Ano,
-    Mes,
-    COUNT(*) AS Boletos_Gerados,
-    SUM({_EF_PAID}) AS Pagos_No_Prazo,
-    {_EF_CONV} AS Conversao_Prazo_5d
-FROM (
-    SELECT R.DT_EMISSAO, R.VR_PAGO, R.DT_PAGAMENTO, R.DT_VENCIMENTO,
-           U.CHAVE AS Agente, YEAR(R.DT_EMISSAO) AS Ano, MONTH(R.DT_EMISSAO) AS Mes
-    FROM {_EF_DB_A}.dbo.REC_MASTER (NOLOCK) R
-    INNER JOIN {_EF_DB_A}.dbo.USU_MASTER (NOLOCK) U ON R.ID_USUARIO = U.ID_USUARIO
-    WHERE R.PARCELA = 0 AND R.ID_REC_STATUS IN {_EF_STATUS} AND YEAR(R.DT_EMISSAO) >= 2026
-      {_EF_AGENT_FILTER}
-    UNION ALL
-    SELECT R.DT_EMISSAO, R.VR_PAGO, R.DT_PAGAMENTO, R.DT_VENCIMENTO,
-           U.CHAVE AS Agente, YEAR(R.DT_EMISSAO) AS Ano, MONTH(R.DT_EMISSAO) AS Mes
-    FROM {_EF_DB_C}.dbo.REC_MASTER (NOLOCK) R
-    INNER JOIN {_EF_DB_C}.dbo.USU_MASTER (NOLOCK) U ON R.ID_USUARIO = U.ID_USUARIO
-    WHERE R.PARCELA = 0 AND R.ID_REC_STATUS IN {_EF_STATUS} AND YEAR(R.DT_EMISSAO) >= 2026
-      {_EF_AGENT_FILTER}
-) AS T
-GROUP BY Agente, Ano, Mes
+
+def _build_ef_diaria_colchao_vencimento(db: str) -> str:
+    inner = _ef_inner_simple(db, "> 0", "DT_VENCIMENTO", "")
+    return f"""
+SELECT CAST(DT_VENCIMENTO AS DATE) AS Dia_Vencimento, COUNT(*) AS Boletos_Gerados_Colchao,
+    SUM({_EF_PAID}) AS Pagos_No_Prazo, {_EF_CONV} AS Conversao_Colchao
+FROM ({inner}) AS T
+GROUP BY CAST(DT_VENCIMENTO AS DATE) ORDER BY Dia_Vencimento
+"""
+
+
+def _build_ef_mensal_colchao_vencimento(db: str) -> str:
+    inner = _ef_inner_simple(db, "> 0", "DT_VENCIMENTO", "")
+    return f"""
+SELECT YEAR(DT_VENCIMENTO) AS Ano, MONTH(DT_VENCIMENTO) AS Mes, COUNT(*) AS Boletos_Gerados_Colchao,
+    SUM({_EF_PAID}) AS Pagos_No_Prazo, {_EF_CONV} AS Conversao_Colchao
+FROM ({inner}) AS T
+GROUP BY YEAR(DT_VENCIMENTO), MONTH(DT_VENCIMENTO) ORDER BY Ano, Mes
+"""
+
+
+def _build_ef_mensal_agente_primeira(db: str) -> str:
+    inner = _ef_inner_agent(db, "= 0", "DT_EMISSAO")
+    return f"""
+SELECT Agente, Ano, Mes, COUNT(*) AS Boletos_Gerados,
+    SUM({_EF_PAID}) AS Pagos_No_Prazo, {_EF_CONV} AS Conversao_Prazo_5d
+FROM ({inner}) AS T
+GROUP BY Agente, Ano, Mes ORDER BY Ano, Mes, Agente
+"""
+
+
+def _build_ef_mensal_agente_colchao(db: str) -> str:
+    inner = _ef_inner_agent(db, "> 0", "DT_EMISSAO")
+    return f"""
+SELECT Agente, Ano, Mes, COUNT(*) AS Boletos_Gerados_Colchao,
+    SUM({_EF_PAID}) AS Pagos_No_Prazo, {_EF_CONV} AS Conversao_Colchao
+FROM ({inner}) AS T
+GROUP BY Agente, Ano, Mes ORDER BY Ano, Mes, Agente
+"""
+
+
+def _build_ef_mensal_agente_colchao_vencimento(db: str) -> str:
+    inner = _ef_inner_agent(db, "> 0", "DT_VENCIMENTO")
+    return f"""
+SELECT Agente, Ano, Mes, COUNT(*) AS Boletos_Gerados_Colchao,
+    SUM({_EF_PAID}) AS Pagos_No_Prazo, {_EF_CONV} AS Conversao_Colchao
+FROM ({inner}) AS T
+GROUP BY Agente, Ano, Mes HAVING COUNT(*) >= 10
 ORDER BY Ano, Mes, Agente
 """
 
-QUERY_EF_MENSAL_AGENTE_COLCHAO = f"""
-SELECT
-    Agente,
-    Ano,
-    Mes,
-    COUNT(*) AS Boletos_Gerados_Colchao,
-    SUM({_EF_PAID}) AS Pagos_No_Prazo,
-    {_EF_CONV} AS Conversao_Colchao
-FROM (
-    SELECT R.DT_EMISSAO, R.VR_PAGO, R.DT_PAGAMENTO, R.DT_VENCIMENTO,
-           U.CHAVE AS Agente, YEAR(R.DT_EMISSAO) AS Ano, MONTH(R.DT_EMISSAO) AS Mes
-    FROM {_EF_DB_A}.dbo.REC_MASTER (NOLOCK) R
-    INNER JOIN {_EF_DB_A}.dbo.USU_MASTER (NOLOCK) U ON R.ID_USUARIO = U.ID_USUARIO
-    WHERE R.PARCELA > 0 AND R.ID_REC_STATUS IN {_EF_STATUS} AND YEAR(R.DT_EMISSAO) >= 2026
-      {_EF_AGENT_FILTER}
-    UNION ALL
-    SELECT R.DT_EMISSAO, R.VR_PAGO, R.DT_PAGAMENTO, R.DT_VENCIMENTO,
-           U.CHAVE AS Agente, YEAR(R.DT_EMISSAO) AS Ano, MONTH(R.DT_EMISSAO) AS Mes
-    FROM {_EF_DB_C}.dbo.REC_MASTER (NOLOCK) R
-    INNER JOIN {_EF_DB_C}.dbo.USU_MASTER (NOLOCK) U ON R.ID_USUARIO = U.ID_USUARIO
-    WHERE R.PARCELA > 0 AND R.ID_REC_STATUS IN {_EF_STATUS} AND YEAR(R.DT_EMISSAO) >= 2026
-      {_EF_AGENT_FILTER}
-) AS T
-GROUP BY Agente, Ano, Mes
-ORDER BY Ano, Mes, Agente
-"""
 
-QUERY_EF_DIARIA_COLCHAO_VENCIMENTO = f"""
-SELECT
-    CAST(DT_VENCIMENTO AS DATE) AS Dia_Vencimento,
-    COUNT(*) AS Boletos_Gerados_Colchao,
-    SUM({_EF_PAID}) AS Pagos_No_Prazo,
-    {_EF_CONV} AS Conversao_Colchao
-FROM (
-    SELECT DT_VENCIMENTO, VR_PAGO, DT_PAGAMENTO
-    FROM {_EF_DB_A}.dbo.REC_MASTER (NOLOCK)
-    WHERE PARCELA > 0 AND ID_REC_STATUS IN {_EF_STATUS} AND YEAR(DT_VENCIMENTO) >= 2026
-    UNION ALL
-    SELECT DT_VENCIMENTO, VR_PAGO, DT_PAGAMENTO
-    FROM {_EF_DB_C}.dbo.REC_MASTER (NOLOCK)
-    WHERE PARCELA > 0 AND ID_REC_STATUS IN {_EF_STATUS} AND YEAR(DT_VENCIMENTO) >= 2026
-) AS T
-GROUP BY CAST(DT_VENCIMENTO AS DATE)
-ORDER BY Dia_Vencimento
-"""
-
-QUERY_EF_MENSAL_COLCHAO_VENCIMENTO = f"""
-SELECT
-    YEAR(DT_VENCIMENTO) AS Ano,
-    MONTH(DT_VENCIMENTO) AS Mes,
-    COUNT(*) AS Boletos_Gerados_Colchao,
-    SUM({_EF_PAID}) AS Pagos_No_Prazo,
-    {_EF_CONV} AS Conversao_Colchao
-FROM (
-    SELECT DT_VENCIMENTO, VR_PAGO, DT_PAGAMENTO
-    FROM {_EF_DB_A}.dbo.REC_MASTER (NOLOCK)
-    WHERE PARCELA > 0 AND ID_REC_STATUS IN {_EF_STATUS} AND YEAR(DT_VENCIMENTO) >= 2026
-    UNION ALL
-    SELECT DT_VENCIMENTO, VR_PAGO, DT_PAGAMENTO
-    FROM {_EF_DB_C}.dbo.REC_MASTER (NOLOCK)
-    WHERE PARCELA > 0 AND ID_REC_STATUS IN {_EF_STATUS} AND YEAR(DT_VENCIMENTO) >= 2026
-) AS T
-GROUP BY YEAR(DT_VENCIMENTO), MONTH(DT_VENCIMENTO)
-ORDER BY Ano, Mes
-"""
-
-QUERY_EF_MENSAL_AGENTE_COLCHAO_VENCIMENTO = f"""
-SELECT
-    Agente,
-    Ano,
-    Mes,
-    COUNT(*) AS Boletos_Gerados_Colchao,
-    SUM({_EF_PAID}) AS Pagos_No_Prazo,
-    {_EF_CONV} AS Conversao_Colchao
-FROM (
-    SELECT R.DT_VENCIMENTO, R.VR_PAGO, R.DT_PAGAMENTO,
-           U.CHAVE AS Agente, YEAR(R.DT_VENCIMENTO) AS Ano, MONTH(R.DT_VENCIMENTO) AS Mes
-    FROM {_EF_DB_A}.dbo.REC_MASTER (NOLOCK) R
-    INNER JOIN {_EF_DB_A}.dbo.USU_MASTER (NOLOCK) U ON R.ID_USUARIO = U.ID_USUARIO
-    WHERE R.PARCELA > 0 AND R.ID_REC_STATUS IN {_EF_STATUS} AND YEAR(R.DT_VENCIMENTO) >= 2026
-      {_EF_AGENT_FILTER}
-    UNION ALL
-    SELECT R.DT_VENCIMENTO, R.VR_PAGO, R.DT_PAGAMENTO,
-           U.CHAVE AS Agente, YEAR(R.DT_VENCIMENTO) AS Ano, MONTH(R.DT_VENCIMENTO) AS Mes
-    FROM {_EF_DB_C}.dbo.REC_MASTER (NOLOCK) R
-    INNER JOIN {_EF_DB_C}.dbo.USU_MASTER (NOLOCK) U ON R.ID_USUARIO = U.ID_USUARIO
-    WHERE R.PARCELA > 0 AND R.ID_REC_STATUS IN {_EF_STATUS} AND YEAR(R.DT_VENCIMENTO) >= 2026
-      {_EF_AGENT_FILTER}
-) AS T
-GROUP BY Agente, Ano, Mes
-HAVING COUNT(*) >= 10
-ORDER BY Ano, Mes, Agente
-"""
-
-_EF_QUERY_MAP: Dict[str, str] = {
-    "diaria-primeira": QUERY_EF_DIARIA_PRIMEIRA,
-    "mensal-primeira": QUERY_EF_MENSAL_PRIMEIRA,
-    "diaria-colchao": QUERY_EF_DIARIA_COLCHAO,
-    "mensal-colchao": QUERY_EF_MENSAL_COLCHAO,
-    "diaria-colchao-vencimento": QUERY_EF_DIARIA_COLCHAO_VENCIMENTO,
-    "mensal-colchao-vencimento": QUERY_EF_MENSAL_COLCHAO_VENCIMENTO,
-    "mensal-agente-primeira": QUERY_EF_MENSAL_AGENTE_PRIMEIRA,
-    "mensal-agente-colchao": QUERY_EF_MENSAL_AGENTE_COLCHAO,
-    "mensal-agente-colchao-vencimento": QUERY_EF_MENSAL_AGENTE_COLCHAO_VENCIMENTO,
+_EF_BUILDER_MAP: Dict[str, Any] = {
+    "diaria-primeira": _build_ef_diaria_primeira,
+    "mensal-primeira": _build_ef_mensal_primeira,
+    "diaria-colchao": _build_ef_diaria_colchao,
+    "mensal-colchao": _build_ef_mensal_colchao,
+    "diaria-colchao-vencimento": _build_ef_diaria_colchao_vencimento,
+    "mensal-colchao-vencimento": _build_ef_mensal_colchao_vencimento,
+    "mensal-agente-primeira": _build_ef_mensal_agente_primeira,
+    "mensal-agente-colchao": _build_ef_mensal_agente_colchao,
+    "mensal-agente-colchao-vencimento": _build_ef_mensal_agente_colchao_vencimento,
 }
 
 _EFETIVIDADE_STORE: Dict[str, List[Dict[str, Any]]] = {}
@@ -2373,12 +2299,15 @@ def _efetividade_etl_run() -> None:
     global _EFETIVIDADE_LAST_RUN
     conn_db = ALLOWED_DATABASES[0]
     results: Dict[str, List[Dict[str, Any]]] = {}
-    for key, query in _EF_QUERY_MAP.items():
-        try:
-            rows = run_query(query, conn_db, context=f"efetividade-etl/{key}")
-            results[key] = rows
-        except Exception as exc:
-            _agent_ndjson("OBS", f"main.py:efetividade_etl:{key}", "etl_error", {"error": str(exc)})
+    for key, builder in _EF_BUILDER_MAP.items():
+        for db_variant in _EF_DB_VARIANTS:
+            store_key = f"{key}:{db_variant}"
+            try:
+                query = builder(db_variant)
+                rows = run_query(query, conn_db, context=f"efetividade-etl/{store_key}")
+                results[store_key] = rows
+            except Exception as exc:
+                _agent_ndjson("OBS", f"main.py:efetividade_etl:{store_key}", "etl_error", {"error": str(exc)})
     with _EFETIVIDADE_LOCK:
         _EFETIVIDADE_STORE.update(results)
         _EFETIVIDADE_LAST_RUN = time.time()
@@ -2404,63 +2333,72 @@ def _start_efetividade_etl() -> None:
     _EFETIVIDADE_ETL_THREAD_STARTED = True
 
 
-def _get_efetividade(key: str) -> Dict[str, Any]:
+def _resolve_ef_db(db: Optional[str]) -> str:
+    if not db or db.strip().lower() == "todos":
+        return "todos"
+    return validate_database(db)
+
+
+def _get_efetividade(key: str, db: Optional[str] = None) -> Dict[str, Any]:
+    db_variant = _resolve_ef_db(db)
+    store_key = f"{key}:{db_variant}"
     with _EFETIVIDADE_LOCK:
-        rows = _EFETIVIDADE_STORE.get(key)
+        rows = _EFETIVIDADE_STORE.get(store_key)
         last_run = _EFETIVIDADE_LAST_RUN
     if rows is None:
         raise HTTPException(status_code=503, detail="ETL ainda não concluído. Tente novamente em instantes.")
+    sources = ALLOWED_DATABASES if db_variant == "todos" else [db_variant]
     return build_response_envelope(
         rows,
-        ALLOWED_DATABASES,
-        filters={"period": "2026+"},
+        sources,
+        filters={"period": "2026+", "database": db_variant},
         quality={"last_etl_run": datetime.fromtimestamp(last_run, tz=timezone.utc).isoformat() if last_run else None},
     )
 
 
 @app.get("/efetividade/diaria-primeira")
-def get_ef_diaria_primeira() -> Dict[str, Any]:
-    return _get_efetividade("diaria-primeira")
+def get_ef_diaria_primeira(db: Optional[str] = Query(default=None)) -> Dict[str, Any]:
+    return _get_efetividade("diaria-primeira", db)
 
 
 @app.get("/efetividade/mensal-primeira")
-def get_ef_mensal_primeira() -> Dict[str, Any]:
-    return _get_efetividade("mensal-primeira")
+def get_ef_mensal_primeira(db: Optional[str] = Query(default=None)) -> Dict[str, Any]:
+    return _get_efetividade("mensal-primeira", db)
 
 
 @app.get("/efetividade/diaria-colchao")
-def get_ef_diaria_colchao() -> Dict[str, Any]:
-    return _get_efetividade("diaria-colchao")
+def get_ef_diaria_colchao(db: Optional[str] = Query(default=None)) -> Dict[str, Any]:
+    return _get_efetividade("diaria-colchao", db)
 
 
 @app.get("/efetividade/mensal-colchao")
-def get_ef_mensal_colchao() -> Dict[str, Any]:
-    return _get_efetividade("mensal-colchao")
+def get_ef_mensal_colchao(db: Optional[str] = Query(default=None)) -> Dict[str, Any]:
+    return _get_efetividade("mensal-colchao", db)
 
 
 @app.get("/efetividade/mensal-agente-primeira")
-def get_ef_mensal_agente_primeira() -> Dict[str, Any]:
-    return _get_efetividade("mensal-agente-primeira")
+def get_ef_mensal_agente_primeira(db: Optional[str] = Query(default=None)) -> Dict[str, Any]:
+    return _get_efetividade("mensal-agente-primeira", db)
 
 
 @app.get("/efetividade/mensal-agente-colchao")
-def get_ef_mensal_agente_colchao() -> Dict[str, Any]:
-    return _get_efetividade("mensal-agente-colchao")
+def get_ef_mensal_agente_colchao(db: Optional[str] = Query(default=None)) -> Dict[str, Any]:
+    return _get_efetividade("mensal-agente-colchao", db)
 
 
 @app.get("/efetividade/mensal-agente-colchao-vencimento")
-def get_ef_mensal_agente_colchao_vencimento() -> Dict[str, Any]:
-    return _get_efetividade("mensal-agente-colchao-vencimento")
+def get_ef_mensal_agente_colchao_vencimento(db: Optional[str] = Query(default=None)) -> Dict[str, Any]:
+    return _get_efetividade("mensal-agente-colchao-vencimento", db)
 
 
 @app.get("/efetividade/diaria-colchao-vencimento")
-def get_ef_diaria_colchao_vencimento() -> Dict[str, Any]:
-    return _get_efetividade("diaria-colchao-vencimento")
+def get_ef_diaria_colchao_vencimento(db: Optional[str] = Query(default=None)) -> Dict[str, Any]:
+    return _get_efetividade("diaria-colchao-vencimento", db)
 
 
 @app.get("/efetividade/mensal-colchao-vencimento")
-def get_ef_mensal_colchao_vencimento() -> Dict[str, Any]:
-    return _get_efetividade("mensal-colchao-vencimento")
+def get_ef_mensal_colchao_vencimento(db: Optional[str] = Query(default=None)) -> Dict[str, Any]:
+    return _get_efetividade("mensal-colchao-vencimento", db)
 
 
 # ─────────────────────────────────────────────────────────────────

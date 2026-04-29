@@ -471,28 +471,33 @@ export interface EfAgenteColchaoRow {
   Conversao_Colchao: number;
 }
 
-export async function fetchEfDiariaPrimeira(): Promise<ApiEnvelope<EfDiariaRow>> {
-  return request<ApiEnvelope<EfDiariaRow>>("/efetividade/diaria-primeira");
+function _efSuffix(db?: string): string {
+  if (!db || db === "todos") return "";
+  return `?db=${encodeURIComponent(db)}`;
 }
 
-export async function fetchEfDiariaColchao(): Promise<ApiEnvelope<EfDiariaColchaoRow>> {
-  return request<ApiEnvelope<EfDiariaColchaoRow>>("/efetividade/diaria-colchao");
+export async function fetchEfDiariaPrimeira(db?: string): Promise<ApiEnvelope<EfDiariaRow>> {
+  return request<ApiEnvelope<EfDiariaRow>>(`/efetividade/diaria-primeira${_efSuffix(db)}`);
 }
 
-export async function fetchEfMensalPrimeira(): Promise<ApiEnvelope<EfMensalRow>> {
-  return request<ApiEnvelope<EfMensalRow>>("/efetividade/mensal-primeira");
+export async function fetchEfDiariaColchao(db?: string): Promise<ApiEnvelope<EfDiariaColchaoRow>> {
+  return request<ApiEnvelope<EfDiariaColchaoRow>>(`/efetividade/diaria-colchao${_efSuffix(db)}`);
 }
 
-export async function fetchEfMensalColchao(): Promise<ApiEnvelope<EfMensalColchaoRow>> {
-  return request<ApiEnvelope<EfMensalColchaoRow>>("/efetividade/mensal-colchao");
+export async function fetchEfMensalPrimeira(db?: string): Promise<ApiEnvelope<EfMensalRow>> {
+  return request<ApiEnvelope<EfMensalRow>>(`/efetividade/mensal-primeira${_efSuffix(db)}`);
 }
 
-export async function fetchEfAgentePrimeira(): Promise<ApiEnvelope<EfAgenteRow>> {
-  return request<ApiEnvelope<EfAgenteRow>>("/efetividade/mensal-agente-primeira");
+export async function fetchEfMensalColchao(db?: string): Promise<ApiEnvelope<EfMensalColchaoRow>> {
+  return request<ApiEnvelope<EfMensalColchaoRow>>(`/efetividade/mensal-colchao${_efSuffix(db)}`);
 }
 
-export async function fetchEfAgenteColchao(): Promise<ApiEnvelope<EfAgenteColchaoRow>> {
-  return request<ApiEnvelope<EfAgenteColchaoRow>>("/efetividade/mensal-agente-colchao");
+export async function fetchEfAgentePrimeira(db?: string): Promise<ApiEnvelope<EfAgenteRow>> {
+  return request<ApiEnvelope<EfAgenteRow>>(`/efetividade/mensal-agente-primeira${_efSuffix(db)}`);
+}
+
+export async function fetchEfAgenteColchao(db?: string): Promise<ApiEnvelope<EfAgenteColchaoRow>> {
+  return request<ApiEnvelope<EfAgenteColchaoRow>>(`/efetividade/mensal-agente-colchao${_efSuffix(db)}`);
 }
 
 export interface EfDiariaColchaoVencimentoRow {
@@ -510,12 +515,12 @@ export interface EfMensalColchaoVencimentoRow {
   Conversao_Colchao: number;
 }
 
-export async function fetchEfDiariaColchaoVencimento(): Promise<ApiEnvelope<EfDiariaColchaoVencimentoRow>> {
-  return request<ApiEnvelope<EfDiariaColchaoVencimentoRow>>("/efetividade/diaria-colchao-vencimento");
+export async function fetchEfDiariaColchaoVencimento(db?: string): Promise<ApiEnvelope<EfDiariaColchaoVencimentoRow>> {
+  return request<ApiEnvelope<EfDiariaColchaoVencimentoRow>>(`/efetividade/diaria-colchao-vencimento${_efSuffix(db)}`);
 }
 
-export async function fetchEfMensalColchaoVencimento(): Promise<ApiEnvelope<EfMensalColchaoVencimentoRow>> {
-  return request<ApiEnvelope<EfMensalColchaoVencimentoRow>>("/efetividade/mensal-colchao-vencimento");
+export async function fetchEfMensalColchaoVencimento(db?: string): Promise<ApiEnvelope<EfMensalColchaoVencimentoRow>> {
+  return request<ApiEnvelope<EfMensalColchaoVencimentoRow>>(`/efetividade/mensal-colchao-vencimento${_efSuffix(db)}`);
 }
 
 export interface EfAgenteColchaoVencimentoRow {
@@ -527,6 +532,6 @@ export interface EfAgenteColchaoVencimentoRow {
   Conversao_Colchao: number;
 }
 
-export async function fetchEfAgenteColchaoVencimento(): Promise<ApiEnvelope<EfAgenteColchaoVencimentoRow>> {
-  return request<ApiEnvelope<EfAgenteColchaoVencimentoRow>>("/efetividade/mensal-agente-colchao-vencimento");
+export async function fetchEfAgenteColchaoVencimento(db?: string): Promise<ApiEnvelope<EfAgenteColchaoVencimentoRow>> {
+  return request<ApiEnvelope<EfAgenteColchaoVencimentoRow>>(`/efetividade/mensal-agente-colchao-vencimento${_efSuffix(db)}`);
 }
