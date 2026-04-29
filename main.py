@@ -1505,6 +1505,12 @@ def _build_agreements_tabela_query(
             GROUP BY U.NOME, DEV.CPF_CNPJ, DEV.NOME_RAZAO, RM.NR_RECEBIMENTO, RS.DESCR
         """
 
+    # PARAM ORDER CONTRACT — callers must supply bind params in this exact sequence:
+    #   1. assessoria LIKE params for COBwebRCBCONSUMER subquery  (2 params: CHAVE, NOME)
+    #   2. assessoria LIKE params for COBwebRCBAUTOS subquery     (2 params: CHAVE, NOME)
+    #      (only 1 pair when database_name != "todos")
+    #   3. agente param for outer WHERE base.agente = ?           (1 param, only if filter_by_agente)
+    # Use _build_assessoria_params(token, repetitions=2 if todos else 1) + optional agente.
     outer_where = "WHERE base.agente = ?" if filter_by_agente else ""
     if database_name == "todos":
         return f"""
@@ -2117,7 +2123,7 @@ def _run_dashboard_chart(
     query_args: Tuple[Any, ...] = (),
     params: Optional[Tuple[Any, ...]] = None,
     filters_extra: Optional[Dict[str, Any]] = None,
-    cache_key_suffix: str = "",
+    cache_key_suffix: str,
 ) -> Dict[str, Any]:
     """Helper central que executa qualquer builder de gráfico/card.
 
@@ -2172,6 +2178,7 @@ def get_excecoes_por_portfolio(db: str, request: Request = None) -> Dict[str, An
     return _run_dashboard_chart(
         db, _build_excecoes_por_portfolio_query,
         "dashboard/excecoes-por-portfolio", request,
+        cache_key_suffix="",
     )
 
 
@@ -2180,6 +2187,7 @@ def get_excecoes_por_agente(db: str, request: Request = None) -> Dict[str, Any]:
     return _run_dashboard_chart(
         db, _build_excecoes_por_agente_query,
         "dashboard/excecoes-por-agente", request,
+        cache_key_suffix="",
     )
 
 
@@ -2188,6 +2196,7 @@ def get_acordos_por_portfolio(db: str, request: Request = None) -> Dict[str, Any
     return _run_dashboard_chart(
         db, _build_acordos_por_portfolio_query,
         "dashboard/acordos-por-portfolio", request,
+        cache_key_suffix="",
     )
 
 

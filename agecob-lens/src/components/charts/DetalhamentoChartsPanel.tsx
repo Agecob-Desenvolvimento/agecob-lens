@@ -25,7 +25,7 @@ interface DetalhamentoChartsPanelProps {
   selectedAgent: string;
   db: DatabaseOption;
   assessoria?: string;
-  primeiraParcelaSelecionada: number;
+  primeiraParcelaSelecionada?: number;
 }
 
 function normalizeAgreementType(value: string): string {
@@ -57,7 +57,7 @@ export default function DetalhamentoChartsPanel({
   selectedAgent,
   db,
   assessoria,
-  primeiraParcelaSelecionada,
+  primeiraParcelaSelecionada = 0,
 }: DetalhamentoChartsPanelProps) {
   const filtered = selectedAgent === "Todos" ? rows : rows.filter((row) => row.NOME === selectedAgent);
   const totals = aggregateTotals(filtered);
