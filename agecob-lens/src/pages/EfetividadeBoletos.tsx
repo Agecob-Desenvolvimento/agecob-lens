@@ -145,17 +145,20 @@ export default function EfetividadeBoletos() {
   const [colchaoView, setColchaoView] = useState<"vencimento" | "emissao">("vencimento");
   const [selectedYear, setSelectedYear] = useState(now.getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1);
+  const [banco, setBanco] = useState<"todos" | "COBwebRCBAUTOS" | "COBwebRCBCONSUMER">("todos");
+
+  const dbParam = banco === "todos" ? undefined : banco;
 
   // Fetch all upfront so switching is instant after first load
-  const { data: dpEnv, isLoading: ldp, error: errDp } = useQuery({ queryKey: ["ef-diaria-primeira"], queryFn: fetchEfDiariaPrimeira });
-  const { data: dcEnv, isLoading: ldc, error: errDc } = useQuery({ queryKey: ["ef-diaria-colchao"], queryFn: fetchEfDiariaColchao });
-  const { data: dcvEnv, isLoading: ldcv, error: errDcv } = useQuery({ queryKey: ["ef-diaria-colchao-vencimento"], queryFn: fetchEfDiariaColchaoVencimento });
-  const { data: mpEnv, isLoading: lmp, error: errMp } = useQuery({ queryKey: ["ef-mensal-primeira"], queryFn: fetchEfMensalPrimeira });
-  const { data: mcEnv, isLoading: lmc, error: errMc } = useQuery({ queryKey: ["ef-mensal-colchao"], queryFn: fetchEfMensalColchao });
-  const { data: mcvEnv, isLoading: lmcv, error: errMcv } = useQuery({ queryKey: ["ef-mensal-colchao-vencimento"], queryFn: fetchEfMensalColchaoVencimento });
-  const { data: apEnv, isLoading: lap, error: errAp } = useQuery({ queryKey: ["ef-agente-primeira"], queryFn: fetchEfAgentePrimeira });
-  const { data: acEnv, isLoading: lac, error: errAc } = useQuery({ queryKey: ["ef-agente-colchao"], queryFn: fetchEfAgenteColchao });
-  const { data: acvEnv, isLoading: lacv, error: errAcv } = useQuery({ queryKey: ["ef-agente-colchao-vencimento"], queryFn: fetchEfAgenteColchaoVencimento });
+  const { data: dpEnv, isLoading: ldp, error: errDp } = useQuery({ queryKey: ["ef-diaria-primeira", banco], queryFn: () => fetchEfDiariaPrimeira(dbParam) });
+  const { data: dcEnv, isLoading: ldc, error: errDc } = useQuery({ queryKey: ["ef-diaria-colchao", banco], queryFn: () => fetchEfDiariaColchao(dbParam) });
+  const { data: dcvEnv, isLoading: ldcv, error: errDcv } = useQuery({ queryKey: ["ef-diaria-colchao-vencimento", banco], queryFn: () => fetchEfDiariaColchaoVencimento(dbParam) });
+  const { data: mpEnv, isLoading: lmp, error: errMp } = useQuery({ queryKey: ["ef-mensal-primeira", banco], queryFn: () => fetchEfMensalPrimeira(dbParam) });
+  const { data: mcEnv, isLoading: lmc, error: errMc } = useQuery({ queryKey: ["ef-mensal-colchao", banco], queryFn: () => fetchEfMensalColchao(dbParam) });
+  const { data: mcvEnv, isLoading: lmcv, error: errMcv } = useQuery({ queryKey: ["ef-mensal-colchao-vencimento", banco], queryFn: () => fetchEfMensalColchaoVencimento(dbParam) });
+  const { data: apEnv, isLoading: lap, error: errAp } = useQuery({ queryKey: ["ef-agente-primeira", banco], queryFn: () => fetchEfAgentePrimeira(dbParam) });
+  const { data: acEnv, isLoading: lac, error: errAc } = useQuery({ queryKey: ["ef-agente-colchao", banco], queryFn: () => fetchEfAgenteColchao(dbParam) });
+  const { data: acvEnv, isLoading: lacv, error: errAcv } = useQuery({ queryKey: ["ef-agente-colchao-vencimento", banco], queryFn: () => fetchEfAgenteColchaoVencimento(dbParam) });
 
   const loading = tipo === "primeira"
     ? (ldp || lmp || lap)
@@ -280,6 +283,7 @@ export default function EfetividadeBoletos() {
                   : colchaoView === "vencimento" ? "Colchão · Por Vencimento" : "Colchão · Por Emissão",
               },
               { label: "Período", value: periodLabel },
+              { label: "Banco", value: banco === "todos" ? "Todas" : banco === "COBwebRCBAUTOS" ? "AUTOS" : "CONSUMER" },
             ]}
           />
 
@@ -312,6 +316,26 @@ export default function EfetividadeBoletos() {
                       {years.map((y) => (
                         <SelectItem key={y} value={String(y)}>{y}</SelectItem>
                       ))}
+                    </SelectContent>
+                  </Select>
+                </CardContent>
+              </Card>
+
+              <Card className="flex-none">
+                <CardHeader className="pb-2 pt-3 px-4">
+                  <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                    Banco
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="px-4 pb-3">
+                  <Select value={banco} onValueChange={(v) => setBanco(v as typeof banco)}>
+                    <SelectTrigger className="w-40">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="todos">Todas</SelectItem>
+                      <SelectItem value="COBwebRCBAUTOS">AUTOS</SelectItem>
+                      <SelectItem value="COBwebRCBCONSUMER">CONSUMER</SelectItem>
                     </SelectContent>
                   </Select>
                 </CardContent>
