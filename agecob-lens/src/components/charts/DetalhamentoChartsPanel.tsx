@@ -24,7 +24,8 @@ interface DetalhamentoChartsPanelProps {
   rows: ProdutividadeRowWithSource[];
   selectedAgent: string;
   db: DatabaseOption;
-  primeiraParcelaTotalDia?: number | null;
+  assessoria?: string;
+  primeiraParcelaSelecionada?: number;
 }
 
 function normalizeAgreementType(value: string): string {
@@ -55,7 +56,8 @@ export default function DetalhamentoChartsPanel({
   rows,
   selectedAgent,
   db,
-  primeiraParcelaTotalDia,
+  assessoria,
+  primeiraParcelaSelecionada = 0,
 }: DetalhamentoChartsPanelProps) {
   const filtered = selectedAgent === "Todos" ? rows : rows.filter((row) => row.NOME === selectedAgent);
   const totals = aggregateTotals(filtered);
@@ -72,7 +74,7 @@ export default function DetalhamentoChartsPanel({
     let cancelled = false;
     setLoadingAcordos(true);
     setAcordosError(null);
-    fetchAcordosHojeAgente(db, selectedAgent)
+    fetchAcordosHojeAgente(db, selectedAgent, assessoria)
       .then((env) => {
         if (cancelled) return;
         setAcordosHoje(env.data ?? []);
@@ -88,7 +90,7 @@ export default function DetalhamentoChartsPanel({
     return () => {
       cancelled = true;
     };
-  }, [db, selectedAgent]);
+  }, [db, selectedAgent, assessoria]);
 
   const sortedAcordos = useMemo(() => {
     return [...acordosHoje].sort((a, b) => {
@@ -102,11 +104,12 @@ export default function DetalhamentoChartsPanel({
   }, [acordosHoje]);
 
   const tableTotals = useMemo(() => {
-    const totalPrimeira = sortedAcordos.reduce((acc, row) => acc + Number(row.valor_primeira_parcela || 0), 0);
-    const totalAcordosValor = sortedAcordos.reduce((acc, row) => acc + Number(row.valor_total_acordo || 0), 0);
-    const approvedCount = sortedAcordos.filter((row) => isApprovedAgreement(row.tipo_acordo)).length;
+    const approvedRows = sortedAcordos.filter((row) => isApprovedAgreement(row.tipo_acordo));
+    const totalPrimeiraAprovada = approvedRows.reduce((acc, row) => acc + Number(row.valor_primeira_parcela || 0), 0);
+    const totalAcordosAprovados = approvedRows.reduce((acc, row) => acc + Number(row.valor_total_acordo || 0), 0);
+    const approvedCount = approvedRows.length;
     const exceptionCount = sortedAcordos.filter((row) => isExceptionAgreement(row.tipo_acordo)).length;
-    return { totalPrimeira, totalAcordosValor, approvedCount, exceptionCount };
+    return { totalPrimeiraAprovada, totalAcordosAprovados, approvedCount, exceptionCount };
   }, [sortedAcordos]);
 
   if (filtered.length === 0) {
@@ -120,9 +123,7 @@ export default function DetalhamentoChartsPanel({
   const valoresData = [
     {
       name: "1ª Parcela",
-      value: selectedAgent === "Todos"
-        ? (primeiraParcelaTotalDia ?? totals.valor_primeira_parcela)
-        : totals.valor_primeira_parcela,
+      value: primeiraParcelaSelecionada,
     },
     { name: "Valor Acordos", value: totals.valor_acordos },
   ];
@@ -232,12 +233,12 @@ export default function DetalhamentoChartsPanel({
                 <TableFooter>
                   <TableRow>
                     <TableCell colSpan={4} className="text-sm font-semibold">
-                      Totais: {tableTotals.approvedCount} aprovados / {tableTotals.exceptionCount} exceção(ões)
+                      Totais aprovados: {tableTotals.approvedCount} aprovados / {tableTotals.exceptionCount} exceção(ões)
                     </TableCell>
-                    <TableCell className="text-sm text-right font-semibold tabular-nums whitespace-nowrap">{fmtBRL(tableTotals.totalPrimeira)}</TableCell>
+                    <TableCell className="text-sm text-right font-semibold tabular-nums whitespace-nowrap">{fmtBRL(tableTotals.totalPrimeiraAprovada)}</TableCell>
                     <TableCell className="text-sm text-right">—</TableCell>
                     <TableCell className="text-sm text-right tabular-nums">{sortedAcordos.length}</TableCell>
-                    <TableCell className="text-sm text-right font-semibold tabular-nums whitespace-nowrap">{fmtBRL(tableTotals.totalAcordosValor)}</TableCell>
+                    <TableCell className="text-sm text-right font-semibold tabular-nums whitespace-nowrap">{fmtBRL(tableTotals.totalAcordosAprovados)}</TableCell>
                   </TableRow>
                 </TableFooter>
               </Table>

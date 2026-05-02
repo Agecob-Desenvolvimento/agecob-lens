@@ -1,0 +1,18 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "FastAPI (agecob-lens API)",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["main.py"],
+      "port": 8000
+    },
+    {
+      "name": "Vite (agecob-lens frontend)",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "cwd": "agecob-lens",
+      "port": 5173
+    }
+  ]
+}
