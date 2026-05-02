@@ -151,6 +151,8 @@ FILTRO_AGENTES_EXCLUIDOS_SQL = """
     AND UPPER(LTRIM(RTRIM(U.NOME))) NOT LIKE 'ANTLIA%'
     AND UPPER(LTRIM(RTRIM(U.NOME))) NOT LIKE 'INTERNA%'
     AND UPPER(LTRIM(RTRIM(U.CHAVE))) NOT LIKE 'INTERNA%'
+    AND UPPER(LTRIM(RTRIM(U.CHAVE))) NOT LIKE 'SUPORTE%'
+    AND UPPER(LTRIM(RTRIM(U.CHAVE))) NOT LIKE 'SISTEMA%'
 """
 
 # --- Produtividade Agentes (consolidated) ---
@@ -827,6 +829,34 @@ def validate_database_or_todos(database_name: str) -> str:
     return validate_database(database_name)
 
 
+def _normalize_assessoria_filter(assessoria: Optional[str]) -> Tuple[str, str]:
+    assessoria_applied = "todos"
+    assessoria_token = ""
+    if assessoria and assessoria.strip().lower() != "todos":
+        assessoria_applied = assessoria.strip()
+        assessoria_token = assessoria_applied.split(":")[-1].strip().upper()
+    return assessoria_applied, assessoria_token
+
+
+def _build_assessoria_clause(assessoria_token: str, user_alias: str = "U") -> str:
+    if not assessoria_token:
+        return ""
+    return (
+        f" AND (UPPER(LTRIM(RTRIM({user_alias}.CHAVE))) LIKE ?"
+        f" OR UPPER(LTRIM(RTRIM({user_alias}.NOME))) LIKE ?)"
+    )
+
+
+def _build_assessoria_params(assessoria_token: str, repetitions: int = 1) -> Tuple[str, ...]:
+    if not assessoria_token:
+        return ()
+    like_token = f"%{assessoria_token}%"
+    params: List[str] = []
+    for _ in range(repetitions):
+        params.extend((like_token, like_token))
+    return tuple(params)
+
+
 # ─────────────────────────────────────────────────────────────────
 # HELPERS DE FILTRO E EXECUÇÃO
 # ─────────────────────────────────────────────────────────────────
@@ -1444,8 +1474,13 @@ def get_dashboard_acordos_hoje_por_banco(
     )
 
 
-def _build_agreements_tabela_query(database_name: str, filter_by_agente: bool) -> str:
+def _build_agreements_tabela_query(
+    database_name: str,
+    filter_by_agente: bool,
+    assessoria_token: str = "",
+) -> str:
     def _single_db_query(db_name: str) -> str:
+        assessoria_clause = _build_assessoria_clause(assessoria_token)
         return f"""
             SELECT
                 U.NOME AS agente,
@@ -1466,9 +1501,16 @@ def _build_agreements_tabela_query(database_name: str, filter_by_agente: bool) -
             WHERE RM.DT_EMISSAO >= @Hoje AND RM.DT_EMISSAO < @Amanha
               AND RM.ID_REC_STATUS IN {STATUS_UNIVERSO_SQL}
               {FILTRO_AGENTES_EXCLUIDOS_SQL}
+              {assessoria_clause}
             GROUP BY U.NOME, DEV.CPF_CNPJ, DEV.NOME_RAZAO, RM.NR_RECEBIMENTO, RS.DESCR
         """
 
+    # PARAM ORDER CONTRACT — callers must supply bind params in this exact sequence:
+    #   1. assessoria LIKE params for COBwebRCBCONSUMER subquery  (2 params: CHAVE, NOME)
+    #   2. assessoria LIKE params for COBwebRCBAUTOS subquery     (2 params: CHAVE, NOME)
+    #      (only 1 pair when database_name != "todos")
+    #   3. agente param for outer WHERE base.agente = ?           (1 param, only if filter_by_agente)
+    # Use _build_assessoria_params(token, repetitions=2 if todos else 1) + optional agente.
     outer_where = "WHERE base.agente = ?" if filter_by_agente else ""
     if database_name == "todos":
         return f"""
@@ -1531,15 +1573,25 @@ def _build_agreements_tabela_query(database_name: str, filter_by_agente: bool) -
 def get_dashboard_acordos_hoje_agente(
     db: str,
     agente: Optional[str] = Query(default=None),
+    assessoria: Optional[str] = Query(default=None),
     request: Request = None,
 ) -> Dict[str, Any]:
     run_id = getattr(request.state, "run_id", f"srv-{uuid4().hex[:12]}") if request else f"srv-{uuid4().hex[:12]}"
     validated_db = validate_database_or_todos(db)
     agente_aplicado = (agente or "").strip()
+    assessoria_applied, assessoria_token = _normalize_assessoria_filter(assessoria)
     filter_by_agente = bool(agente_aplicado and agente_aplicado.lower() != "todos")
-    query = _build_agreements_tabela_query(validated_db, filter_by_agente)
+    query = _build_agreements_tabela_query(validated_db, filter_by_agente, assessoria_token)
     conn_db = ALLOWED_DATABASES[0] if validated_db == "todos" else validated_db
-    params: Optional[Tuple[Any, ...]] = (agente_aplicado,) if filter_by_agente else None
+    params_list: List[Any] = list(
+        _build_assessoria_params(
+            assessoria_token,
+            2 if validated_db == "todos" else 1,
+        )
+    )
+    if filter_by_agente:
+        params_list.append(agente_aplicado)
+    params: Optional[Tuple[Any, ...]] = tuple(params_list) if params_list else None
     rows = run_query(
         query,
         conn_db,
@@ -1551,7 +1603,12 @@ def get_dashboard_acordos_hoje_agente(
     return build_response_envelope(
         rows,
         sources,
-        filters={"date": "today", "database": validated_db, "agente": agente_aplicado or "todos"},
+        filters={
+            "date": "today",
+            "database": validated_db,
+            "agente": agente_aplicado or "todos",
+            "assessoria": assessoria_applied,
+        },
         run_id=run_id,
     )
 
@@ -1575,10 +1632,8 @@ def get_dashboard_produtividade_hoje(
         context="dashboard/produtividade-hoje",
     )
     rows, validation_metrics = validate_produtividade_rows(rows, run_id=run_id)
-    assessoria_applied = "todos"
-    if assessoria and assessoria.strip().lower() != "todos":
-        assessoria_applied = assessoria.strip()
-        token = assessoria_applied.split(":")[-1].strip().upper()
+    assessoria_applied, token = _normalize_assessoria_filter(assessoria)
+    if token:
         rows = [
             row
             for row in rows
@@ -1619,11 +1674,7 @@ def get_dashboard_status_carga(
     targets = ALLOWED_DATABASES if validated_db == "todos" else [validated_db]
     summaries: List[Dict[str, Any]] = []
     errors: List[Dict[str, str]] = []
-    assessoria_applied = "todos"
-    assessoria_token = ""
-    if assessoria and assessoria.strip().lower() != "todos":
-        assessoria_applied = assessoria.strip()
-        assessoria_token = assessoria_applied.split(":")[-1].strip().upper()
+    assessoria_applied, assessoria_token = _normalize_assessoria_filter(assessoria)
 
     for source in targets:
         try:
@@ -1868,12 +1919,13 @@ def _wrap_todos_or_single(db: str, base_fn, agg_select: str, order_by: str) -> s
     """
 
 
-def _build_primeira_parcela_dia_query(db: str) -> str:
+def _build_primeira_parcela_dia_query(db: str, assessoria_token: str = "") -> str:
     """
     Card de topo: soma da 1ª parcela de hoje e quantidade de acordos.
     Considera acordos aprovados (ATIVO, BAIXA POR PAGAMENTO, BAIXA AVULSA).
     """
     def _base(database: str) -> str:
+        assessoria_clause = _build_assessoria_clause(assessoria_token)
         return f"""
             SELECT
                 SUM(R.VALOR) AS total_valor,
@@ -1884,6 +1936,7 @@ def _build_primeira_parcela_dia_query(db: str) -> str:
               AND R.DT_EMISSAO >= @Hoje AND R.DT_EMISSAO < @Amanha
               AND R.ID_REC_STATUS IN {STATUS_APROVADOS_SQL}
               {FILTRO_AGENTES_EXCLUIDOS_SQL}
+              {assessoria_clause}
         """
 
     agg = """
@@ -1999,11 +2052,12 @@ def _build_acordos_por_portfolio_query(db: str) -> str:
     return _wrap_todos_or_single(db, _base, agg, order_by=order)
 
 
-def _build_primeira_parcela_por_agente_query(db: str) -> str:
+def _build_primeira_parcela_por_agente_query(db: str, assessoria_token: str = "") -> str:
     """
     Gráfico: valor e quantidade da 1ª parcela por agente (acordos aprovados).
     """
     def _base(database: str) -> str:
+        assessoria_clause = _build_assessoria_clause(assessoria_token)
         return f"""
             SELECT
                 U.NOME AS agente,
@@ -2015,6 +2069,7 @@ def _build_primeira_parcela_por_agente_query(db: str) -> str:
               AND R.DT_EMISSAO >= @Hoje AND R.DT_EMISSAO < @Amanha
               AND R.ID_REC_STATUS IN {STATUS_APROVADOS_SQL}
               {FILTRO_AGENTES_EXCLUIDOS_SQL}
+              {assessoria_clause}
             GROUP BY U.NOME
         """
 
@@ -2064,6 +2119,11 @@ def _run_dashboard_chart(
     query_builder,
     context: str,
     request: Optional[Request],
+    *,
+    query_args: Tuple[Any, ...] = (),
+    params: Optional[Tuple[Any, ...]] = None,
+    filters_extra: Optional[Dict[str, Any]] = None,
+    cache_key_suffix: str,
 ) -> Dict[str, Any]:
     """Helper central que executa qualquer builder de gráfico/card.
 
@@ -2076,24 +2136,40 @@ def _run_dashboard_chart(
     conn_db = ALLOWED_DATABASES[0] if validated_db == "todos" else validated_db
 
     def _compute() -> List[Dict[str, Any]]:
-        query = query_builder(validated_db)
-        return run_query(query, conn_db, run_id=run_id, context=context)
+        query = query_builder(validated_db, *query_args)
+        return run_query(query, conn_db, params=params, run_id=run_id, context=context)
 
-    cache_key = f"chart|{context}|{validated_db}"
+    cache_key = f"chart|{context}|{validated_db}{cache_key_suffix}"
     rows = cache_get_or_compute(cache_key, _compute)
     sources = ALLOWED_DATABASES if validated_db == "todos" else [validated_db]
+    filters = {"date": "today", "database": validated_db}
+    if filters_extra:
+        filters.update(filters_extra)
     return build_response_envelope(
         rows, sources,
-        filters={"date": "today", "database": validated_db},
+        filters=filters,
         run_id=run_id,
     )
 
 
 @app.get("/dashboard/primeira-parcela-dia/{db}")
-def get_primeira_parcela_dia(db: str, request: Request = None) -> Dict[str, Any]:
+def get_primeira_parcela_dia(
+    db: str,
+    assessoria: Optional[str] = Query(default=None),
+    request: Request = None,
+) -> Dict[str, Any]:
+    assessoria_applied, assessoria_token = _normalize_assessoria_filter(assessoria)
+    validated_db = validate_database_or_todos(db)
     return _run_dashboard_chart(
-        db, _build_primeira_parcela_dia_query,
+        validated_db, _build_primeira_parcela_dia_query,
         "dashboard/primeira-parcela-dia", request,
+        query_args=(assessoria_token,),
+        params=_build_assessoria_params(
+            assessoria_token,
+            2 if validated_db == "todos" else 1,
+        ) or None,
+        filters_extra={"assessoria": assessoria_applied},
+        cache_key_suffix=f"|assessoria:{assessoria_token or 'todos'}",
     )
 
 
@@ -2102,6 +2178,7 @@ def get_excecoes_por_portfolio(db: str, request: Request = None) -> Dict[str, An
     return _run_dashboard_chart(
         db, _build_excecoes_por_portfolio_query,
         "dashboard/excecoes-por-portfolio", request,
+        cache_key_suffix="",
     )
 
 
@@ -2110,6 +2187,7 @@ def get_excecoes_por_agente(db: str, request: Request = None) -> Dict[str, Any]:
     return _run_dashboard_chart(
         db, _build_excecoes_por_agente_query,
         "dashboard/excecoes-por-agente", request,
+        cache_key_suffix="",
     )
 
 
@@ -2118,14 +2196,28 @@ def get_acordos_por_portfolio(db: str, request: Request = None) -> Dict[str, Any
     return _run_dashboard_chart(
         db, _build_acordos_por_portfolio_query,
         "dashboard/acordos-por-portfolio", request,
+        cache_key_suffix="",
     )
 
 
 @app.get("/dashboard/primeira-parcela-por-agente/{db}")
-def get_primeira_parcela_por_agente(db: str, request: Request = None) -> Dict[str, Any]:
+def get_primeira_parcela_por_agente(
+    db: str,
+    assessoria: Optional[str] = Query(default=None),
+    request: Request = None,
+) -> Dict[str, Any]:
+    assessoria_applied, assessoria_token = _normalize_assessoria_filter(assessoria)
+    validated_db = validate_database_or_todos(db)
     return _run_dashboard_chart(
-        db, _build_primeira_parcela_por_agente_query,
+        validated_db, _build_primeira_parcela_por_agente_query,
         "dashboard/primeira-parcela-por-agente", request,
+        query_args=(assessoria_token,),
+        params=_build_assessoria_params(
+            assessoria_token,
+            2 if validated_db == "todos" else 1,
+        ) or None,
+        filters_extra={"assessoria": assessoria_applied},
+        cache_key_suffix=f"|assessoria:{assessoria_token or 'todos'}",
     )
 
 
