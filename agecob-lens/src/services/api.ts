@@ -545,3 +545,50 @@ export interface EfAgenteColchaoVencimentoRow {
 export async function fetchEfAgenteColchaoVencimento(db?: string): Promise<ApiEnvelope<EfAgenteColchaoVencimentoRow>> {
   return request<ApiEnvelope<EfAgenteColchaoVencimentoRow>>(`/efetividade/mensal-agente-colchao-vencimento${_efSuffix(db)}`);
 }
+
+// ── Efetividade Resumo (live, date-range) ────────────────────────────────────
+
+export interface EfResumoDayRow {
+  dia: string;
+  generated: number;
+  paid_on_time: number;
+  conversion_pct: number;
+  amount_maturing: number;
+  amount_received: number;
+  effectiveness_pct: number;
+}
+
+export interface EfResumoKpis {
+  generated: number;
+  paid_on_time: number;
+  conversion_pct: number;
+  amount_maturing: number;
+  amount_received: number;
+  effectiveness_pct: number;
+}
+
+export interface EfResumoData {
+  kpis: EfResumoKpis;
+  daily: EfResumoDayRow[];
+  best_day: EfResumoDayRow | null;
+  worst_day: EfResumoDayRow | null;
+}
+
+export interface EfResumoEnvelope {
+  meta: { generated_at: string; sources: string[]; filters: Record<string, unknown> };
+  data: EfResumoData;
+  errors: unknown[];
+}
+
+export async function fetchEfResumo(
+  dateFrom: string,
+  dateTo: string,
+  db?: string,
+  parcelaTipo: "primeira" | "colchao" = "primeira",
+  idPortfolio?: number,
+): Promise<EfResumoEnvelope> {
+  const params = new URLSearchParams({ date_from: dateFrom, date_to: dateTo, parcela_tipo: parcelaTipo });
+  if (db && db !== "todos") params.set("db", db);
+  if (idPortfolio != null) params.set("id_portfolio", String(idPortfolio));
+  return request<EfResumoEnvelope>(`/efetividade/resumo?${params.toString()}`);
+}
