@@ -657,9 +657,9 @@ export default function EfetividadeBoletos() {
                         />
                         <Tooltip
                           contentStyle={TOOLTIP_STYLE}
-                          formatter={(v) => [`${v}%`, "% Conversão"]}
+                          formatter={(v) => [`${v}%`, "Efetividade"]}
                         />
-                        <Bar dataKey="conversao" name="% Conversão" radius={[0, 3, 3, 0]}>
+                        <Bar dataKey="conversao" name="Efetividade" radius={[0, 3, 3, 0]}>
                           <LabelList
                             dataKey="conversao"
                             position="right"
@@ -695,7 +695,7 @@ export default function EfetividadeBoletos() {
                               Pagos no Prazo
                             </th>
                             <th className="text-right py-2 px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                              % Conversão
+                              Efetividade
                             </th>
                           </tr>
                         </thead>
