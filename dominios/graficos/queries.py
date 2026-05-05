@@ -1,0 +1,194 @@
+import config.settings as settings
+from core.utils.sql_helpers import build_assessoria_clause
+
+
+def wrap_todos_or_single(db: str, base_fn, agg_select: str, order_by: str) -> str:
+    """
+    Helper central dos builders. Monta o query final a partir de:
+      - `base_fn(database)` → SELECT base pra um único banco
+      - `agg_select` → SELECT de agregação externa quando db == 'todos'
+      - `order_by` → ORDER BY final
+    """
+    header = """
+        DECLARE @Hoje DATE = CAST(GETDATE() AS DATE);
+        DECLARE @Amanha DATE = DATEADD(DAY, 1, @Hoje);
+    """
+    if db == "todos":
+        inner = f"{base_fn('COBwebRCBCONSUMER')}\n            UNION ALL\n{base_fn('COBwebRCBAUTOS')}"
+        return f"""
+            {header}
+            {agg_select}
+            FROM (
+                {inner}
+            ) sub
+            {order_by}
+        """
+    return f"""
+        {header}
+        {base_fn(db)}
+        {order_by}
+    """
+
+
+def build_primeira_parcela_dia_query(db: str, assessoria_token: str = "") -> str:
+    """
+    Card de topo: soma da 1ª parcela de hoje e quantidade de acordos.
+    Considera acordos aprovados (ATIVO, BAIXA POR PAGAMENTO, BAIXA AVULSA).
+    """
+    def _base(database: str) -> str:
+        assessoria_clause = build_assessoria_clause(assessoria_token)
+        return f"""
+            SELECT
+                SUM(R.VALOR) AS total_valor,
+                COUNT(DISTINCT R.NR_RECEBIMENTO) AS total_acordos
+            FROM {database}.dbo.REC_MASTER R (NOLOCK)
+            JOIN {database}.dbo.USU_MASTER U (NOLOCK) ON R.ID_USUARIO = U.ID_USUARIO
+            WHERE R.PARCELA = {settings.PRIMEIRA_PARCELA}
+              AND R.DT_EMISSAO >= @Hoje AND R.DT_EMISSAO < @Amanha
+              AND R.ID_REC_STATUS IN {settings.STATUS_APROVADOS_SQL}
+              {settings.FILTRO_AGENTES_EXCLUIDOS_SQL}
+              {assessoria_clause}
+        """
+
+    agg = """
+        SELECT
+            SUM(sub.total_valor) AS total_valor,
+            SUM(sub.total_acordos) AS total_acordos
+    """
+    return wrap_todos_or_single(db, _base, agg, order_by="")
+
+
+def build_excecoes_por_portfolio_query(db: str) -> str:
+    """
+    Gráfico: exceções agrupadas por nome do portfolio (CAMPO010 da DIV_AUX).
+    Usa CROSS APPLY com TOP 1 para evitar multiplicação de linhas quando
+    um acordo tem múltiplas dívidas vinculadas.
+    """
+    def _base(database: str) -> str:
+        return f"""
+            SELECT
+                DA.{settings.PORTFOLIO_COLUMN} AS portfolio_name,
+                COUNT(DISTINCT R.NR_RECEBIMENTO) AS qtd_excecoes,
+                SUM(R.VALOR) AS valor_excecoes
+            FROM {database}.dbo.REC_MASTER R (NOLOCK)
+            JOIN {database}.dbo.USU_MASTER U (NOLOCK) ON R.ID_USUARIO = U.ID_USUARIO
+            CROSS APPLY (
+                SELECT TOP 1 DA2.{settings.PORTFOLIO_COLUMN}
+                FROM {database}.dbo.REC_DIVIDAS RD (NOLOCK)
+                JOIN {database}.dbo.DIV_AUX DA2 (NOLOCK) ON RD.ID_DIVIDA = DA2.ID_DIVIDA
+                WHERE RD.NR_RECEBIMENTO = R.NR_RECEBIMENTO
+                  AND RD.ID_CARTEIRA = R.ID_CARTEIRA
+                  AND DA2.{settings.PORTFOLIO_COLUMN} IS NOT NULL
+            ) DA
+            WHERE R.DT_EMISSAO >= @Hoje AND R.DT_EMISSAO < @Amanha
+              AND R.PARCELA = {settings.PRIMEIRA_PARCELA}
+              AND R.ID_REC_STATUS IN {settings.STATUS_EXCECAO_SQL}
+              {settings.FILTRO_AGENTES_EXCLUIDOS_SQL}
+            GROUP BY DA.{settings.PORTFOLIO_COLUMN}
+        """
+
+    agg = """
+        SELECT
+            portfolio_name,
+            SUM(qtd_excecoes) AS qtd_excecoes,
+            SUM(valor_excecoes) AS valor_excecoes
+    """
+    order = "GROUP BY portfolio_name ORDER BY qtd_excecoes DESC" if db == "todos" else "ORDER BY qtd_excecoes DESC"
+    return wrap_todos_or_single(db, _base, agg, order_by=order)
+
+
+def build_excecoes_por_agente_query(db: str) -> str:
+    """
+    Gráfico: exceções agrupadas por agente.
+    """
+    def _base(database: str) -> str:
+        return f"""
+            SELECT
+                U.NOME AS agente,
+                COUNT(DISTINCT R.NR_RECEBIMENTO) AS qtd_excecoes,
+                SUM(R.VALOR) AS valor_excecoes
+            FROM {database}.dbo.REC_MASTER R (NOLOCK)
+            JOIN {database}.dbo.USU_MASTER U (NOLOCK) ON R.ID_USUARIO = U.ID_USUARIO
+            WHERE R.DT_EMISSAO >= @Hoje AND R.DT_EMISSAO < @Amanha
+              AND R.PARCELA = {settings.PRIMEIRA_PARCELA}
+              AND R.ID_REC_STATUS IN {settings.STATUS_EXCECAO_SQL}
+              {settings.FILTRO_AGENTES_EXCLUIDOS_SQL}
+            GROUP BY U.NOME
+        """
+
+    agg = """
+        SELECT
+            agente,
+            SUM(qtd_excecoes) AS qtd_excecoes,
+            SUM(valor_excecoes) AS valor_excecoes
+    """
+    order = "GROUP BY agente ORDER BY qtd_excecoes DESC" if db == "todos" else "ORDER BY qtd_excecoes DESC"
+    return wrap_todos_or_single(db, _base, agg, order_by=order)
+
+
+def build_acordos_por_portfolio_query(db: str) -> str:
+    """
+    Gráfico: acordos aprovados agrupados por portfolio (CAMPO010 da DIV_AUX).
+    """
+    def _base(database: str) -> str:
+        return f"""
+            SELECT
+                DA.{settings.PORTFOLIO_COLUMN} AS portfolio_name,
+                COUNT(DISTINCT R.NR_RECEBIMENTO) AS qtd_acordos,
+                SUM(R.VALOR) AS valor_acordos
+            FROM {database}.dbo.REC_MASTER R (NOLOCK)
+            JOIN {database}.dbo.USU_MASTER U (NOLOCK) ON R.ID_USUARIO = U.ID_USUARIO
+            CROSS APPLY (
+                SELECT TOP 1 DA2.{settings.PORTFOLIO_COLUMN}
+                FROM {database}.dbo.REC_DIVIDAS RD (NOLOCK)
+                JOIN {database}.dbo.DIV_AUX DA2 (NOLOCK) ON RD.ID_DIVIDA = DA2.ID_DIVIDA
+                WHERE RD.NR_RECEBIMENTO = R.NR_RECEBIMENTO
+                  AND RD.ID_CARTEIRA = R.ID_CARTEIRA
+                  AND DA2.{settings.PORTFOLIO_COLUMN} IS NOT NULL
+            ) DA
+            WHERE R.DT_EMISSAO >= @Hoje AND R.DT_EMISSAO < @Amanha
+              AND R.PARCELA = {settings.PRIMEIRA_PARCELA}
+              AND R.ID_REC_STATUS IN {settings.STATUS_APROVADOS_SQL}
+              {settings.FILTRO_AGENTES_EXCLUIDOS_SQL}
+            GROUP BY DA.{settings.PORTFOLIO_COLUMN}
+        """
+
+    agg = """
+        SELECT
+            portfolio_name,
+            SUM(qtd_acordos) AS qtd_acordos,
+            SUM(valor_acordos) AS valor_acordos
+    """
+    order = "GROUP BY portfolio_name ORDER BY qtd_acordos DESC" if db == "todos" else "ORDER BY qtd_acordos DESC"
+    return wrap_todos_or_single(db, _base, agg, order_by=order)
+
+
+def build_primeira_parcela_por_agente_query(db: str, assessoria_token: str = "") -> str:
+    """
+    Gráfico: valor e quantidade da 1ª parcela por agente (acordos aprovados).
+    """
+    def _base(database: str) -> str:
+        assessoria_clause = build_assessoria_clause(assessoria_token)
+        return f"""
+            SELECT
+                U.NOME AS agente,
+                COUNT(DISTINCT R.NR_RECEBIMENTO) AS qtd_acordos_primeira_parcela,
+                SUM(R.VALOR) AS valor_primeira_parcela
+            FROM {database}.dbo.REC_MASTER R (NOLOCK)
+            JOIN {database}.dbo.USU_MASTER U (NOLOCK) ON R.ID_USUARIO = U.ID_USUARIO
+            WHERE R.PARCELA = {settings.PRIMEIRA_PARCELA}
+              AND R.DT_EMISSAO >= @Hoje AND R.DT_EMISSAO < @Amanha
+              AND R.ID_REC_STATUS IN {settings.STATUS_APROVADOS_SQL}
+              {settings.FILTRO_AGENTES_EXCLUIDOS_SQL}
+              {assessoria_clause}
+            GROUP BY U.NOME
+        """
+
+    agg = """
+        SELECT
+            agente,
+            SUM(qtd_acordos_primeira_parcela) AS qtd_acordos_primeira_parcela,
+            SUM(valor_primeira_parcela) AS valor_primeira_parcela
+    """
+    order = "GROUP BY agente ORDER BY valor_primeira_parcela DESC" if db == "todos" else "ORDER BY valor_primeira_parcela DESC"
+    return wrap_todos_or_single(db, _base, agg, order_by=order)
