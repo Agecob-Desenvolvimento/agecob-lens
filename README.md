@@ -1,411 +1,227 @@
 # Dashboard Relatorio (Monorepo)
 
-Projeto de dashboard em estrutura monorepo:
-- **Backend** em FastAPI + SQL Server (`main.py`)
-- **Frontend** em React + Vite (`src`, `dist`)
+Monorepo com **backend** FastAPI + SQL Server (`main.py`) e **frontend** React + Vite (`src/dist`). O frontend consome a API para exibir acordos do dia e indicadores operacionais.
 
-O frontend consome a API para exibir dados de acordos do dia e indicadores operacionais.
+## Stack
 
-## Tecnologias
+- **Backend:** Python 3.8+, FastAPI, pyodbc, SQL Server
+- **Frontend:** Node.js 18+, React + TypeScript + Vite, Tailwind + shadcn/ui + Recharts
 
-- Python 3.8+
-- FastAPI
-- pyodbc
-- SQL Server
-- Node.js 18+
-- React + TypeScript + Vite
-- Tailwind + shadcn/ui + Recharts
+## Estrutura
 
-## Estrutura do projeto
-
-```text
-agecob-lens/
-  main.py
-  requirements.txt
-  atualizar.bat
-  .env
-  .env.example
-  package.json
-  vite.config.ts
-  src/
-  dist/
-  docs/
+```
+agecob-lens/  main.py  requirements.txt  atualizar.bat  .env  .env.example
+              package.json  vite.config.ts  src/  dist/  docs/
 ```
 
 ## Pré-requisitos
 
-1. Driver ODBC instalado: **ODBC Driver 17 for SQL Server**
-2. Acesso ao SQL Server com usuário/senha válidos
-3. Python e Node.js instalados
+- ODBC Driver 17 for SQL Server instalado
+- Acesso ao SQL Server com usuário/senha válidos
+- Python 3.8+ e Node.js 18+
 
-## Início rápido (subir sistema completo)
+## Início rápido
 
-### Opção 1 — Atualização no servidor (recomendado)
-
+**Recomendado (servidor):**
 ```cmd
-cd C:\agecob
-git pull origin main
-atualizar.bat
+cd C:\agecob && git pull origin main && atualizar.bat
 ```
 
-### Opção 2 — Manual (servidor/local)
-
+**Manual:**
 ```cmd
 cd C:\agecob
 python -m pip install -r requirements.txt
-npm install
-npm run build
+npm install && npm run build
 python -m uvicorn main:app --host 0.0.0.0 --port 8000
 ```
 
-Após iniciar, acesse:
+Acesse: `http://127.0.0.1:8000` | Docs: `http://127.0.0.1:8000/docs`
 
-- App/API: `http://127.0.0.1:8000`
-- Docs da API: `http://127.0.0.1:8000/docs`
+## Deploy em produção (`C:\agecob`)
 
-### Verificação rápida (opcional)
-
-```powershell
-# Deve retornar status do banco
-curl http://127.0.0.1:8000/health/db
-```
-
-## Atualização no servidor (procedimento completo)
-
-Fluxo padrão para publicar uma nova versão em produção (`C:\agecob`).
-Um deploy normal (que **não mexe em schema**) resume-se aos passos 1–4.
-Os passos 5–6 só se aplicam quando a release inclui mudanças em índices/SQL
-(o release atual inclui — ver seção [Aplicar índices SQL recomendados (DBA)](#aplicar-índices-sql-recomendados-dba)).
-
-1. **Entrar como admin** no servidor e abrir `cmd` em `C:\agecob`.
-2. **Backup rápido** (opcional mas recomendado no primeiro deploy do dia):
-   ```cmd
-   copy .env .env.bak
-   ```
-3. **Atualizar código + dependências + build + restart** em um passo:
-   ```cmd
-   atualizar.bat
-   ```
-   O script executa:
-   - `git pull`
-   - `pip install -r requirements.txt`
-   - `npm install` + `npm run build` (gera `agecob-lens/dist`)
-   - Força `--workers 4` no serviço NSSM `AgecobAPI` e reinicia.
-4. **Smoke test** — a API deve voltar em ~10 s:
+1. Abrir `cmd` como admin em `C:\agecob`
+2. Backup opcional: `copy .env .env.bak`
+3. Atualizar tudo: `atualizar.bat` *(git pull + pip + npm build + restart NSSM)*
+4. Smoke test (~10 s após restart):
    ```powershell
    curl http://127.0.0.1:8000/health/db
    curl http://127.0.0.1:8000/health/db/COBwebRCBAUTOS
    curl http://127.0.0.1:8000/health/db/COBwebRCBCONSUMER
    ```
-   Todas as respostas devem conter `"status":"ok"`. Se alguma falhar, ver
-   [Rollback](#rollback-de-deploy).
-5. **(Se a release pede)** Aplicar índices SQL — ver próxima seção.
-6. **(Se necessário)** Limpar cache do dashboard após mudanças grandes:
-   ```powershell
-   # Basta reiniciar a API (o cache é em memória).
-   C:\nssm\win64\nssm.exe restart AgecobAPI
-   ```
+   Todas devem retornar `"status":"ok"`.
+5. Se a release inclui mudança de schema/índices: ver [Índices SQL](#índices-sql-dba).
+6. Para limpar cache em memória: `C:\nssm\win64\nssm.exe restart AgecobAPI`
 
-### Rollback de deploy
-
-Se o `atualizar.bat` subir versão quebrada:
+### Rollback
 
 ```cmd
-cd C:\agecob
 git log --oneline -5
 git reset --hard <HASH_ANTERIOR>
 atualizar.bat
+# Se necessário: copy .env.bak .env && C:\nssm\win64\nssm.exe restart AgecobAPI
 ```
 
-Em último caso, restaurar `.env` do backup e reiniciar o serviço:
+## Índices SQL (DBA)
 
-```cmd
-copy .env.bak .env
-C:\nssm\win64\nssm.exe restart AgecobAPI
-```
+Fonte de verdade: `docs/sql-indexes-recommendations.sql`. Auditoria: `docs/produtividade-agentes-consistency-audit.md`.
 
-## Aplicar índices SQL recomendados (DBA)
+### Via SSMS (recomendado em produção)
 
-Para releases que mudam performance de leitura, as recomendações ficam em:
+Tabelas afetadas: `REC_MASTER`, `DEV`, `USU_MASTER`, `DIV`. Preferir janela de baixa escrita.
 
-- `agecob-lens/docs/sql-indexes-recommendations.sql` — fonte de verdade, comentada.
-- `agecob-lens/docs/produtividade-agentes-consistency-audit.md` — auditoria de consistência do endpoint unificado `/dashboard/produtividade-agentes`.
-- `main.py` expõe os mesmos índices via endpoints `/admin/indexes/*` para conferência.
-
-### Caminho recomendado — SSMS, controlado pelo DBA
-
-Como os índices são em tabelas grandes (`REC_MASTER`, `DEV`, `USU_MASTER`, `DIV`),
-o certo é rodar o script manualmente, em janela de manutenção, com controle fino
-de `ONLINE`, `DATA_COMPRESSION` e monitoramento de espaço/tempo.
-
-1. **Janela de manutenção**: preferir horário de baixa escrita. `CREATE INDEX` com
-   `ONLINE = OFF` bloqueia escrita na tabela durante a operação; com `ONLINE = ON`
-   (Enterprise) roda concorrente mas consome mais tempdb.
-2. **Conectar no SSMS** como `sa` ou role `db_ddladmin` em cada banco:
-   - `COBwebRCBAUTOS`
-   - `COBwebRCBCONSUMER`
-3. **Revisar e executar** `agecob-lens/docs/sql-indexes-recommendations.sql` em cada
-   banco. Ajustar antes de rodar:
-   - Trocar `ONLINE = OFF` → `ONLINE = ON` se for Enterprise e não puder bloquear.
-   - Remover `DATA_COMPRESSION = PAGE` se a edição não suportar (Standard pré-2016 SP1).
-   - Ajustar `FILLFACTOR` conforme perfil de escrita (padrão 90 serve).
-4. **Monitorar durante o CREATE**:
+1. Conectar como `sa` / `db_ddladmin` em `COBwebRCBAUTOS` e `COBwebRCBCONSUMER`
+2. Revisar e executar `docs/sql-indexes-recommendations.sql` — ajustar `ONLINE`, `DATA_COMPRESSION` e `FILLFACTOR` conforme edição do SQL Server
+3. Monitorar:
    ```sql
-   SELECT session_id, percent_complete, estimated_completion_time / 60000 AS minutes_left
-   FROM sys.dm_exec_requests
-   WHERE command LIKE 'CREATE%INDEX%';
+   SELECT session_id, percent_complete, estimated_completion_time/60000 AS min_left
+   FROM sys.dm_exec_requests WHERE command LIKE 'CREATE%INDEX%';
    ```
-5. **Atualizar estatísticas** (o script já tem, mas se pulou):
+4. Atualizar estatísticas (já incluso no script):
    ```sql
    UPDATE STATISTICS dbo.REC_MASTER WITH FULLSCAN;
    UPDATE STATISTICS dbo.USU_MASTER WITH FULLSCAN;
-   UPDATE STATISTICS dbo.DEV        WITH FULLSCAN;
-   UPDATE STATISTICS dbo.DIV        WITH FULLSCAN;
+   UPDATE STATISTICS dbo.DEV WITH FULLSCAN;
+   UPDATE STATISTICS dbo.DIV WITH FULLSCAN;
    ```
-6. **Validar ganho** — rodar antes e depois em uma sessão com:
-   ```sql
-   SET STATISTICS IO ON;
-   SET STATISTICS TIME ON;
-   -- cole aqui uma query representativa (ex.: a do endpoint /dashboard/produtividade-hoje)
-   ```
-   Esperado: **Clustered Index Scan** em `REC_MASTER` substituído por **Index Seek**
-   em `IX_REC_MASTER_DT_EMISSAO`; `logical reads` cai 1–2 ordens de grandeza.
 
-### Caminho alternativo — via endpoints admin (conferência/uso emergencial)
+### Via endpoints admin (homologação / conferência)
 
-O `main.py` expõe dois endpoints que leem/aplicam **os mesmos índices** do
-arquivo `.sql`. Servem para você conferir o estado sem abrir o SSMS, ou para
-aplicar rapidamente num banco de homologação. **Em produção prefira SSMS.**
-
-Pré-requisitos no `.env` do servidor:
-
+Exige no `.env`:
 ```env
-REQUIRE_API_AUTH=true
-API_KEY=<chave_forte>
-API_TOKEN=<token_forte>
-ENABLE_INDEX_ADMIN=true
+REQUIRE_API_AUTH=true  API_KEY=<chave>  API_TOKEN=<token>  ENABLE_INDEX_ADMIN=true
+```
+Reiniciar: `C:\nssm\win64\nssm.exe restart AgecobAPI`
+
+```powershell
+$H = @{ "X-API-Key" = "<chave>"; "Authorization" = "Bearer <token>" }
+
+# Conferir estado (read-only)
+Invoke-RestMethod -Headers $H http://127.0.0.1:8000/admin/indexes/status/COBwebRCBAUTOS
+
+# Dry-run (gera SQL sem executar)
+Invoke-RestMethod -Method POST -Headers $H "http://127.0.0.1:8000/admin/indexes/apply/COBwebRCBAUTOS?dry_run=true"
+
+# Aplicar
+Invoke-RestMethod -Method POST -Headers $H "http://127.0.0.1:8000/admin/indexes/apply/COBwebRCBAUTOS?dry_run=false&online=true&update_statistics=true"
+Invoke-RestMethod -Method POST -Headers $H "http://127.0.0.1:8000/admin/indexes/apply/COBwebRCBCONSUMER?dry_run=false&online=true&update_statistics=true"
 ```
 
-Após editar o `.env`, reiniciar a API:
-
-```cmd
-C:\nssm\win64\nssm.exe restart AgecobAPI
-```
-
-1. **Conferir o que falta** (read-only, seguro a qualquer hora):
-   ```powershell
-   $H = @{ "X-API-Key" = "<chave>"; "Authorization" = "Bearer <token>" }
-   Invoke-RestMethod -Headers $H `
-     http://127.0.0.1:8000/admin/indexes/status/COBwebRCBAUTOS
-   ```
-   Resposta traz `total_recommended`, `existing`, `missing` e a lista detalhada
-   com `exists: true/false` por índice.
-
-2. **Dry-run** — gera o SQL que seria rodado, sem executar:
-   ```powershell
-   Invoke-RestMethod -Method POST -Headers $H `
-     "http://127.0.0.1:8000/admin/indexes/apply/COBwebRCBAUTOS?dry_run=true"
-   ```
-   Cada item da resposta traz `action: "would_create"` e o `sql` completo —
-   copie e inspecione antes de aplicar de verdade.
-
-3. **Aplicar de fato** (somente após dry-run conferido, em janela):
-   ```powershell
-   Invoke-RestMethod -Method POST -Headers $H `
-     "http://127.0.0.1:8000/admin/indexes/apply/COBwebRCBAUTOS?dry_run=false&online=true&update_statistics=true"
-   ```
-   Parâmetros:
-   - `dry_run` (default `true`) — `false` para executar.
-   - `online` (default `false`) — `true` exige SQL Server Enterprise; permite
-     escrita concorrente durante o `CREATE INDEX`.
-   - `update_statistics` (default `false`) — dispara `UPDATE STATISTICS … FULLSCAN`
-     nas tabelas afetadas depois do create.
-
-4. **Repetir para o segundo banco**:
-   ```powershell
-   Invoke-RestMethod -Method POST -Headers $H `
-     "http://127.0.0.1:8000/admin/indexes/apply/COBwebRCBCONSUMER?dry_run=false&online=true&update_statistics=true"
-   ```
-
-5. **Desligar o admin depois** (opcional, recomendado — superfície de ataque menor):
-   ```env
-   ENABLE_INDEX_ADMIN=false
-   ```
-   E reiniciar o serviço.
-
-A operação é **idempotente**: índices que já existem retornam `action: "skipped_existing"`
-e não são recriados.
+Operação idempotente — índices existentes retornam `action: "skipped_existing"`. Após aplicar, setar `ENABLE_INDEX_ADMIN=false` e reiniciar.
 
 ### Rollback de índice
 
-Se algum índice precisar sair (ex.: consumo de espaço inesperado):
-
 ```sql
-USE COBwebRCBAUTOS;   -- ou COBwebRCBCONSUMER
+USE COBwebRCBAUTOS; -- ou COBwebRCBCONSUMER
 DROP INDEX IX_REC_MASTER_DT_EMISSAO ON dbo.REC_MASTER;
 -- repetir para os demais listados em sql-indexes-recommendations.sql
 ```
 
-Não há impacto funcional — o dashboard volta a fazer scan, apenas mais lento.
+## Configuração
 
-## Configuração do backend
+### Backend (`.env`)
 
-O backend lê variáveis de ambiente (sem segredos hardcoded):
+| Variável | Padrão | Descrição |
+|---|---|---|
+| `DB_DRIVER / SERVER / USER / PASSWORD` | — | Conexão SQL Server |
+| `API_KEY / API_TOKEN` | — | Auth da API |
+| `DB_POOL_SIZE` | 6 | Conexões por database por worker |
+| `DB_POOL_TIMEOUT` | 10 | Segundos de espera por conexão |
+| `DB_POOL_MAX_AGE_SECONDS` | 1800 | Idade máxima de conexão |
+| `DASHBOARD_CACHE_TTL` | 60 | TTL do cache em memória (0 = off) |
+| `REQUIRE_API_AUTH` | false | Exige auth em `/dashboard/*`, `/health/*`, `/admin/*` |
+| `ENABLE_AGENT_TELEMETRY` | false | Habilita rotas de telemetria |
+| `ENABLE_INDEX_ADMIN` | false | Habilita `/admin/indexes/*` |
 
-- `DB_DRIVER`
-- `DB_SERVER`
-- `DB_USER`
-- `DB_PASSWORD`
-- `API_KEY`
-- `API_TOKEN`
+Use `.env.example` como base.
 
-Variáveis opcionais de tuning (valores padrão entre parênteses):
-
-- `DB_POOL_SIZE` (6) — conexões pyodbc reutilizadas por database, por worker.
-- `DB_POOL_TIMEOUT` (10) — segundos de espera por conexão do pool.
-- `DB_POOL_MAX_AGE_SECONDS` (1800) — idade máxima de uma conexão antes de reciclar.
-- `DASHBOARD_CACHE_TTL` (60) — TTL em segundos do cache em memória dos endpoints de gráfico. `0` desliga.
-- `REQUIRE_API_AUTH` (`false`) — quando `true`, exige `X-API-Key` + `Authorization: Bearer` em todos os endpoints de `/dashboard/*`, `/health/*` e `/admin/*`.
-- `ENABLE_AGENT_TELEMETRY` (`false`) — habilita rotas de telemetria de agente.
-- `ENABLE_INDEX_ADMIN` (`false`) — habilita `/admin/indexes/status/*` e `/admin/indexes/apply/*`. Mantenha `false` fora de janelas de manutenção.
-
-Use o arquivo `.env.example` como base para criar seu `.env` local.
-
-### Instalar dependências Python
-
-```cmd
-cd C:\agecob
-python -m pip install -r requirements.txt
-```
-
-### Executar API
-
-```cmd
-cd C:\agecob
-python -m uvicorn main:app --host 0.0.0.0 --port 8000
-```
-
-A API sobe em `http://0.0.0.0:8000` (acessível pela rede local via IP da máquina).
-
-## Configuração do frontend
-
-Arquivo `C:\agecob\.env` (build e API compartilham o mesmo arquivo):
+### Frontend (`.env`)
 
 ```env
 VITE_API_BASE_URL=/api
 VITE_API_PROXY_TARGET=http://127.0.0.1:8000
 ```
 
-> Em produção, acesse por `http://<IP_SERVIDOR>:8000`.
+Em produção: `http://<IP_SERVIDOR>:8000`
 
-### Instalar dependências do frontend
+## Rede local (LAN)
 
-```cmd
-cd C:\agecob
-npm install
-```
+1. NSSM `AgecobAPI`: `AppDirectory=C:\agecob`, `AppParameters=-m uvicorn main:app --host 0.0.0.0 --port 8000 --workers 4`
+2. Liberar porta `8000` no firewall:
+   ```powershell
+   netsh advfirewall firewall add rule name="Dash API 8000" dir=in action=allow protocol=TCP localport=8000
+   ```
+3. Acessar: `http://<IP_SERVIDOR>:8000`
 
-### Executar frontend
+O `atualizar.bat` já força `--workers 4` via `nssm set` antes de reiniciar.
 
-```cmd
-cd C:\agecob
-npm run dev
-```
-
-## Rodar em rede local (LAN)
-
-Para outro computador acessar no mesmo endereço:
-
-### Produção (endereço único)
-
-1. Configure o serviço `AgecobAPI` no NSSM com:
-   - AppDirectory: `C:\agecob`
-   - AppParameters: `-m uvicorn main:app --host 0.0.0.0 --port 8000 --workers 4`
-     (ajuste `--workers` para ~N de cores físicos; 4 é um default seguro para servidores modestos)
-2. Libere a porta `8000` no firewall.
-3. Abra no cliente da rede: `http://<IP_SERVIDOR>:8000`
-
-> O `atualizar.bat` já força `--workers 4` via `nssm set AgecobAPI AppParameters` antes de reiniciar o serviço.
-
-No modo produção, o FastAPI serve o frontend (`dist`) e a API no mesmo host, com suporte a `/api/*`.
-
-### Exemplo de regra no firewall (PowerShell admin)
-
-```powershell
-netsh advfirewall firewall add rule name="Dash API 8000" dir=in action=allow protocol=TCP localport=8000
-```
-
-## Endpoints principais da API
+## Endpoints
 
 ### Infra
-- `GET /` — frontend em produção (ou health simples sem build)
-- `GET /docs` — Swagger UI
-- `GET /api/*` — alias para os mesmos endpoints (útil para frontend unificado)
-- `GET /health/db` — health check no banco padrão (COBwebRCBAUTOS)
-- `GET /health/db/{database_name}` — health check no banco informado
+| Endpoint | Descrição |
+|---|---|
+| `GET /` | Frontend (prod) ou health |
+| `GET /docs` | Swagger UI |
+| `GET /api/*` | Alias para todos os endpoints |
+| `GET /health/db[/{database_name}]` | Health check no banco |
 
 ### Acordos
-- `GET /dashboard/acordos-hoje` — acordos do dia (COBwebRCBAUTOS, fixo). Aceita `?limit=500&offset=0` (máx 5000). Meta traz `pagination: { limit, offset, total, returned }`.
-- `GET /dashboard/acordos-hoje/{database_name}` — acordos do dia por banco (mesma paginação).
-- `GET /dashboard/acordos-hoje/todos` — acordos do dia com campo `banco_origem` (paginação aplicada por banco; meta inclui `total_por_banco`).
+| Endpoint | Descrição |
+|---|---|
+| `GET /dashboard/acordos-hoje` | Acordos do dia — COBwebRCBAUTOS. `?limit=500&offset=0` (máx 5000) |
+| `GET /dashboard/acordos-hoje/{database_name}` | Por banco |
+| `GET /dashboard/acordos-hoje/todos` | Todos com `banco_origem` |
 
 ### Produtividade / Agentes
-- `GET /dashboard/produtividade-hoje/{database_name}` — produtividade por banco (único)
-- `GET /dashboard/comparacao-agentes/{db}` — comparação de agentes (aceita `todos`)
-- `GET /dashboard/detalhamento-agentes/{database_name}` — detalhamento de agentes
-- `GET /dashboard/produtividade/{database_name}` — alias de comparacao-agentes
-- `GET /dashboard/produtividade-agentes` — produtividade unificada (consolidado + por banco na mesma resposta). Aceita `?force_refresh=true`.
+| Endpoint | Descrição |
+|---|---|
+| `GET /dashboard/produtividade-hoje/{db}` | Produtividade por banco |
+| `GET /dashboard/comparacao-agentes/{db}` | Comparação (aceita `todos`) |
+| `GET /dashboard/detalhamento-agentes/{db}` | Detalhamento |
+| `GET /dashboard/produtividade/{db}` | Alias de comparacao-agentes |
+| `GET /dashboard/produtividade-agentes` | Unificado consolidado + por banco. `?force_refresh=true` |
 
-### Dashboard v2 — novos endpoints
-- `GET /dashboard/primeira-parcela-dia/{db}` — soma e contagem de 1ª parcela (PARCELA=0) emitida hoje
-- `GET /dashboard/excecoes-por-portfolio/{db}` — exceções (status 11) agrupadas por portfólio
-- `GET /dashboard/excecoes-por-agente/{db}` — exceções (status 11) agrupadas por agente
-- `GET /dashboard/acordos-por-portfolio/{db}` — acordos aprovados agrupados por portfólio
-- `GET /dashboard/primeira-parcela-por-agente/{db}` — valor e qtd de 1ª parcela por agente
+### Dashboard v2
+| Endpoint | Descrição |
+|---|---|
+| `GET /dashboard/primeira-parcela-dia/{db}` | Soma/qtd de 1ª parcela (PARCELA=0) do dia |
+| `GET /dashboard/excecoes-por-portfolio/{db}` | Exceções (status 11) por portfólio |
+| `GET /dashboard/excecoes-por-agente/{db}` | Exceções por agente |
+| `GET /dashboard/acordos-por-portfolio/{db}` | Acordos aprovados por portfólio |
+| `GET /dashboard/primeira-parcela-por-agente/{db}` | 1ª parcela por agente |
 
-Todos os endpoints acima aceitam `{db}`:
-- `COBwebRCBAUTOS`
-- `COBwebRCBCONSUMER`
-- `todos` (UNION ALL dos dois bancos)
+`{db}`: `COBwebRCBAUTOS` | `COBwebRCBCONSUMER` | `todos`
 
-### Admin — índices SQL (requer `ENABLE_INDEX_ADMIN=true`)
-- `GET /admin/indexes/status/{db}` — lista o estado (`exists`) de cada índice recomendado.
-- `POST /admin/indexes/apply/{db}?dry_run=true&online=false&update_statistics=false` — aplica índices faltantes. Idempotente. Detalhes no passo-a-passo da seção [Aplicar índices SQL recomendados (DBA)](#aplicar-índices-sql-recomendados-dba).
+### Admin (requer `ENABLE_INDEX_ADMIN=true`)
+| Endpoint | Descrição |
+|---|---|
+| `GET /admin/indexes/status/{db}` | Estado de cada índice recomendado |
+| `POST /admin/indexes/apply/{db}` | Aplica índices faltantes. `?dry_run=true&online=false&update_statistics=false` |
 
-`{db}` nos endpoints admin aceita **apenas** `COBwebRCBAUTOS` ou `COBwebRCBCONSUMER` (sem `todos`).
+`{db}` admin: apenas `COBwebRCBAUTOS` ou `COBwebRCBCONSUMER`.
 
-## Regras de negócio e convenções SQL
+## Regras de negócio
 
 | Regra | Valor |
 |---|---|
-| Primeira parcela (entrada) | `PARCELA = 0` |
-| Acordos válidos (`ID_REC_STATUS`) | `IN (1, 3, 12)` — ATIVO + BAIXA POR PAGAMENTO + BAIXA POR PAGAMENTO AVULSO |
-| Exceções (`ID_REC_STATUS`) | `= 11` — EXCEÇÃO |
-| Pré-filtro CTE acordos | `IN (1, 3, 11, 12)` |
-| Coluna de nome do portfólio | `DIV_AUX.CAMPO010` |
-| Padrão de data | `DECLARE @Hoje / @Amanha` + `DT_EMISSAO >= @Hoje AND DT_EMISSAO < @Amanha` |
-| NOLOCK | Obrigatório em todas as referências de tabela |
+| Primeira parcela | `PARCELA = 0` |
+| Acordos válidos (`ID_REC_STATUS`) | `IN (1, 3, 12)` — ATIVO + BAIXAS POR PAGAMENTO |
+| Exceções (`ID_REC_STATUS`) | `= 11` |
+| Pré-filtro CTE | `IN (1, 3, 11, 12)` |
+| Portfólio | `DIV_AUX.CAMPO010` |
+| Filtro de data | `DT_EMISSAO >= @Hoje AND DT_EMISSAO < @Amanha` |
+| NOLOCK | Obrigatório em todas as tabelas |
 | Agentes excluídos | `COBDESANTOS`, `ANTLIA%`, `INTERNA%`, `suporte%`, `SISTEMA%` |
 
-## Scripts úteis (frontend)
+## Scripts
 
 ```powershell
-npm run dev
-npm run dev:lan
-npm run build
-npm run lint
-npm run test
-npm run check
-```
+# Frontend
+npm run dev | dev:lan | build | lint | test | check
 
-## Script útil (servidor)
-
-```cmd
-cd C:\agecob
+# Servidor
 atualizar.bat
 ```
 
-## Observações
+---
 
-- O arquivo `.env` não deve ser commitado com dados sensíveis.
-- `.env.example` deve conter apenas placeholders.
+> `.env` nunca deve ser commitado com dados sensíveis. Use `.env.example` com placeholders.

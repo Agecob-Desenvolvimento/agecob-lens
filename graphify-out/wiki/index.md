@@ -1,6 +1,6 @@
 # dash-relatorio — Knowledge Graph
 
-> Gerado em 2026-04-30. Atualizado em 2026-05-05. Entry point para navegação do projeto.
+> Gerado em 2026-04-30. Atualizado em 2026-05-05 (docs/ adicionado). Entry point para navegação do projeto.
 
 ## Visão Geral
 
@@ -29,6 +29,7 @@ React SPA (agecob-lens/src/)
 | [flows.md](flows.md) | Fluxos de dados end-to-end |
 | [security.md](security.md) | Auth, rate limit, CORS, middlewares |
 | [dia-26-maio.md](dia-26-maio.md) | Sessão 26/05: regras canônicas de efetividade, auditoria de métricas, refatoração por domínios |
+| [docs.md](docs.md) | Toda a documentação em `agecob-lens/docs/`: regras de negócio, ADRs, KPIs, padrões SQL, changelog, diários |
 
 ---
 
