@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -31,12 +32,11 @@ import {
   fetchEfAgenteColchao,
   fetchEfAgenteColchaoVencimento,
   fetchEfAgentePrimeira,
-  fetchEfDiariaColchao,
-  fetchEfDiariaColchaoVencimento,
-  fetchEfDiariaPrimeira,
   fetchEfMensalColchao,
   fetchEfMensalColchaoVencimento,
   fetchEfMensalPrimeira,
+  fetchEfResumo,
+  type EfResumoDayRow,
 } from "@/services/api";
 import {
   Tooltip as UITooltip,
@@ -47,23 +47,9 @@ import {
 import { cn } from "@/lib/utils";
 
 // ── Constants ──────────────────────────────────────────────────────
-const MONTH_NAMES = [
-  "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
-  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
-];
 const MONTH_ABBR = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 
-// ── Normalized internal types ───────────────────────────────────────
-interface DiariaData {
-  dia: string;
-  diaNum: number;
-  mesNum: number;
-  anoNum: number;
-  boletosGerados: number;
-  pagosNoPrazo: number;
-  conversao: number;
-}
-
+// ── Types ────────────────────────────────────────────────────────────
 interface MensalData {
   ano: number;
   mes: number;
@@ -81,14 +67,22 @@ interface AgenteData {
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────
-function parseDateParts(dateStr: string): { year: number; month: number; day: number } {
-  const p = dateStr.split("-");
-  return { year: parseInt(p[0], 10), month: parseInt(p[1], 10), day: parseInt(p[2], 10) };
+function toISO(d: Date): string {
+  return d.toISOString().split("T")[0];
 }
 
 function fmtDia(dateStr: string): string {
-  const { day, month } = parseDateParts(dateStr);
-  return `${String(day).padStart(2, "0")}/${String(month).padStart(2, "0")}`;
+  const [, month, day] = dateStr.split("-");
+  return `${day}/${month}`;
+}
+
+function fmtBRL(value: number): string {
+  return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+function fmtPct(value: number | null | undefined): string {
+  if (value == null) return "—";
+  return `${Number(value).toFixed(2)}%`;
 }
 
 function convColorClass(v: number): string {
@@ -103,19 +97,32 @@ function convFill(v: number): string {
   return "#dc2626";
 }
 
+function monthInRange(year: number, month: number, dateFrom: string, dateTo: string): boolean {
+  const monthStart = `${year}-${String(month).padStart(2, "0")}-01`;
+  const nextMonthStart =
+    month === 12
+      ? `${year + 1}-01-01`
+      : `${year}-${String(month + 1).padStart(2, "0")}-01`;
+  return monthStart <= dateTo && nextMonthStart > dateFrom;
+}
+
 // ── Simple KPI card ─────────────────────────────────────────────────
 function KpiCard({
   label,
   value,
   colorClass,
   highlight,
+  sub,
+  tooltip,
 }: {
   label: string;
   value: string;
   colorClass?: string;
   highlight?: boolean;
+  sub?: string;
+  tooltip?: string;
 }) {
-  return (
+  const card = (
     <Card className={cn("min-w-0", highlight ? "border-primary/40 shadow-sm" : "")}>
       <CardHeader className="pb-1 pt-3 px-3">
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground leading-tight truncate">
@@ -126,8 +133,18 @@ function KpiCard({
         <span className={cn("block font-bold tabular-nums text-xl md:text-2xl truncate", colorClass ?? "text-foreground")}>
           {value}
         </span>
+        {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
       </CardContent>
     </Card>
+  );
+  if (!tooltip) return card;
+  return (
+    <TooltipProvider>
+      <UITooltip>
+        <TooltipTrigger asChild>{card}</TooltipTrigger>
+        <TooltipContent className="max-w-xs text-xs">{tooltip}</TooltipContent>
+      </UITooltip>
+    </TooltipProvider>
   );
 }
 
@@ -143,61 +160,38 @@ export default function EfetividadeBoletos() {
   const now = new Date();
   const [tipo, setTipo] = useState<"primeira" | "colchao">("primeira");
   const [colchaoView, setColchaoView] = useState<"vencimento" | "emissao">("vencimento");
-  const [selectedYear, setSelectedYear] = useState(now.getFullYear());
-  const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1);
   const [banco, setBanco] = useState<"todos" | "COBwebRCBAUTOS" | "COBwebRCBCONSUMER">("todos");
+  const [dateFrom, setDateFrom] = useState(
+    toISO(new Date(now.getFullYear(), now.getMonth(), 1)),
+  );
+  const [dateTo, setDateTo] = useState(toISO(now));
 
   const dbParam = banco === "todos" ? undefined : banco;
 
-  // Fetch all upfront so switching is instant after first load
-  const { data: dpEnv, isLoading: ldp, error: errDp } = useQuery({ queryKey: ["ef-diaria-primeira", banco], queryFn: () => fetchEfDiariaPrimeira(dbParam) });
-  const { data: dcEnv, isLoading: ldc, error: errDc } = useQuery({ queryKey: ["ef-diaria-colchao", banco], queryFn: () => fetchEfDiariaColchao(dbParam) });
-  const { data: dcvEnv, isLoading: ldcv, error: errDcv } = useQuery({ queryKey: ["ef-diaria-colchao-vencimento", banco], queryFn: () => fetchEfDiariaColchaoVencimento(dbParam) });
-  const { data: mpEnv, isLoading: lmp, error: errMp } = useQuery({ queryKey: ["ef-mensal-primeira", banco], queryFn: () => fetchEfMensalPrimeira(dbParam) });
-  const { data: mcEnv, isLoading: lmc, error: errMc } = useQuery({ queryKey: ["ef-mensal-colchao", banco], queryFn: () => fetchEfMensalColchao(dbParam) });
-  const { data: mcvEnv, isLoading: lmcv, error: errMcv } = useQuery({ queryKey: ["ef-mensal-colchao-vencimento", banco], queryFn: () => fetchEfMensalColchaoVencimento(dbParam) });
-  const { data: apEnv, isLoading: lap, error: errAp } = useQuery({ queryKey: ["ef-agente-primeira", banco], queryFn: () => fetchEfAgentePrimeira(dbParam) });
-  const { data: acEnv, isLoading: lac, error: errAc } = useQuery({ queryKey: ["ef-agente-colchao", banco], queryFn: () => fetchEfAgenteColchao(dbParam) });
-  const { data: acvEnv, isLoading: lacv, error: errAcv } = useQuery({ queryKey: ["ef-agente-colchao-vencimento", banco], queryFn: () => fetchEfAgenteColchaoVencimento(dbParam) });
+  // ── Live resumo query (KPIs + daily chart) ───────────────────────
+  const { data: resumoEnv, isLoading: loadingResumo, error: errResumo } = useQuery({
+    queryKey: ["ef-resumo", dateFrom, dateTo, banco, tipo],
+    queryFn: () => fetchEfResumo(dateFrom, dateTo, dbParam, tipo),
+    enabled: !!dateFrom && !!dateTo && dateFrom <= dateTo,
+  });
 
-  const loading = tipo === "primeira"
-    ? (ldp || lmp || lap)
-    : colchaoView === "vencimento"
-      ? (ldcv || lmcv || lacv)
-      : (ldc || lmc || lac);
+  // ── ETL queries for monthly trend + agent ranking ─────────────────
+  const { data: mpEnv } = useQuery({ queryKey: ["ef-mensal-primeira", banco], queryFn: () => fetchEfMensalPrimeira(dbParam) });
+  const { data: mcEnv } = useQuery({ queryKey: ["ef-mensal-colchao", banco], queryFn: () => fetchEfMensalColchao(dbParam) });
+  const { data: mcvEnv } = useQuery({ queryKey: ["ef-mensal-colchao-vencimento", banco], queryFn: () => fetchEfMensalColchaoVencimento(dbParam) });
+  const { data: apEnv } = useQuery({ queryKey: ["ef-agente-primeira", banco], queryFn: () => fetchEfAgentePrimeira(dbParam) });
+  const { data: acEnv } = useQuery({ queryKey: ["ef-agente-colchao", banco], queryFn: () => fetchEfAgenteColchao(dbParam) });
+  const { data: acvEnv } = useQuery({ queryKey: ["ef-agente-colchao-vencimento", banco], queryFn: () => fetchEfAgenteColchaoVencimento(dbParam) });
 
-  const hasError = tipo === "primeira"
-    ? Boolean(errDp || errMp || errAp)
-    : colchaoView === "vencimento"
-      ? Boolean(errDcv || errMcv || errAcv)
-      : Boolean(errDc || errMc || errAc);
+  const resumo = resumoEnv?.data;
+  const kpis = resumo?.kpis;
+  const daily: EfResumoDayRow[] = resumo?.daily ?? [];
 
-  // ── Normalize diaria ────────────────────────────────────────────
-  const diariaAll = useMemo((): DiariaData[] => {
-    if (tipo === "primeira") {
-      return (dpEnv?.data ?? []).map((r) => {
-        const { year, month, day } = parseDateParts(r.Dia_Emissao);
-        return { dia: r.Dia_Emissao, diaNum: day, mesNum: month, anoNum: year, boletosGerados: r.Boletos_Gerados, pagosNoPrazo: r.Pagos_No_Prazo, conversao: r.Conversao_Prazo_5d };
-      });
-    }
-    if (colchaoView === "vencimento") {
-      return (dcvEnv?.data ?? []).map((r) => {
-        const { year, month, day } = parseDateParts(r.Dia_Vencimento);
-        return { dia: r.Dia_Vencimento, diaNum: day, mesNum: month, anoNum: year, boletosGerados: r.Boletos_Gerados_Colchao, pagosNoPrazo: r.Pagos_No_Prazo, conversao: r.Conversao_Colchao };
-      });
-    }
-    return (dcEnv?.data ?? []).map((r) => {
-      const { year, month, day } = parseDateParts(r.Dia_Emissao);
-      return { dia: r.Dia_Emissao, diaNum: day, mesNum: month, anoNum: year, boletosGerados: r.Boletos_Gerados_Colchao, pagosNoPrazo: r.Pagos_No_Prazo, conversao: r.Conversao_Colchao };
-    });
-  }, [tipo, colchaoView, dpEnv, dcEnv, dcvEnv]);
+  // ── Derived chart data ───────────────────────────────────────────
+  const melhorDia = resumo?.best_day ?? null;
+  const piorDia = resumo?.worst_day ?? null;
 
-  const diariaFiltrada = useMemo(
-    () => diariaAll.filter((d) => d.anoNum === selectedYear && d.mesNum === selectedMonth),
-    [diariaAll, selectedYear, selectedMonth],
-  );
-
-  // ── Normalize mensal ────────────────────────────────────────────
+  // ── Normalize mensal (for monthly trend) ─────────────────────────
   const mensalAll = useMemo((): MensalData[] => {
     if (tipo === "primeira") {
       return (mpEnv?.data ?? []).map((r) => ({
@@ -214,57 +208,42 @@ export default function EfetividadeBoletos() {
     }));
   }, [tipo, colchaoView, mpEnv, mcEnv, mcvEnv]);
 
-  const selectedMensal = useMemo(
-    () => mensalAll.find((m) => m.ano === selectedYear && m.mes === selectedMonth),
-    [mensalAll, selectedYear, selectedMonth],
-  );
-
-  const mensalChart = useMemo(
-    () => mensalAll.filter((m) => m.conversao > 0),
-    [mensalAll],
-  );
+  const mensalChart = useMemo(() => mensalAll.filter((m) => m.conversao > 0), [mensalAll]);
 
   const avgConversao = useMemo(() => {
     if (!mensalChart.length) return 0;
     return Math.round(mensalChart.reduce((s, m) => s + m.conversao, 0) / mensalChart.length);
   }, [mensalChart]);
 
-  // ── Normalize agentes ───────────────────────────────────────────
+  // ── Agent ranking filtered to date range ─────────────────────────
   const agentesAll = useMemo((): AgenteData[] => {
-    if (tipo === "primeira") {
-      return (apEnv?.data ?? [])
-        .filter((r) => r.Ano === selectedYear && r.Mes === selectedMonth)
-        .map((r) => ({ agente: r.Agente, boletosGerados: r.Boletos_Gerados, pagosNoPrazo: r.Pagos_No_Prazo, conversao: r.Conversao_Prazo_5d }))
-        .filter((a) => a.boletosGerados >= 10)
-        .sort((a, b) => b.conversao - a.conversao);
+    const src = tipo === "primeira"
+      ? (apEnv?.data ?? [])
+      : colchaoView === "vencimento" ? (acvEnv?.data ?? []) : (acEnv?.data ?? []);
+
+    const inRange = src.filter((r) => monthInRange(r.Ano, r.Mes, dateFrom, dateTo));
+
+    const byAgent = new Map<string, { gerados: number; pagos: number }>();
+    for (const r of inRange) {
+      const gerados = tipo === "primeira" ? (r as any).Boletos_Gerados : (r as any).Boletos_Gerados_Colchao;
+      const prev = byAgent.get(r.Agente) ?? { gerados: 0, pagos: 0 };
+      byAgent.set(r.Agente, { gerados: prev.gerados + gerados, pagos: prev.pagos + r.Pagos_No_Prazo });
     }
-    const agenteSrc = colchaoView === "vencimento" ? (acvEnv?.data ?? []) : (acEnv?.data ?? []);
-    return agenteSrc
-      .filter((r) => r.Ano === selectedYear && r.Mes === selectedMonth)
-      .map((r) => ({ agente: r.Agente, boletosGerados: r.Boletos_Gerados_Colchao, pagosNoPrazo: r.Pagos_No_Prazo, conversao: r.Conversao_Colchao }))
+
+    return Array.from(byAgent.entries())
+      .map(([agente, { gerados, pagos }]) => ({
+        agente,
+        boletosGerados: gerados,
+        pagosNoPrazo: pagos,
+        conversao: gerados > 0 ? Math.round((pagos / gerados) * 100) : 0,
+      }))
       .filter((a) => a.boletosGerados >= 10)
       .sort((a, b) => b.conversao - a.conversao);
-  }, [tipo, colchaoView, apEnv, acEnv, acvEnv, selectedYear, selectedMonth]);
+  }, [tipo, colchaoView, apEnv, acEnv, acvEnv, dateFrom, dateTo]);
 
-  // ── KPI derivations ─────────────────────────────────────────────
-  const melhorDia = useMemo(() => {
-    if (!diariaFiltrada.length) return null;
-    return diariaFiltrada.reduce((best, d) => d.conversao > best.conversao ? d : best);
-  }, [diariaFiltrada]);
-
-  const piorDia = useMemo(() => {
-    const valid = diariaFiltrada.filter((d) => d.boletosGerados > 0);
-    if (!valid.length) return null;
-    return valid.reduce((worst, d) => d.conversao < worst.conversao ? d : worst);
-  }, [diariaFiltrada]);
-
-  const kpiConversao = selectedMensal?.conversao ?? 0;
   const agentChartHeight = Math.max(180, Math.min(500, agentesAll.length * 34));
 
-  const currentYear = now.getFullYear();
-  const years = Array.from({ length: Math.max(1, currentYear - 2025) }, (_, i) => 2026 + i);
-
-  const periodLabel = `${MONTH_NAMES[selectedMonth - 1]} ${selectedYear}`;
+  const periodLabel = `${dateFrom} → ${dateTo}`;
 
   return (
     <SidebarProvider>
@@ -291,36 +270,37 @@ export default function EfetividadeBoletos() {
 
             {/* ── Global Filters ─────────────────────────────────── */}
             <div className="flex flex-wrap gap-3 items-end">
+              {/* Date range */}
               <Card className="flex-none">
                 <CardHeader className="pb-2 pt-3 px-4">
                   <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
                     Período
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="px-4 pb-3 flex gap-2">
-                  <Select value={String(selectedMonth)} onValueChange={(v) => setSelectedMonth(Number(v))}>
-                    <SelectTrigger className="w-36">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {MONTH_NAMES.map((name, i) => (
-                        <SelectItem key={i + 1} value={String(i + 1)}>{name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Select value={String(selectedYear)} onValueChange={(v) => setSelectedYear(Number(v))}>
-                    <SelectTrigger className="w-24">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {years.map((y) => (
-                        <SelectItem key={y} value={String(y)}>{y}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                <CardContent className="px-4 pb-3 flex items-center gap-2">
+                  <div className="flex flex-col gap-0.5">
+                    <label className="text-xs text-muted-foreground">De</label>
+                    <Input
+                      type="date"
+                      value={dateFrom}
+                      onChange={(e) => setDateFrom(e.target.value)}
+                      className="w-36 h-8 text-sm"
+                    />
+                  </div>
+                  <span className="text-muted-foreground mt-4">→</span>
+                  <div className="flex flex-col gap-0.5">
+                    <label className="text-xs text-muted-foreground">Até</label>
+                    <Input
+                      type="date"
+                      value={dateTo}
+                      onChange={(e) => setDateTo(e.target.value)}
+                      className="w-36 h-8 text-sm"
+                    />
+                  </div>
                 </CardContent>
               </Card>
 
+              {/* Banco */}
               <Card className="flex-none">
                 <CardHeader className="pb-2 pt-3 px-4">
                   <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
@@ -341,6 +321,7 @@ export default function EfetividadeBoletos() {
                 </CardContent>
               </Card>
 
+              {/* Tipo */}
               <Card className="flex-none">
                 <CardHeader className="pb-2 pt-3 px-4">
                   <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
@@ -404,74 +385,108 @@ export default function EfetividadeBoletos() {
               )}
             </div>
 
-            {/* ── Error state ─────────────────────────────────────── */}
-            {hasError && !loading && (
+            {/* ── Date validation warning ──────────────────────────── */}
+            {dateFrom > dateTo && (
               <Card className="border-destructive/50">
                 <CardContent className="py-3 text-sm text-destructive">
-                  Erro ao carregar dados de efetividade. O ETL pode ainda estar em execução — tente atualizar em instantes.
+                  A data inicial deve ser anterior ou igual à data final.
                 </CardContent>
               </Card>
             )}
 
-            {/* ── Section 1: KPI Cards ────────────────────────────── */}
-            {loading ? (
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-20 w-full" />)}
+            {/* ── Error state ─────────────────────────────────────── */}
+            {errResumo && !loadingResumo && (
+              <Card className="border-destructive/50">
+                <CardContent className="py-3 text-sm text-destructive">
+                  Erro ao carregar dados de efetividade. Verifique a conexão com o banco.
+                </CardContent>
+              </Card>
+            )}
+
+            {/* ── Section 1: KPI Row 1 — Counts + Effectiveness ───── */}
+            {loadingResumo ? (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-20 w-full" />)}
               </div>
             ) : (
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <KpiCard
                   label="Boletos Gerados"
-                  value={selectedMensal ? String(selectedMensal.boletosGerados) : "—"}
+                  value={kpis ? String(kpis.generated) : "—"}
                 />
                 <KpiCard
                   label="Pagos no Prazo"
-                  value={selectedMensal ? String(selectedMensal.pagosNoPrazo) : "—"}
+                  value={kpis ? String(kpis.paid_on_time) : "—"}
                 />
                 <KpiCard
                   label="% Conversão"
-                  value={selectedMensal ? `${kpiConversao}%` : "—"}
-                  colorClass={selectedMensal ? convColorClass(kpiConversao) : undefined}
+                  value={kpis ? fmtPct(kpis.conversion_pct) : "—"}
+                  colorClass={kpis ? convColorClass(kpis.conversion_pct) : undefined}
                   highlight
                 />
                 <KpiCard
+                  label="Efetividade"
+                  value={kpis ? fmtPct(kpis.effectiveness_pct) : "—"}
+                  colorClass={kpis ? convColorClass(kpis.effectiveness_pct) : undefined}
+                  highlight
+                  sub="Recebido / Emitido"
+                  tooltip="Efetividade = Valor Recebido / Valor dos Boletos Vencendo. Pode exceder 100% quando o valor pago inclui juros ou multa além do valor de face."
+                />
+              </div>
+            )}
+
+            {/* ── Section 2: KPI Row 2 — Amounts + Days ───────────── */}
+            {loadingResumo ? (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-20 w-full" />)}
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <KpiCard
+                  label="Valor de Boletos Vencendo"
+                  value={kpis ? fmtBRL(Number(kpis.amount_maturing)) : "—"}
+                />
+                <KpiCard
+                  label="Valor Recebido"
+                  value={kpis ? fmtBRL(Number(kpis.amount_received)) : "—"}
+                  colorClass="text-emerald-600"
+                />
+                <KpiCard
                   label="Melhor Dia"
-                  value={melhorDia ? `${fmtDia(melhorDia.dia)} – ${melhorDia.conversao}%` : "—"}
+                  value={melhorDia ? `${fmtDia(melhorDia.dia)} – ${fmtPct(melhorDia.effectiveness_pct)}` : "—"}
                   colorClass="text-emerald-600"
                 />
                 <KpiCard
                   label="Pior Dia"
-                  value={piorDia ? `${fmtDia(piorDia.dia)} – ${piorDia.conversao}%` : "—"}
+                  value={piorDia ? `${fmtDia(piorDia.dia)} – ${fmtPct(piorDia.effectiveness_pct)}` : "—"}
                   colorClass="text-rose-600"
                 />
               </div>
             )}
 
-            {/* ── Section 2: Daily Combo Chart ────────────────────── */}
+            {/* ── Section 3: Daily Chart ───────────────────────────── */}
             <Card>
               <CardHeader className="pb-2 pt-4 px-5">
                 <CardTitle className="text-sm font-semibold">
-                  Conversão Diária — {periodLabel}
+                  Efetividade Diária por Data de Vencimento — {periodLabel}
                 </CardTitle>
               </CardHeader>
               <CardContent className="px-4 pb-4">
-                {loading ? (
+                {loadingResumo ? (
                   <Skeleton className="h-72 w-full" />
-                ) : diariaFiltrada.length === 0 ? (
+                ) : daily.length === 0 ? (
                   <p className="text-sm text-muted-foreground py-10 text-center">
-                    {tipo === "colchao" && colchaoView === "vencimento"
-                      ? "Não há boletos vencidos neste mês."
-                      : "Sem dados para o período selecionado."}
+                    Sem dados para o período selecionado.
                   </p>
                 ) : (
                   <ResponsiveContainer width="100%" height={300}>
-                    <ComposedChart data={diariaFiltrada} margin={{ top: 24, right: 52, left: 0, bottom: 8 }}>
+                    <ComposedChart data={daily} margin={{ top: 24, right: 52, left: 0, bottom: 8 }}>
                       <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="4 4" />
                       <XAxis
-                        dataKey="diaNum"
+                        dataKey="dia"
                         tickLine={false}
-                        tick={{ fontSize: 11 }}
-                        label={{ value: "Dia", position: "insideBottomRight", offset: -4, fontSize: 11 }}
+                        tick={{ fontSize: 10 }}
+                        tickFormatter={(v) => fmtDia(v)}
                       />
                       <YAxis
                         yAxisId="boletos"
@@ -491,12 +506,13 @@ export default function EfetividadeBoletos() {
                       <Tooltip
                         contentStyle={TOOLTIP_STYLE}
                         formatter={(value, name) =>
-                          name === "% Conversão" ? [`${value}%`, name] : [value, name]
+                          name === "Efetividade %" ? [`${value}%`, name] : [value, name]
                         }
+                        labelFormatter={(v) => fmtDia(v)}
                       />
                       <Bar
                         yAxisId="boletos"
-                        dataKey="boletosGerados"
+                        dataKey="generated"
                         name="Boletos Gerados"
                         fill="hsl(var(--primary))"
                         opacity={0.55}
@@ -505,14 +521,14 @@ export default function EfetividadeBoletos() {
                       <Line
                         yAxisId="conv"
                         type="monotone"
-                        dataKey="conversao"
-                        name="% Conversão"
+                        dataKey="effectiveness_pct"
+                        name="Efetividade %"
                         stroke="#16a34a"
                         strokeWidth={2}
                         dot={(props: any) => {
                           const { cx, cy, payload, key } = props;
-                          const isMax = payload.diaNum === melhorDia?.diaNum;
-                          const isMin = payload.diaNum === piorDia?.diaNum;
+                          const isMax = payload.dia === melhorDia?.dia;
+                          const isMin = payload.dia === piorDia?.dia;
                           return (
                             <circle
                               key={key}
@@ -528,17 +544,17 @@ export default function EfetividadeBoletos() {
                         activeDot={{ r: 5, fill: "#16a34a" }}
                       >
                         <LabelList
-                          dataKey="conversao"
+                          dataKey="effectiveness_pct"
                           content={(props: any) => {
                             const { x, y, value, index } = props;
-                            const d = diariaFiltrada[index];
+                            const d = daily[index];
                             if (!d) return null;
-                            const isMax = d.diaNum === melhorDia?.diaNum;
-                            const isMin = d.diaNum === piorDia?.diaNum;
+                            const isMax = d.dia === melhorDia?.dia;
+                            const isMin = d.dia === piorDia?.dia;
                             if (!isMax && !isMin) return null;
                             return (
                               <text
-                                key={`lbl-${d.diaNum}`}
+                                key={`lbl-${d.dia}`}
                                 x={Number(x)}
                                 y={Number(y) - 10}
                                 fill={isMax ? "#16a34a" : "#dc2626"}
@@ -558,15 +574,13 @@ export default function EfetividadeBoletos() {
               </CardContent>
             </Card>
 
-            {/* ── Section 3: Monthly Trend ─────────────────────────── */}
+            {/* ── Section 4: Monthly Trend (ETL-based) ─────────────── */}
             <Card>
               <CardHeader className="pb-2 pt-4 px-5">
-                <CardTitle className="text-sm font-semibold">Tendência Mensal — % Conversão</CardTitle>
+                <CardTitle className="text-sm font-semibold">Tendência Mensal — % Conversão (histórico)</CardTitle>
               </CardHeader>
               <CardContent className="px-4 pb-4">
-                {loading ? (
-                  <Skeleton className="h-64 w-full" />
-                ) : mensalChart.length === 0 ? (
+                {mensalChart.length === 0 ? (
                   <p className="text-sm text-muted-foreground py-10 text-center">
                     Sem dados históricos disponíveis.
                   </p>
@@ -610,7 +624,7 @@ export default function EfetividadeBoletos() {
               </CardContent>
             </Card>
 
-            {/* ── Section 4: Agent Ranking ─────────────────────────── */}
+            {/* ── Section 5: Agent Ranking ──────────────────────────── */}
             <Card>
               <CardHeader className="pb-2 pt-4 px-5">
                 <CardTitle className="text-sm font-semibold">
@@ -620,13 +634,9 @@ export default function EfetividadeBoletos() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="px-4 pb-4 space-y-4">
-                {loading ? (
-                  <Skeleton className="h-48 w-full" />
-                ) : agentesAll.length === 0 ? (
+                {agentesAll.length === 0 ? (
                   <p className="text-sm text-muted-foreground py-10 text-center">
-                    {tipo === "colchao" && colchaoView === "vencimento"
-                      ? "Não há boletos vencidos neste mês."
-                      : "Sem dados de agentes para o período selecionado."}
+                    Sem dados de agentes para o período selecionado.
                   </p>
                 ) : (
                   <>
@@ -708,12 +718,8 @@ export default function EfetividadeBoletos() {
                                   <span className="truncate max-w-52">{a.agente}</span>
                                 </div>
                               </td>
-                              <td className="py-2 px-3 text-right tabular-nums">
-                                {a.boletosGerados}
-                              </td>
-                              <td className="py-2 px-3 text-right tabular-nums">
-                                {a.pagosNoPrazo}
-                              </td>
+                              <td className="py-2 px-3 text-right tabular-nums">{a.boletosGerados}</td>
+                              <td className="py-2 px-3 text-right tabular-nums">{a.pagosNoPrazo}</td>
                               <td className={cn("py-2 px-3 text-right tabular-nums font-semibold", convColorClass(a.conversao))}>
                                 {a.conversao}%
                               </td>
