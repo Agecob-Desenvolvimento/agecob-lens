@@ -1,5 +1,5 @@
 import time
-from datetime import date
+from datetime import date, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import uuid4
 
@@ -79,14 +79,36 @@ def _run_dashboard_chart(
     )
 
 
+def _parse_period(
+    date_from: Optional[str],
+    date_to: Optional[str],
+) -> tuple:
+    """Valida e retorna (date_from_str, date_to_exclusive_str) ou (None, None) para hoje."""
+    if not date_from or not date_to:
+        return None, None
+    try:
+        df = date.fromisoformat(date_from)
+        dt = date.fromisoformat(date_to)
+        return df.isoformat(), (dt + timedelta(days=1)).isoformat()
+    except ValueError:
+        return None, None
+
+
 def _get_dashboard_agentes_unificado(
     database_name: str,
     request: Optional[Request],
     context: str,
+    date_from: Optional[str] = None,
+    date_to_exclusive: Optional[str] = None,
 ) -> Dict[str, Any]:
     run_id = getattr(request.state, "run_id", f"srv-{uuid4().hex[:12]}") if request else f"srv-{uuid4().hex[:12]}"
     validated_database = validate_database_or_todos(database_name)
-    query = build_produtividade_query(validated_database, use_distinct_esforco=False)
+    query = build_produtividade_query(
+        validated_database,
+        use_distinct_esforco=False,
+        date_from=date_from,
+        date_to_exclusive=date_to_exclusive,
+    )
     rows = run_query(
         query,
         settings.ALLOWED_DATABASES[0],
@@ -94,10 +116,11 @@ def _get_dashboard_agentes_unificado(
         context=context,
     )
     sources = settings.ALLOWED_DATABASES if validated_database == "todos" else [validated_database]
+    date_label = f"{date_from}/{date_to_exclusive}" if date_from else "today"
     return build_response_envelope(
         rows,
         sources,
-        filters={"date": "today", "database": validated_database},
+        filters={"date": date_label, "database": validated_database},
         run_id=run_id,
     )
 
@@ -222,13 +245,21 @@ def get_dashboard_acordos_hoje_agente(
 def get_tabela_performance_periodo(
     db: str,
     agente: Optional[str] = Query(default=None),
+    date_from: Optional[str] = Query(default=None),
+    date_to: Optional[str] = Query(default=None),
     request: Request = None,
 ) -> Dict[str, Any]:
     run_id = getattr(request.state, "run_id", f"srv-{uuid4().hex[:12]}") if request else f"srv-{uuid4().hex[:12]}"
     validated_db = validate_database_or_todos(db)
     agente_aplicado = (agente or "").strip()
     filter_by_agente = bool(agente_aplicado and agente_aplicado.lower() != "todos")
-    query = build_tabela_performance_periodo_query(validated_db, filter_by_agente)
+    parsed_from, parsed_to_excl = _parse_period(date_from, date_to)
+    query = build_tabela_performance_periodo_query(
+        validated_db,
+        filter_by_agente,
+        date_from=parsed_from or "2026-04-01",
+        date_to_exclusive=parsed_to_excl or "2026-05-06",
+    )
     conn_db = settings.ALLOWED_DATABASES[0] if validated_db == "todos" else validated_db
     params: Optional[Tuple[Any, ...]] = (agente_aplicado,) if filter_by_agente else None
     rows = run_query(
@@ -239,11 +270,12 @@ def get_tabela_performance_periodo(
         context="dashboard/tabela-performance-periodo",
     )
     sources = settings.ALLOWED_DATABASES if validated_db == "todos" else [validated_db]
+    date_label = f"{parsed_from}/{date_to}" if parsed_from else "2026-04-01/2026-05-05"
     return build_response_envelope(
         rows,
         sources,
         filters={
-            "date": "2026-04-01/2026-05-05",
+            "date": date_label,
             "database": validated_db,
             "agente": agente_aplicado or "todos",
         },
@@ -258,13 +290,21 @@ def get_tabela_performance_periodo(
 def get_dashboard_produtividade_hoje(
     database_name: str,
     assessoria: Optional[str] = Query(default=None),
+    date_from: Optional[str] = Query(default=None),
+    date_to: Optional[str] = Query(default=None),
     request: Request = None,
 ) -> Dict[str, Any]:
     endpoint_started_at = time.perf_counter()
     run_id = getattr(request.state, "run_id", f"srv-{uuid4().hex[:12]}") if request else f"srv-{uuid4().hex[:12]}"
     database_name = validate_database(database_name)
+    parsed_from, parsed_to_excl = _parse_period(date_from, date_to)
     rows = run_query(
-        build_produtividade_query(database_name, use_distinct_esforco=True),
+        build_produtividade_query(
+            database_name,
+            use_distinct_esforco=True,
+            date_from=parsed_from,
+            date_to_exclusive=parsed_to_excl,
+        ),
         database_name,
         run_id=run_id,
         context="dashboard/produtividade-hoje",
@@ -383,37 +423,52 @@ def get_dashboard_status_carga(
 def get_dashboard_comparacao_agentes(
     db: Optional[str] = None,
     database_name: Optional[str] = None,
+    date_from: Optional[str] = Query(default=None),
+    date_to: Optional[str] = Query(default=None),
     request: Request = None,
 ) -> Dict[str, Any]:
     target_db = db if db is not None else (database_name or "")
+    parsed_from, parsed_to_excl = _parse_period(date_from, date_to)
     return _get_dashboard_agentes_unificado(
         database_name=target_db,
         request=request,
         context="dashboard/comparacao-agentes",
+        date_from=parsed_from,
+        date_to_exclusive=parsed_to_excl,
     )
 
 
 @router.get("/detalhamento-agentes/{database_name}")
 def get_dashboard_detalhamento_agentes(
     database_name: str,
+    date_from: Optional[str] = Query(default=None),
+    date_to: Optional[str] = Query(default=None),
     request: Request = None,
 ) -> Dict[str, Any]:
+    parsed_from, parsed_to_excl = _parse_period(date_from, date_to)
     return _get_dashboard_agentes_unificado(
         database_name=database_name,
         request=request,
         context="dashboard/detalhamento-agentes",
+        date_from=parsed_from,
+        date_to_exclusive=parsed_to_excl,
     )
 
 
 @router.get("/produtividade/{database_name}")
 def get_dashboard_produtividade(
     database_name: str,
+    date_from: Optional[str] = Query(default=None),
+    date_to: Optional[str] = Query(default=None),
     request: Request = None,
 ) -> Dict[str, Any]:
+    parsed_from, parsed_to_excl = _parse_period(date_from, date_to)
     return _get_dashboard_agentes_unificado(
         database_name=database_name,
         request=request,
         context="dashboard/produtividade",
+        date_from=parsed_from,
+        date_to_exclusive=parsed_to_excl,
     )
 
 

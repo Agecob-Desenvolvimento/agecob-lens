@@ -30,13 +30,20 @@ export function useProdutividadeData(
   filters?: ProdutividadeFilters,
 ): UseProdutividadeDataResult {
   const assessoriaFilter = filters?.assessoria ?? "";
+  const dateFrom = filters?.dateFrom ?? "";
+  const dateTo = filters?.dateTo ?? "";
   const targets = useMemo(() => dbTargets(db), [db]);
 
   const prodQueries = useQueries({
     queries: targets.map((target) => ({
-      queryKey: ["produtividade", target, assessoriaFilter] as const,
-      queryFn: () =>
-        fetchProdutividade(target, assessoriaFilter ? { assessoria: assessoriaFilter } : undefined),
+      queryKey: ["produtividade", target, assessoriaFilter, dateFrom, dateTo] as const,
+      queryFn: () => {
+        const f: ProdutividadeFilters = {};
+        if (assessoriaFilter) f.assessoria = assessoriaFilter;
+        if (dateFrom) f.dateFrom = dateFrom;
+        if (dateTo) f.dateTo = dateTo;
+        return fetchProdutividade(target, Object.keys(f).length ? f : undefined);
+      },
     })),
   });
 

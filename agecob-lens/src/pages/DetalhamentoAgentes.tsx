@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import PeriodoFilter from "@/components/PeriodoFilter";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import LazyVisibleSection from "@/components/performance/LazyVisibleSection";
@@ -27,11 +28,16 @@ import type { ExecutiveKpi } from "@/types/executive";
 
 const DetalhamentoChartsPanel = lazy(() => import("@/components/charts/DetalhamentoChartsPanel"));
 
+function todayStr() { return new Date().toISOString().slice(0, 10); }
+function firstOfMonthStr() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`; }
+
 export default function DetalhamentoAgentes() {
   const [category, setCategory] = useState("Todas");
   const [assessoria, setAssessoria] = useState("Todas");
   const [selectedAgent, setSelectedAgent] = useState("Todos");
   const [agentFilter, setAgentFilter] = useState("");
+  const [dateFrom, setDateFrom] = useState(firstOfMonthStr);
+  const [dateTo, setDateTo] = useState(todayStr);
   const [primeiraParcelaDia, setPrimeiraParcelaDia] = useState<{ total_valor: number; total_acordos: number } | null>(null);
   const [primeiraParcelaPorAgente, setPrimeiraParcelaPorAgente] = useState<Record<string, number>>({});
 
@@ -41,9 +47,12 @@ export default function DetalhamentoAgentes() {
       : category === "CONSUMER"
         ? "COBwebRCBCONSUMER"
         : "todos";
+  const filters = assessoria === "Todas"
+    ? { dateFrom, dateTo }
+    : { assessoria, dateFrom, dateTo };
   const { rows, loading, error: loadError, warnings, refresh } = useProdutividadeData(
     selectedDatabase,
-    assessoria === "Todas" ? undefined : { assessoria },
+    filters,
   );
   const { guardedRefresh, refreshing, remainingMs } = useRefreshGuard(async () => {
     const startedAt = performance.now();
@@ -214,6 +223,7 @@ export default function DetalhamentoAgentes() {
 
             <main className="flex-1 overflow-y-auto p-6 space-y-6 bg-background">
               {/* Filters */}
+              <PeriodoFilter dateFrom={dateFrom} dateTo={dateTo} onDateFromChange={setDateFrom} onDateToChange={setDateTo} />
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Card>
                   <CardHeader className="pb-2 pt-3 px-4">
@@ -281,6 +291,8 @@ export default function DetalhamentoAgentes() {
                     db={selectedDatabase}
                     assessoria={assessoria === "Todas" ? undefined : assessoria}
                     primeiraParcelaSelecionada={primeiraParcelaSelecionada}
+                    dateFrom={dateFrom}
+                    dateTo={dateTo}
                   />
                 </Suspense>
               </LazyVisibleSection>

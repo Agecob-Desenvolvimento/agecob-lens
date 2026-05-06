@@ -1,6 +1,7 @@
 import { lazy, Suspense, useState } from "react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import FilterBar from "@/components/FilterBar";
+import PeriodoFilter from "@/components/PeriodoFilter";
 import { type DatabaseOption } from "@/services/api";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
@@ -18,10 +19,15 @@ const DB_OPTIONS: { value: DatabaseOption; label: string }[] = [
   { value: "todos", label: "Todos" },
 ];
 
+function todayStr() { return new Date().toISOString().slice(0, 10); }
+function firstOfMonthStr() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`; }
+
 export default function ComparacaoAgentes() {
   const [db, setDb] = useState<DatabaseOption>("todos");
   const [carteira, setCarteira] = useState("Geral");
   const [assessoria, setAssessoria] = useState("todos");
+  const [dateFrom, setDateFrom] = useState(firstOfMonthStr);
+  const [dateTo, setDateTo] = useState(todayStr);
   const [refreshTick, setRefreshTick] = useState(0);
   const { guardedRefresh, refreshing, remainingMs } = useRefreshGuard(async () => {
     const startedAt = performance.now();
@@ -81,6 +87,8 @@ export default function ComparacaoAgentes() {
               </TabsList>
             </Tabs>
 
+            <PeriodoFilter dateFrom={dateFrom} dateTo={dateTo} onDateFromChange={setDateFrom} onDateToChange={setDateTo} />
+
             <FilterBar
               carteira={carteira}
               onCarteiraChange={handleCarteiraChange}
@@ -95,7 +103,7 @@ export default function ComparacaoAgentes() {
               fallback={<div className="text-sm text-muted-foreground">Preparando dashboard...</div>}
             >
               <Suspense fallback={<div className="text-sm text-muted-foreground">Carregando comparação...</div>}>
-                <AgentComparisonDashboard key={`${db}-${assessoria}-${refreshTick}`} db={db} assessoria={assessoria} />
+                <AgentComparisonDashboard key={`${db}-${assessoria}-${dateFrom}-${dateTo}-${refreshTick}`} db={db} assessoria={assessoria} dateFrom={dateFrom} dateTo={dateTo} />
               </Suspense>
             </LazyVisibleSection>
           </div>

@@ -176,8 +176,10 @@ def build_agreements_tabela_query(
 def build_tabela_performance_periodo_query(
     database_name: str,
     filter_by_agente: bool,
+    date_from: str = "2026-04-01",
+    date_to_exclusive: str = "2026-05-06",
 ) -> str:
-    """Tabela agregada de métricas por agente — período fixo 2026-04-01 a 2026-05-05.
+    """Tabela agregada de métricas por agente — período configurável (default 2026-04-01 a 2026-05-05).
 
     Colunas retornadas:
         nome_agente, matricula, qtd_acionamentos, qtd_acordos, conversao_pct,
@@ -202,7 +204,7 @@ def build_tabela_performance_periodo_query(
             LEFT JOIN (
                 SELECT ID_USUARIO, COUNT(DISTINCT ID_CTO_MASTER) AS qtd_acionamentos
                 FROM {db}.dbo.CTO_MASTER
-                WHERE DATA >= '2026-04-01' AND DATA < '2026-05-06'
+                WHERE DATA >= '{date_from}' AND DATA < '{date_to_exclusive}'
                 GROUP BY ID_USUARIO
             ) A ON A.ID_USUARIO = U.ID_USUARIO
             LEFT JOIN (
@@ -213,7 +215,7 @@ def build_tabela_performance_periodo_query(
                     SUM(VALOR) AS valor_total,
                     SUM(CASE WHEN PARCELA = 0 THEN VALOR ELSE 0 END) AS soma_primeira_parcela
                 FROM {db}.dbo.REC_MASTER
-                WHERE DT_EMISSAO >= '2026-04-01' AND DT_EMISSAO < '2026-05-06'
+                WHERE DT_EMISSAO >= '{date_from}' AND DT_EMISSAO < '{date_to_exclusive}'
                   AND ID_REC_STATUS IN (1, 3, 12)
                 GROUP BY ID_USUARIO
             ) AC ON AC.ID_USUARIO = U.ID_USUARIO
@@ -222,7 +224,7 @@ def build_tabela_performance_periodo_query(
                 SELECT RM.ID_USUARIO, COUNT(DISTINCT RM.NR_RECEBIMENTO) AS qtd_reprovados
                 FROM {db}.dbo.REC_MASTER RM
                 JOIN {db}.dbo.REC_STATUS RS ON RM.ID_REC_STATUS = RS.ID_REC_STATUS
-                WHERE RM.DT_EMISSAO >= '2026-04-01' AND RM.DT_EMISSAO < '2026-05-06'
+                WHERE RM.DT_EMISSAO >= '{date_from}' AND RM.DT_EMISSAO < '{date_to_exclusive}'
                   AND (
                       RS.DESCR LIKE '%REJEITADO%'
                       OR RS.DESCR LIKE '%REPROVADO%'
