@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import PeriodoFilter from "@/components/PeriodoFilter";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { useRefreshGuard } from "@/hooks/useRefreshGuard";
@@ -29,9 +30,14 @@ const AnaliseChartsPanel = lazy(() => import("@/components/charts/AnaliseChartsP
 
 const normalizeOfficeName = (office: string) => office.replace("COBwebRCB", "");
 
+function todayStr() { return new Date().toISOString().slice(0, 10); }
+function firstOfMonthStr() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`; }
+
 export default function AnaliseProdutividade() {
   const [category, setCategory] = useState("(Todos)");
   const [teamBU, setTeamBU] = useState("(Todos)");
+  const [dateFrom, setDateFrom] = useState(firstOfMonthStr);
+  const [dateTo, setDateTo] = useState(todayStr);
   const [primeiraParcelaDia, setPrimeiraParcelaDia] = useState<{ total_valor: number; total_acordos: number } | null>(null);
   const selectedDatabase: DatabaseOption =
     category === "AUTOS"
@@ -39,7 +45,7 @@ export default function AnaliseProdutividade() {
       : category === "CONSUMER"
         ? "COBwebRCBCONSUMER"
         : "todos";
-  const { rows, loading, error: loadError, warnings, refresh } = useProdutividadeData(selectedDatabase);
+  const { rows, loading, error: loadError, warnings, refresh } = useProdutividadeData(selectedDatabase, { dateFrom, dateTo });
   const { guardedRefresh, refreshing, remainingMs } = useRefreshGuard(async () => {
     await refresh();
     window.dispatchEvent(new CustomEvent("dashboard:refresh", { detail: { route: "/analise-produtividade" } }));
@@ -116,6 +122,7 @@ export default function AnaliseProdutividade() {
 
           <div className="flex-1 bg-background p-6 space-y-6 overflow-auto">
             {/* Filters */}
+            <PeriodoFilter dateFrom={dateFrom} dateTo={dateTo} onDateFromChange={setDateFrom} onDateToChange={setDateTo} />
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Card>
                 <CardHeader className="pb-2 pt-3 px-4">

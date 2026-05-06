@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import PeriodoFilter from "@/components/PeriodoFilter";
 import {
   Select,
   SelectContent,
@@ -39,18 +40,26 @@ import {
 import { generateDailyReadout } from "@/lib/insightEngine";
 import type { ExecutiveKpi, RankingRow } from "@/types/executive";
 
+function todayStr() { return new Date().toISOString().slice(0, 10); }
+function firstOfMonthStr() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`; }
+
 export default function Index() {
   const [category, setCategory] = useState("Todas");
   const [assessoria, setAssessoria] = useState("todos");
+  const [dateFrom, setDateFrom] = useState(firstOfMonthStr);
+  const [dateTo, setDateTo] = useState(todayStr);
   const selectedDatabase: DatabaseOption =
     category === "AUTOS"
       ? "COBwebRCBAUTOS"
       : category === "CONSUMER"
         ? "COBwebRCBCONSUMER"
         : "todos";
+  const filters = assessoria === "todos"
+    ? { dateFrom, dateTo }
+    : { assessoria, dateFrom, dateTo };
   const { rows, loading, error: loadError, warnings, refresh } = useProdutividadeData(
     selectedDatabase,
-    assessoria === "todos" ? undefined : { assessoria },
+    filters,
   );
 
   const [primeiraParcelaDia, setPrimeiraParcelaDia] = useState<{ total_valor: number; total_acordos: number } | null>(null);
@@ -183,7 +192,8 @@ export default function Index() {
           />
 
           <div className="flex-1 bg-background p-6 space-y-6 overflow-auto">
-            {/* Filters: Categoria + Assessoria (removed non-functional Carteira) */}
+            {/* Filters */}
+            <PeriodoFilter dateFrom={dateFrom} dateTo={dateTo} onDateFromChange={setDateFrom} onDateToChange={setDateTo} />
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Card>
                 <CardHeader className="pb-2 pt-3 px-4">

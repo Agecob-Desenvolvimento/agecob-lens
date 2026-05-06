@@ -59,6 +59,8 @@ export interface ProdutividadeRow {
 
 export interface ProdutividadeFilters {
   assessoria?: string;
+  dateFrom?: string;
+  dateTo?: string;
 }
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "").trim();
@@ -229,6 +231,8 @@ export async function fetchProdutividade(
 ): Promise<ApiEnvelope<ProdutividadeRow>> {
   const query = new URLSearchParams();
   if (filters?.assessoria && filters.assessoria !== "Todas") query.set("assessoria", filters.assessoria);
+  if (filters?.dateFrom) query.set("date_from", filters.dateFrom);
+  if (filters?.dateTo) query.set("date_to", filters.dateTo);
   const suffix = query.toString() ? `?${query.toString()}` : "";
   return request<ApiEnvelope<ProdutividadeRow>>(`/dashboard/produtividade-hoje/${db}${suffix}`);
 }
@@ -364,9 +368,13 @@ export interface TabelaPerformancePeriodoRow {
 export async function fetchTabelaPerformancePeriodo(
   db: DatabaseOption,
   agente?: string,
+  dateFrom?: string,
+  dateTo?: string,
 ): Promise<ApiEnvelope<TabelaPerformancePeriodoRow>> {
   const query = new URLSearchParams();
   if (agente && agente.trim() && agente.trim().toLowerCase() !== "todos") query.set("agente", agente.trim());
+  if (dateFrom) query.set("date_from", dateFrom);
+  if (dateTo) query.set("date_to", dateTo);
   const suffix = query.toString() ? `?${query.toString()}` : "";
   return request<ApiEnvelope<TabelaPerformancePeriodoRow>>(`/dashboard/tabela-performance-periodo/${db}${suffix}`);
 }

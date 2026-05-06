@@ -35,10 +35,12 @@ const TABLE_COLUMNS = [
 interface AgentComparisonDashboardProps {
   db: DatabaseOption;
   assessoria?: string;
+  dateFrom?: string;
+  dateTo?: string;
 }
 
-export default function AgentComparisonDashboard({ db, assessoria = "todos" }: AgentComparisonDashboardProps) {
-  const { rows, loading, error, warnings } = useProdutividadeData(db, { assessoria });
+export default function AgentComparisonDashboard({ db, assessoria = "todos", dateFrom, dateTo }: AgentComparisonDashboardProps) {
+  const { rows, loading, error, warnings } = useProdutividadeData(db, { assessoria, dateFrom, dateTo });
   const [isTableFullscreen, setIsTableFullscreen] = useState(false);
   const [sortKey, setSortKey] = useState<string>("valor_acordos");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");

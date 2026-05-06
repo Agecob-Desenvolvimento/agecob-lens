@@ -24,6 +24,8 @@ interface DetalhamentoChartsPanelProps {
   db: DatabaseOption;
   assessoria?: string;
   primeiraParcelaSelecionada?: number;
+  dateFrom?: string;
+  dateTo?: string;
 }
 
 export default function DetalhamentoChartsPanel({
@@ -32,6 +34,8 @@ export default function DetalhamentoChartsPanel({
   db,
   assessoria: _assessoria,
   primeiraParcelaSelecionada = 0,
+  dateFrom,
+  dateTo,
 }: DetalhamentoChartsPanelProps) {
   const filtered = selectedAgent === "Todos" ? rows : rows.filter((row) => row.NOME === selectedAgent);
   const totals = aggregateTotals(filtered);
@@ -47,7 +51,7 @@ export default function DetalhamentoChartsPanel({
     let cancelled = false;
     setLoadingPerf(true);
     setPerfError(null);
-    fetchTabelaPerformancePeriodo(db, selectedAgent)
+    fetchTabelaPerformancePeriodo(db, selectedAgent, dateFrom, dateTo)
       .then((env) => {
         if (cancelled) return;
         setPerfRows(env.data ?? []);
@@ -61,7 +65,7 @@ export default function DetalhamentoChartsPanel({
         if (!cancelled) setLoadingPerf(false);
       });
     return () => { cancelled = true; };
-  }, [db, selectedAgent]);
+  }, [db, selectedAgent, dateFrom, dateTo]);
 
   const perfTotals = useMemo(() => {
     return perfRows.reduce(
@@ -147,7 +151,7 @@ export default function DetalhamentoChartsPanel({
       <Card>
         <CardHeader className="pb-2 pt-3 px-4">
           <CardTitle className="text-base font-semibold leading-snug">
-            Performance por Agente — Abr/2026 a Mai/2026
+            Performance por Agente{dateFrom && dateTo ? ` — ${dateFrom} a ${dateTo}` : " — Abr/2026 a Mai/2026"}
           </CardTitle>
         </CardHeader>
         <CardContent className="px-4 pb-3 overflow-auto">
