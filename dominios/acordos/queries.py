@@ -196,16 +196,23 @@ def build_tabela_performance_periodo_query(
                 U.NOME    AS nome_agente,
                 U.MATRICULA AS matricula,
                 ISNULL(A.qtd_acionamentos, 0) AS qtd_acionamentos,
+                ISNULL(A.qtd_contatos, 0)     AS qtd_contatos,
                 ISNULL(AC.qtd_acordos, 0)     AS qtd_acordos,
                 ISNULL(AC.valor_total, 0)     AS valor_total,
                 ISNULL(AC.soma_primeira_parcela, 0) AS soma_primeira_parcela,
-                ISNULL(R.qtd_reprovados, 0)   AS qtd_reprovados
+                ISNULL(R.qtd_reprovados, 0)   AS qtd_reprovados,
+                ISNULL(EX.qtd_excecoes, 0)    AS qtd_excecoes,
+                ISNULL(EX.valor_excecoes, 0)  AS valor_excecoes
             FROM {db}.dbo.USU_MASTER U
             LEFT JOIN (
-                SELECT ID_USUARIO, COUNT(DISTINCT ID_CTO_MASTER) AS qtd_acionamentos
-                FROM {db}.dbo.CTO_MASTER
-                WHERE DATA >= '{date_from}' AND DATA < '{date_to_exclusive}'
-                GROUP BY ID_USUARIO
+                SELECT
+                    CM.ID_USUARIO,
+                    COUNT(DISTINCT DM.CPF_CNPJ) AS qtd_acionamentos,
+                    COUNT(DISTINCT CASE WHEN CM.ID_COMPLEMENTO IN {settings.CPC_IDS_SQL} THEN DM.CPF_CNPJ END) AS qtd_contatos
+                FROM {db}.dbo.CTO_MASTER CM
+                JOIN {db}.dbo.DEV_MASTER DM ON DM.ID_DEV = CM.ID_DEV
+                WHERE CM.DATA >= CAST('{date_from}' AS DATE) AND CM.DATA < CAST('{date_to_exclusive}' AS DATE)
+                GROUP BY CM.ID_USUARIO
             ) A ON A.ID_USUARIO = U.ID_USUARIO
             LEFT JOIN (
                 -- STATUS_APROVADOS = (1, 3, 12). PARCELA=0 é a primeira parcela neste banco.
@@ -215,7 +222,7 @@ def build_tabela_performance_periodo_query(
                     SUM(VALOR) AS valor_total,
                     SUM(CASE WHEN PARCELA = 0 THEN VALOR ELSE 0 END) AS soma_primeira_parcela
                 FROM {db}.dbo.REC_MASTER
-                WHERE DT_EMISSAO >= '{date_from}' AND DT_EMISSAO < '{date_to_exclusive}'
+                WHERE DT_EMISSAO >= CAST('{date_from}' AS DATE) AND DT_EMISSAO < CAST('{date_to_exclusive}' AS DATE)
                   AND ID_REC_STATUS IN (1, 3, 12)
                 GROUP BY ID_USUARIO
             ) AC ON AC.ID_USUARIO = U.ID_USUARIO
@@ -224,7 +231,7 @@ def build_tabela_performance_periodo_query(
                 SELECT RM.ID_USUARIO, COUNT(DISTINCT RM.NR_RECEBIMENTO) AS qtd_reprovados
                 FROM {db}.dbo.REC_MASTER RM
                 JOIN {db}.dbo.REC_STATUS RS ON RM.ID_REC_STATUS = RS.ID_REC_STATUS
-                WHERE RM.DT_EMISSAO >= '{date_from}' AND RM.DT_EMISSAO < '{date_to_exclusive}'
+                WHERE RM.DT_EMISSAO >= CAST('{date_from}' AS DATE) AND RM.DT_EMISSAO < CAST('{date_to_exclusive}' AS DATE)
                   AND (
                       RS.DESCR LIKE '%REJEITADO%'
                       OR RS.DESCR LIKE '%REPROVADO%'
@@ -232,10 +239,21 @@ def build_tabela_performance_periodo_query(
                   )
                 GROUP BY RM.ID_USUARIO
             ) R ON R.ID_USUARIO = U.ID_USUARIO
+            LEFT JOIN (
+                SELECT
+                    ID_USUARIO,
+                    COUNT(DISTINCT NR_RECEBIMENTO) AS qtd_excecoes,
+                    SUM(VALOR) AS valor_excecoes
+                FROM {db}.dbo.REC_MASTER
+                WHERE DT_EMISSAO >= CAST('{date_from}' AS DATE) AND DT_EMISSAO < CAST('{date_to_exclusive}' AS DATE)
+                  AND ID_REC_STATUS IN {settings.STATUS_EXCECAO_SQL}
+                GROUP BY ID_USUARIO
+            ) EX ON EX.ID_USUARIO = U.ID_USUARIO
             WHERE (
                 ISNULL(A.qtd_acionamentos, 0) > 0
                 OR ISNULL(AC.qtd_acordos, 0)   > 0
                 OR ISNULL(R.qtd_reprovados, 0)  > 0
+                OR ISNULL(EX.qtd_excecoes, 0)   > 0
             )
             {settings.FILTRO_AGENTES_EXCLUIDOS_SQL}
         """
@@ -262,7 +280,16 @@ def build_tabela_performance_periodo_query(
                 ) AS conversao_pct,
                 CAST(SUM(valor_total)            AS DECIMAL(18,2)) AS valor_total,
                 CAST(SUM(soma_primeira_parcela)  AS DECIMAL(18,2)) AS soma_primeira_parcela,
-                SUM(qtd_reprovados) AS qtd_reprovados
+                SUM(qtd_reprovados) AS qtd_reprovados,
+                SUM(qtd_contatos)   AS qtd_contatos,
+                CAST(
+                    CASE WHEN SUM(qtd_acionamentos) > 0
+                         THEN SUM(qtd_contatos) * 100.0 / SUM(qtd_acionamentos)
+                         ELSE 0.0
+                    END AS DECIMAL(5,1)
+                ) AS cpc_pct,
+                SUM(qtd_excecoes)                                    AS qtd_excecoes,
+                CAST(SUM(valor_excecoes) AS DECIMAL(18,2))           AS valor_excecoes
             FROM raw
             {outer_where}
             GROUP BY nome_agente
@@ -286,7 +313,16 @@ def build_tabela_performance_periodo_query(
             ) AS conversao_pct,
             CAST(valor_total           AS DECIMAL(18,2)) AS valor_total,
             CAST(soma_primeira_parcela AS DECIMAL(18,2)) AS soma_primeira_parcela,
-            qtd_reprovados
+            qtd_reprovados,
+            qtd_contatos,
+            CAST(
+                CASE WHEN qtd_acionamentos > 0
+                     THEN qtd_contatos * 100.0 / qtd_acionamentos
+                     ELSE 0.0
+                END AS DECIMAL(5,1)
+            ) AS cpc_pct,
+            qtd_excecoes,
+            CAST(valor_excecoes AS DECIMAL(18,2)) AS valor_excecoes
         FROM raw
         {outer_where}
         ORDER BY qtd_acionamentos DESC

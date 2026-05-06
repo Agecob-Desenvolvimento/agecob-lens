@@ -3,7 +3,19 @@ from typing import Optional
 import config.settings as settings
 
 
-def build_produtividade_query(db: str, *, use_distinct_esforco: bool) -> str:
+def _date_decl(date_from: Optional[str], date_to_exclusive: Optional[str]) -> str:
+    if date_from and date_to_exclusive:
+        return f"DECLARE @Hoje DATE = '{date_from}'; DECLARE @Amanha DATE = '{date_to_exclusive}';"
+    return "DECLARE @Hoje DATE = CAST(GETDATE() AS DATE); DECLARE @Amanha DATE = DATEADD(DAY, 1, @Hoje);"
+
+
+def build_produtividade_query(
+    db: str,
+    *,
+    use_distinct_esforco: bool,
+    date_from: Optional[str] = None,
+    date_to_exclusive: Optional[str] = None,
+) -> str:
     """
     Single source of truth para produtividade-por-agente de hoje.
 
@@ -28,8 +40,7 @@ def build_produtividade_query(db: str, *, use_distinct_esforco: bool) -> str:
     """
     if use_distinct_esforco:
         return f"""
-DECLARE @Hoje DATE = CAST(GETDATE() AS DATE);
-DECLARE @Amanha DATE = DATEADD(DAY, 1, @Hoje);
+{_date_decl(date_from, date_to_exclusive)}
 
 WITH CTE_Acordos AS (
     SELECT
@@ -155,8 +166,7 @@ OPTION (USE HINT('ENABLE_PARALLEL_PLAN_PREFERENCE'), MAXDOP 0);
         """
 
     return f"""
-DECLARE @Hoje DATE = CAST(GETDATE() AS DATE);
-DECLARE @Amanha DATE = DATEADD(DAY, 1, @Hoje);
+{_date_decl(date_from, date_to_exclusive)}
 
 WITH CTE_Usuarios AS ({usu_master}),
 
