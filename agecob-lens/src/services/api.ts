@@ -348,6 +348,30 @@ export async function fetchAcordosHojeAgente(
 }
 
 // ─────────────────────────────────────────────────────────────────
+// TABELA PERFORMANCE PERÍODO (2026-04-01 a 2026-05-05)
+// ─────────────────────────────────────────────────────────────────
+export interface TabelaPerformancePeriodoRow {
+  nome_agente: string;
+  matricula: string;
+  qtd_acionamentos: number;
+  qtd_acordos: number;
+  conversao_pct: number;
+  valor_total: number;
+  soma_primeira_parcela: number;
+  qtd_reprovados: number;
+}
+
+export async function fetchTabelaPerformancePeriodo(
+  db: DatabaseOption,
+  agente?: string,
+): Promise<ApiEnvelope<TabelaPerformancePeriodoRow>> {
+  const query = new URLSearchParams();
+  if (agente && agente.trim() && agente.trim().toLowerCase() !== "todos") query.set("agente", agente.trim());
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<ApiEnvelope<TabelaPerformancePeriodoRow>>(`/dashboard/tabela-performance-periodo/${db}${suffix}`);
+}
+
+// ─────────────────────────────────────────────────────────────────
 // ADMIN: indices recomendados
 // Endpoints protegidos por ENABLE_INDEX_ADMIN=true + REQUIRE_API_AUTH no backend.
 // Ver main.py (/admin/indexes/*) e agecob-lens/docs/sql-indexes-recommendations.sql.
