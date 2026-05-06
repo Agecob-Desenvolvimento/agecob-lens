@@ -171,3 +171,121 @@ def build_agreements_tabela_query(
             base.cpf_cnpj,
             base.nr_acordo
     """
+
+
+def build_tabela_performance_periodo_query(
+    database_name: str,
+    filter_by_agente: bool,
+) -> str:
+    """Tabela agregada de métricas por agente — período fixo 2026-04-01 a 2026-05-05.
+
+    Colunas retornadas:
+        nome_agente, matricula, qtd_acionamentos, qtd_acordos, conversao_pct,
+        valor_total, soma_primeira_parcela, qtd_reprovados
+
+    Status válidos (Acordos + valor): ID_REC_STATUS IN (1, 3, 12) — STATUS_APROVADOS.
+    Reprovados: REC_STATUS.DESCR contém REJEITADO, REPROVADO ou RECUSADO.
+    Primeira parcela: PARCELA = 0 (convenção do banco — PARCELA=0 é a 1ª, PARCELA=1+ são demais).
+    """
+
+    def _single_db(db: str) -> str:
+        return f"""
+            SELECT
+                U.NOME    AS nome_agente,
+                U.MATRICULA AS matricula,
+                ISNULL(A.qtd_acionamentos, 0) AS qtd_acionamentos,
+                ISNULL(AC.qtd_acordos, 0)     AS qtd_acordos,
+                ISNULL(AC.valor_total, 0)     AS valor_total,
+                ISNULL(AC.soma_primeira_parcela, 0) AS soma_primeira_parcela,
+                ISNULL(R.qtd_reprovados, 0)   AS qtd_reprovados
+            FROM {db}.dbo.USU_MASTER U
+            LEFT JOIN (
+                SELECT ID_USUARIO, COUNT(DISTINCT ID_CTO_MASTER) AS qtd_acionamentos
+                FROM {db}.dbo.CTO_MASTER
+                WHERE DATA >= '2026-04-01' AND DATA < '2026-05-06'
+                GROUP BY ID_USUARIO
+            ) A ON A.ID_USUARIO = U.ID_USUARIO
+            LEFT JOIN (
+                -- STATUS_APROVADOS = (1, 3, 12). PARCELA=0 é a primeira parcela neste banco.
+                SELECT
+                    ID_USUARIO,
+                    COUNT(DISTINCT NR_RECEBIMENTO) AS qtd_acordos,
+                    SUM(VALOR) AS valor_total,
+                    SUM(CASE WHEN PARCELA = 0 THEN VALOR ELSE 0 END) AS soma_primeira_parcela
+                FROM {db}.dbo.REC_MASTER
+                WHERE DT_EMISSAO >= '2026-04-01' AND DT_EMISSAO < '2026-05-06'
+                  AND ID_REC_STATUS IN (1, 3, 12)
+                GROUP BY ID_USUARIO
+            ) AC ON AC.ID_USUARIO = U.ID_USUARIO
+            LEFT JOIN (
+                -- Reprovados: status cuja descrição contém REJEITADO, REPROVADO ou RECUSADO.
+                SELECT RM.ID_USUARIO, COUNT(DISTINCT RM.NR_RECEBIMENTO) AS qtd_reprovados
+                FROM {db}.dbo.REC_MASTER RM
+                JOIN {db}.dbo.REC_STATUS RS ON RM.ID_REC_STATUS = RS.ID_REC_STATUS
+                WHERE RM.DT_EMISSAO >= '2026-04-01' AND RM.DT_EMISSAO < '2026-05-06'
+                  AND (
+                      RS.DESCR LIKE '%REJEITADO%'
+                      OR RS.DESCR LIKE '%REPROVADO%'
+                      OR RS.DESCR LIKE '%RECUSADO%'
+                  )
+                GROUP BY RM.ID_USUARIO
+            ) R ON R.ID_USUARIO = U.ID_USUARIO
+            WHERE (
+                ISNULL(A.qtd_acionamentos, 0) > 0
+                OR ISNULL(AC.qtd_acordos, 0)   > 0
+                OR ISNULL(R.qtd_reprovados, 0)  > 0
+            )
+            {settings.FILTRO_AGENTES_EXCLUIDOS_SQL}
+        """
+
+    outer_where = "WHERE nome_agente = ?" if filter_by_agente else ""
+
+    if database_name == "todos":
+        return f"""
+            WITH raw AS (
+                {_single_db("COBwebRCBCONSUMER")}
+                UNION ALL
+                {_single_db("COBwebRCBAUTOS")}
+            )
+            SELECT
+                nome_agente,
+                MAX(matricula) AS matricula,
+                SUM(qtd_acionamentos) AS qtd_acionamentos,
+                SUM(qtd_acordos)      AS qtd_acordos,
+                CAST(
+                    CASE WHEN SUM(qtd_acionamentos) > 0
+                         THEN SUM(qtd_acordos) * 100.0 / SUM(qtd_acionamentos)
+                         ELSE 0.0
+                    END AS DECIMAL(6,1)
+                ) AS conversao_pct,
+                CAST(SUM(valor_total)            AS DECIMAL(18,2)) AS valor_total,
+                CAST(SUM(soma_primeira_parcela)  AS DECIMAL(18,2)) AS soma_primeira_parcela,
+                SUM(qtd_reprovados) AS qtd_reprovados
+            FROM raw
+            {outer_where}
+            GROUP BY nome_agente
+            ORDER BY SUM(qtd_acionamentos) DESC
+        """
+
+    return f"""
+        WITH raw AS (
+            {_single_db(database_name)}
+        )
+        SELECT
+            nome_agente,
+            matricula,
+            qtd_acionamentos,
+            qtd_acordos,
+            CAST(
+                CASE WHEN qtd_acionamentos > 0
+                     THEN qtd_acordos * 100.0 / qtd_acionamentos
+                     ELSE 0.0
+                END AS DECIMAL(6,1)
+            ) AS conversao_pct,
+            CAST(valor_total           AS DECIMAL(18,2)) AS valor_total,
+            CAST(soma_primeira_parcela AS DECIMAL(18,2)) AS soma_primeira_parcela,
+            qtd_reprovados
+        FROM raw
+        {outer_where}
+        ORDER BY qtd_acionamentos DESC
+    """

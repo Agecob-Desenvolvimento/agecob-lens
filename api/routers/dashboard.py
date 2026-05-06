@@ -20,7 +20,11 @@ from core.utils.validation import (
     validate_database_or_todos,
     validate_produtividade_rows,
 )
-from dominios.acordos.queries import QUERY_ACORDOS_HOJE, build_agreements_tabela_query
+from dominios.acordos.queries import (
+    QUERY_ACORDOS_HOJE,
+    build_agreements_tabela_query,
+    build_tabela_performance_periodo_query,
+)
 from dominios.graficos.queries import (
     build_acordos_por_portfolio_query,
     build_excecoes_por_agente_query,
@@ -206,6 +210,42 @@ def get_dashboard_acordos_hoje_agente(
             "database": validated_db,
             "agente": agente_aplicado or "todos",
             "assessoria": assessoria_applied,
+        },
+        run_id=run_id,
+    )
+
+
+# ─────────────────────────────────────────────────────────────────
+# ENDPOINTS: TABELA PERFORMANCE PERÍODO (2026-04-01 a 2026-05-05)
+# ─────────────────────────────────────────────────────────────────
+@router.get("/tabela-performance-periodo/{db}")
+def get_tabela_performance_periodo(
+    db: str,
+    agente: Optional[str] = Query(default=None),
+    request: Request = None,
+) -> Dict[str, Any]:
+    run_id = getattr(request.state, "run_id", f"srv-{uuid4().hex[:12]}") if request else f"srv-{uuid4().hex[:12]}"
+    validated_db = validate_database_or_todos(db)
+    agente_aplicado = (agente or "").strip()
+    filter_by_agente = bool(agente_aplicado and agente_aplicado.lower() != "todos")
+    query = build_tabela_performance_periodo_query(validated_db, filter_by_agente)
+    conn_db = settings.ALLOWED_DATABASES[0] if validated_db == "todos" else validated_db
+    params: Optional[Tuple[Any, ...]] = (agente_aplicado,) if filter_by_agente else None
+    rows = run_query(
+        query,
+        conn_db,
+        params=params,
+        run_id=run_id,
+        context="dashboard/tabela-performance-periodo",
+    )
+    sources = settings.ALLOWED_DATABASES if validated_db == "todos" else [validated_db]
+    return build_response_envelope(
+        rows,
+        sources,
+        filters={
+            "date": "2026-04-01/2026-05-05",
+            "database": validated_db,
+            "agente": agente_aplicado or "todos",
         },
         run_id=run_id,
     )
