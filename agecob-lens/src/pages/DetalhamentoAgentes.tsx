@@ -126,10 +126,10 @@ export default function DetalhamentoAgentes() {
   const totals = useMemo(() => aggregateTotals(filteredRows), [filteredRows]);
   const primeiraParcelaSelecionada = useMemo(() => {
     if (selectedAgent === "Todos") {
-      return primeiraParcelaDia?.total_valor ?? totals.valor_primeira_parcela;
+      return primeiraParcelaDia?.total_valor ?? 0;
     }
-    return primeiraParcelaPorAgente[selectedAgent] ?? totals.valor_primeira_parcela;
-  }, [primeiraParcelaDia, primeiraParcelaPorAgente, selectedAgent, totals.valor_primeira_parcela]);
+    return primeiraParcelaPorAgente[selectedAgent] ?? 0;
+  }, [primeiraParcelaDia, primeiraParcelaPorAgente, selectedAgent]);
 
   const kpis: ExecutiveKpi[] = useMemo(() => {
     const cpc = calcCpc(totals);

@@ -11,10 +11,14 @@
             "id": "27dc345ee963ce9d",
             "type": "leaf",
             "state": {
-              "type": "graph",
-              "state": {},
-              "icon": "lucide-git-fork",
-              "title": "Visualização em gráfico"
+              "type": "markdown",
+              "state": {
+                "file": "__init__.py.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "__init__.py"
             }
           }
         ]
@@ -170,14 +174,21 @@
       "switcher:Abrir a troca rápida": false,
       "graph:Abrir visualização em gráfico": false,
       "canvas:Criar novo canvas": false,
-      "daily-notes:Abrir a nota de hoje": false,
-      "templates:Inserir modelo": false,
-      "command-palette:Abrir paleta de comandos": false,
-      "bases:Criar nova base": false
+      "command-palette:Abrir paleta de comandos": false
     }
   },
   "active": "27dc345ee963ce9d",
   "lastOpenFiles": [
+    "__init__.py.md",
+    "fmtNum()_2.md",
+    "main.py.md",
+    "GRAPH_REPORT.md",
+    "fmtPct()_1.md",
+    "wiki/types.md",
+    "wiki/dia-26-maio.md",
+    "Sem título",
+    "wiki/docs.md",
+    "wiki/dependencies.md",
     "wiki/index.md.tmp.7968.1777990077834",
     "wiki/backend.md"
   ]
