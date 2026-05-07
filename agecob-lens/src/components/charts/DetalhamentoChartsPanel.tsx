@@ -71,12 +71,15 @@ export default function DetalhamentoChartsPanel({
     return perfRows.reduce(
       (acc, r) => ({
         qtd_acionamentos: acc.qtd_acionamentos + Number(r.qtd_acionamentos),
+        qtd_contatos: acc.qtd_contatos + Number(r.qtd_contatos),
         qtd_acordos: acc.qtd_acordos + Number(r.qtd_acordos),
         valor_total: acc.valor_total + Number(r.valor_total),
         soma_primeira_parcela: acc.soma_primeira_parcela + Number(r.soma_primeira_parcela),
         qtd_reprovados: acc.qtd_reprovados + Number(r.qtd_reprovados),
+        qtd_excecoes: acc.qtd_excecoes + Number(r.qtd_excecoes),
+        valor_excecoes: acc.valor_excecoes + Number(r.valor_excecoes),
       }),
-      { qtd_acionamentos: 0, qtd_acordos: 0, valor_total: 0, soma_primeira_parcela: 0, qtd_reprovados: 0 },
+      { qtd_acionamentos: 0, qtd_contatos: 0, qtd_acordos: 0, valor_total: 0, soma_primeira_parcela: 0, qtd_reprovados: 0, qtd_excecoes: 0, valor_excecoes: 0 },
     );
   }, [perfRows]);
 
@@ -168,11 +171,14 @@ export default function DetalhamentoChartsPanel({
                   <TableHead className="text-sm font-semibold whitespace-nowrap">Agente</TableHead>
                   <TableHead className="text-sm font-semibold whitespace-nowrap">Matrícula</TableHead>
                   <TableHead className="text-sm font-semibold text-right whitespace-nowrap">Acionamentos</TableHead>
+                  <TableHead className="text-sm font-semibold text-right whitespace-nowrap">CPC %</TableHead>
                   <TableHead className="text-sm font-semibold text-right whitespace-nowrap">Acordos</TableHead>
                   <TableHead className="text-sm font-semibold text-right whitespace-nowrap">Conversão %</TableHead>
                   <TableHead className="text-sm font-semibold text-right whitespace-nowrap">Valor Total</TableHead>
                   <TableHead className="text-sm font-semibold text-right whitespace-nowrap">1ª Parcela</TableHead>
                   <TableHead className="text-sm font-semibold text-right whitespace-nowrap">Reprovados</TableHead>
+                  <TableHead className="text-sm font-semibold text-right whitespace-nowrap">Exceções</TableHead>
+                  <TableHead className="text-sm font-semibold text-right whitespace-nowrap">Valor Exceções</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -181,11 +187,14 @@ export default function DetalhamentoChartsPanel({
                     <TableCell className="text-sm max-w-[200px] truncate" title={row.nome_agente}>{row.nome_agente}</TableCell>
                     <TableCell className="text-sm tabular-nums whitespace-nowrap">{row.matricula || "—"}</TableCell>
                     <TableCell className="text-sm text-right tabular-nums whitespace-nowrap">{fmtNum(Number(row.qtd_acionamentos))}</TableCell>
+                    <TableCell className="text-sm text-right tabular-nums whitespace-nowrap">{Number(row.cpc_pct).toFixed(1)}%</TableCell>
                     <TableCell className="text-sm text-right tabular-nums whitespace-nowrap">{fmtNum(Number(row.qtd_acordos))}</TableCell>
                     <TableCell className="text-sm text-right tabular-nums whitespace-nowrap">{Number(row.conversao_pct).toFixed(1)}%</TableCell>
                     <TableCell className="text-sm text-right tabular-nums whitespace-nowrap">{fmtBRL(Number(row.valor_total))}</TableCell>
                     <TableCell className="text-sm text-right tabular-nums whitespace-nowrap">{fmtBRL(Number(row.soma_primeira_parcela))}</TableCell>
                     <TableCell className="text-sm text-right tabular-nums whitespace-nowrap">{fmtNum(Number(row.qtd_reprovados))}</TableCell>
+                    <TableCell className="text-sm text-right tabular-nums whitespace-nowrap">{fmtNum(Number(row.qtd_excecoes))}</TableCell>
+                    <TableCell className="text-sm text-right tabular-nums whitespace-nowrap">{fmtBRL(Number(row.valor_excecoes))}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -193,6 +202,11 @@ export default function DetalhamentoChartsPanel({
                 <TableRow>
                   <TableCell colSpan={2} className="text-sm font-semibold">{perfRows.length} agente(s)</TableCell>
                   <TableCell className="text-sm text-right font-semibold tabular-nums whitespace-nowrap">{fmtNum(perfTotals.qtd_acionamentos)}</TableCell>
+                  <TableCell className="text-sm text-right font-semibold tabular-nums whitespace-nowrap">
+                    {perfTotals.qtd_acionamentos > 0
+                      ? `${(perfTotals.qtd_contatos * 100 / perfTotals.qtd_acionamentos).toFixed(1)}%`
+                      : "—"}
+                  </TableCell>
                   <TableCell className="text-sm text-right font-semibold tabular-nums whitespace-nowrap">{fmtNum(perfTotals.qtd_acordos)}</TableCell>
                   <TableCell className="text-sm text-right font-semibold tabular-nums whitespace-nowrap">
                     {perfTotals.qtd_acionamentos > 0
@@ -202,6 +216,8 @@ export default function DetalhamentoChartsPanel({
                   <TableCell className="text-sm text-right font-semibold tabular-nums whitespace-nowrap">{fmtBRL(perfTotals.valor_total)}</TableCell>
                   <TableCell className="text-sm text-right font-semibold tabular-nums whitespace-nowrap">{fmtBRL(perfTotals.soma_primeira_parcela)}</TableCell>
                   <TableCell className="text-sm text-right font-semibold tabular-nums whitespace-nowrap">{fmtNum(perfTotals.qtd_reprovados)}</TableCell>
+                  <TableCell className="text-sm text-right font-semibold tabular-nums whitespace-nowrap">{fmtNum(perfTotals.qtd_excecoes)}</TableCell>
+                  <TableCell className="text-sm text-right font-semibold tabular-nums whitespace-nowrap">{fmtBRL(perfTotals.valor_excecoes)}</TableCell>
                 </TableRow>
               </TableFooter>
             </Table>

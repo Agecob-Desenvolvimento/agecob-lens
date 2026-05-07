@@ -358,11 +358,15 @@ export interface TabelaPerformancePeriodoRow {
   nome_agente: string;
   matricula: string;
   qtd_acionamentos: number;
+  qtd_contatos: number;
   qtd_acordos: number;
   conversao_pct: number;
   valor_total: number;
   soma_primeira_parcela: number;
   qtd_reprovados: number;
+  cpc_pct: number;
+  qtd_excecoes: number;
+  valor_excecoes: number;
 }
 
 export async function fetchTabelaPerformancePeriodo(

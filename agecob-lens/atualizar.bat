@@ -2,8 +2,8 @@
 setlocal
 
 set "ROOT_DIR=C:\agecob"
-set "FRONTEND_DIR=%ROOT_DIR%"
-set "NSSM_EXE=C:\nssm\nssm.exe"
+set "FRONTEND_DIR=%ROOT_DIR%\agecob-lens"
+set "NSSM_EXE=C:\nssm\win64\nssm.exe"
 set "SERVICE_NAME=AgecobAPI"
 
 net session >nul 2>&1
