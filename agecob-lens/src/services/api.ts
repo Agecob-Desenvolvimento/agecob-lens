@@ -628,3 +628,33 @@ export async function fetchEfResumo(
   if (idPortfolio != null) params.set("id_portfolio", String(idPortfolio));
   return request<EfResumoEnvelope>(`/efetividade/resumo?${params.toString()}`);
 }
+
+export interface RitmoDiaBanda {
+  hora: number;
+  esperado: number;
+  real: number | null;
+  delta: number | null;
+  status: "acima" | "ok" | "abaixo" | "em_andamento" | "futuro";
+}
+
+export interface RitmoDiaResponse {
+  meta: {
+    generated_at: string;
+    em_operacao: boolean;
+    modelo: string;
+    faixa_batimento?: string;
+    dias_desde_ultimo_batimento?: number;
+  };
+  data: {
+    hora_atual: number;
+    acumulado_atual: number;
+    esperado_total?: number;
+    projecao_fechamento?: number;
+    bandas: RitmoDiaBanda[];
+  };
+  errors: ApiErrorItem[];
+}
+
+export async function fetchRitmoDia(db: DatabaseOption): Promise<RitmoDiaResponse> {
+  return request<RitmoDiaResponse>(`/dashboard/ritmo-dia/${db}`);
+}

@@ -24,6 +24,7 @@ import ExecutiveInsightCard from "@/components/executive/ExecutiveInsightCard";
 import ExecutiveRankingTable from "@/components/executive/ExecutiveRankingTable";
 import ApiDebugBanner from "@/components/executive/ApiDebugBanner";
 import BuValueChart, { type BuValueDatum } from "@/components/executive/BuValueChart";
+import RitmoDiaCard from "@/components/executive/RitmoDiaCard";
 import BuEfficiencyChart, { type BuEfficiencyDatum } from "@/components/executive/BuEfficiencyChart";
 import {
   aggregateTotals,
@@ -248,6 +249,9 @@ export default function Index() {
 
             {/* KPIs */}
             <ExecutiveKpiStrip kpis={kpis} loading={loading} />
+
+            {/* Ritmo do Dia (KNN Fase 2) */}
+            <RitmoDiaCard db={selectedDatabase} />
 
             {/* BU comparisons */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
