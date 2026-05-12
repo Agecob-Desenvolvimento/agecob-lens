@@ -1,3 +1,6 @@
 fastapi
 uvicorn[standard]
 pyodbc
+joblib
+scikit-learn
+numpy
