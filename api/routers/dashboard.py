@@ -484,20 +484,24 @@ def get_produtividade_agentes(force_refresh: bool = False) -> dict:
 def get_primeira_parcela_dia(
     db: str,
     assessoria: Optional[str] = Query(default=None),
+    date_from: Optional[str] = Query(default=None, alias="dateFrom"),
+    date_to: Optional[str] = Query(default=None, alias="dateTo"),
     request: Request = None,
 ) -> Dict[str, Any]:
     assessoria_applied, assessoria_token = normalize_assessoria_filter(assessoria)
     validated_db = validate_database_or_todos(db)
+    parsed_from, parsed_to_excl = _parse_period(date_from, date_to)
+    period_suffix = f"|period:{parsed_from or 'hoje'}-{parsed_to_excl or 'hoje'}"
     return _run_dashboard_chart(
         validated_db, build_primeira_parcela_dia_query,
         "dashboard/primeira-parcela-dia", request,
-        query_args=(assessoria_token,),
+        query_args=(assessoria_token, parsed_from, parsed_to_excl),
         params=build_assessoria_params(
             assessoria_token,
             2 if validated_db == "todos" else 1,
         ) or None,
-        filters_extra={"assessoria": assessoria_applied},
-        cache_key_suffix=f"|assessoria:{assessoria_token or 'todos'}",
+        filters_extra={"assessoria": assessoria_applied, "date": f"{parsed_from}/{parsed_to_excl}" if parsed_from else "today"},
+        cache_key_suffix=f"|assessoria:{assessoria_token or 'todos'}{period_suffix}",
     )
 
 

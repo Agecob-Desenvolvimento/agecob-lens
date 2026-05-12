@@ -29,11 +29,8 @@ import BuEfficiencyChart, { type BuEfficiencyDatum } from "@/components/executiv
 import {
   aggregateTotals,
   buFromSource,
-  calcConcentracao,
   calcConversao,
   calcCpc,
-  calcExcecoesPctValor,
-  calcHealthScore,
   calcTicketMedio,
   fmtBRL,
   shortAgentName,
@@ -90,23 +87,36 @@ export default function Index() {
 
   useEffect(() => {
     setPrimeiraParcelaDia(null);
-    fetchPrimeiraParcelaDia(selectedDatabase)
+    fetchPrimeiraParcelaDia(selectedDatabase, undefined, dateFrom, dateTo)
       .then((env) => {
         const row = env.data[0];
         if (row) setPrimeiraParcelaDia({ total_valor: Number(row.total_valor) || 0, total_acordos: Number(row.total_acordos) || 0 });
       })
       .catch(() => {});
-  }, [selectedDatabase]);
+  }, [selectedDatabase, dateFrom, dateTo]);
 
   const totals = useMemo(() => aggregateTotals(rows), [rows]);
+
+  useEffect(() => {
+    if (totals.valor_acordos <= 0) return;
+    const ratio = (totals.valor_primeira_parcela * 100) / totals.valor_acordos;
+    let severity: "critical" | "warning" | null = null;
+    if (ratio > 0 && ratio < 5) severity = "critical";
+    else if (ratio >= 5 && ratio < 10) severity = "warning";
+    if (!severity) return;
+    trackEvent("first_installment_ratio_alert", {
+      severity,
+      ratio_pct: Number(ratio.toFixed(2)),
+      valor_primeira_parcela: totals.valor_primeira_parcela,
+      valor_total_acordado: totals.valor_acordos,
+      database: selectedDatabase,
+    });
+  }, [totals.valor_acordos, totals.valor_primeira_parcela, selectedDatabase]);
 
   const kpis: ExecutiveKpi[] = useMemo(() => {
     const cpc = calcCpc(totals);
     const conv = calcConversao(totals);
     const ticket = calcTicketMedio(totals);
-    const excPct = calcExcecoesPctValor(totals);
-    const concentracao = calcConcentracao(rows, 3);
-    const health = calcHealthScore(totals);
     return [
       { label: "Valor de Acordos", value: totals.valor_acordos, unit: "BRL", priority: "primary", formula: "Σ valor_acordos", hint: "Soma total do valor acordado no período." },
       {
@@ -122,9 +132,9 @@ export default function Index() {
       { label: "Qtd Acordos", value: totals.qtd_acordos, unit: "count", priority: "secondary", formula: "Σ qtd_acordos" },
       { label: "Qtd Acionamentos", value: totals.qtd_acionamentos, unit: "count", priority: "secondary", formula: "Σ qtd_acionamentos" },
       { label: "Ticket Médio", value: ticket, unit: "BRL", priority: "secondary", formula: "valor_acordos / qtd_acordos" },
-      { label: "Exceções % (valor)", value: excPct, unit: "%", priority: "secondary", formula: "valor_excecoes / valor_acordos" },
-      { label: "Concentração Top 3", value: concentracao, unit: "%", priority: "secondary", formula: "Σ Top 3 / Σ total", hint: "Risco de concentração em poucos agentes." },
-      { label: "Health Score", value: health, unit: "count", priority: "secondary", hint: "Índice operacional composto 0-100." },
+      { label: "Exceções (valor)", value: totals.valor_excecoes, unit: "BRL", priority: "secondary", formula: "Σ valor_excecoes" },
+      { label: "1ª Parcela em Exceções", value: totals.valor_primeira_parcela_excecoes, unit: "BRL", priority: "secondary", formula: "Σ p1 onde status ∈ exceção" },
+      { label: "Acordos em Exceções", value: totals.qtd_excecoes, unit: "count", priority: "secondary", formula: "Σ qtd_excecoes" },
     ];
   }, [rows, totals, primeiraParcelaDia]);
 
@@ -244,14 +254,15 @@ export default function Index() {
               onRetry={guardedRefresh}
             />
 
-            {/* Daily Readout */}
-            <ExecutiveInsightCard data={readout} loading={loading} />
+            {/* Resumo do Dia + Ritmo do Dia (merged) */}
+            <Card>
+              <ExecutiveInsightCard data={readout} loading={loading} embedded />
+              <div className="border-t" />
+              <RitmoDiaCard db={selectedDatabase} embedded />
+            </Card>
 
             {/* KPIs */}
             <ExecutiveKpiStrip kpis={kpis} loading={loading} />
-
-            {/* Ritmo do Dia (KNN Fase 2) */}
-            <RitmoDiaCard db={selectedDatabase} />
 
             {/* BU comparisons */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

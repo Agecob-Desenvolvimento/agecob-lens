@@ -26,3 +26,6 @@ agecob-lens/.vite/
 
 # Claude Code local state
 .claude/settings.local.json
+
+# ML — raw training data (não versionar; baixar do repo KNN-agecob quando precisar retreinar)
+deploy/d.csv

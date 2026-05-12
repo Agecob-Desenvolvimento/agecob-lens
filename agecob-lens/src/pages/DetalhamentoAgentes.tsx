@@ -75,7 +75,7 @@ export default function DetalhamentoAgentes() {
     setPrimeiraParcelaPorAgente({});
 
     Promise.all([
-      fetchPrimeiraParcelaDia(selectedDatabase, assessoriaFilter),
+      fetchPrimeiraParcelaDia(selectedDatabase, assessoriaFilter, dateFrom, dateTo),
       fetchPrimeiraParcelaPorAgente(selectedDatabase, assessoriaFilter),
     ])
       .then(([diaEnv, agenteEnv]) => {
@@ -102,7 +102,7 @@ export default function DetalhamentoAgentes() {
     return () => {
       cancelled = true;
     };
-  }, [selectedDatabase, assessoria]);
+  }, [selectedDatabase, assessoria, dateFrom, dateTo]);
 
   const agentNames = useMemo(
     () =>

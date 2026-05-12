@@ -14,6 +14,7 @@ export interface MetricTotals {
   valor_acordos: number;
   valor_primeira_parcela: number;
   valor_excecoes: number;
+  valor_primeira_parcela_excecoes: number;
   agentes: number;
 }
 
@@ -27,6 +28,7 @@ export function aggregateTotals(rows: ProdutividadeRowWithSource[]): MetricTotal
       acc.valor_acordos += Number(row.valor_acordos || 0);
       acc.valor_primeira_parcela += Number(row.valor_primeira_parcela || 0);
       acc.valor_excecoes += Number(row.valor_excecoes || 0);
+      acc.valor_primeira_parcela_excecoes += Number(row.valor_primeira_parcela_excecoes || 0);
       return acc;
     },
     {
@@ -37,6 +39,7 @@ export function aggregateTotals(rows: ProdutividadeRowWithSource[]): MetricTotal
       valor_acordos: 0,
       valor_primeira_parcela: 0,
       valor_excecoes: 0,
+      valor_primeira_parcela_excecoes: 0,
       agentes: rows.length,
     },
   );

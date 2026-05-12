@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { AlertCircle, AlertTriangle, CheckCircle2, Lightbulb, Sparkles } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -8,6 +9,11 @@ interface ExecutiveInsightCardProps {
   data: InsightEngineOutput;
   loading?: boolean;
   title?: string;
+  embedded?: boolean;
+}
+
+function Wrapper({ embedded, children }: { embedded?: boolean; children: ReactNode }) {
+  return embedded ? <>{children}</> : <Card>{children}</Card>;
 }
 
 const SEVERITY_STYLES: Record<InsightSeverity | "action", { icon: typeof Lightbulb; className: string; label: string }> = {
@@ -17,10 +23,10 @@ const SEVERITY_STYLES: Record<InsightSeverity | "action", { icon: typeof Lightbu
   action: { icon: Lightbulb, className: "text-sky-600", label: "Ação sugerida" },
 };
 
-export function ExecutiveInsightCard({ data, loading, title = "Resumo do dia" }: ExecutiveInsightCardProps) {
+export function ExecutiveInsightCard({ data, loading, title = "Resumo do dia", embedded }: ExecutiveInsightCardProps) {
   if (loading) {
     return (
-      <Card>
+      <Wrapper embedded={embedded}>
         <CardHeader className="pb-2 pt-3 px-4">
           <CardTitle className="text-base font-semibold flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-primary" />
@@ -32,13 +38,13 @@ export function ExecutiveInsightCard({ data, loading, title = "Resumo do dia" }:
           <Skeleton className="h-5 w-2/3" />
           <Skeleton className="h-5 w-1/2" />
         </CardContent>
-      </Card>
+      </Wrapper>
     );
   }
 
   if (data.empty) {
     return (
-      <Card>
+      <Wrapper embedded={embedded}>
         <CardHeader className="pb-2 pt-3 px-4">
           <CardTitle className="text-base font-semibold flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-primary" />
@@ -50,7 +56,7 @@ export function ExecutiveInsightCard({ data, loading, title = "Resumo do dia" }:
             Sem sinais operacionais detectados.
           </p>
         </CardContent>
-      </Card>
+      </Wrapper>
     );
   }
 
@@ -61,7 +67,7 @@ export function ExecutiveInsightCard({ data, loading, title = "Resumo do dia" }:
   ].filter((s): s is { text: string; severity: InsightSeverity | "action"; key: string } => Boolean(s));
 
   return (
-    <Card>
+    <Wrapper embedded={embedded}>
       <CardHeader className="pb-2 pt-3 px-4">
         <CardTitle className="text-base font-semibold flex items-center gap-2">
           <Sparkles className="h-4 w-4 text-primary" />
@@ -84,7 +90,7 @@ export function ExecutiveInsightCard({ data, loading, title = "Resumo do dia" }:
           })
         )}
       </CardContent>
-    </Card>
+    </Wrapper>
   );
 }
 

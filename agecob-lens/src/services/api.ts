@@ -55,6 +55,7 @@ export interface ProdutividadeRow {
   valor_primeira_parcela: number;
   qtd_excecoes: number;
   valor_excecoes: number;
+  valor_primeira_parcela_excecoes: number;
 }
 
 export interface ProdutividadeFilters {
@@ -294,9 +295,13 @@ export interface StatusCargaRow {
 export async function fetchPrimeiraParcelaDia(
   db: DatabaseOption,
   assessoria?: string,
+  dateFrom?: string,
+  dateTo?: string,
 ): Promise<ApiEnvelope<PrimeiraParcelaDiaRow>> {
   const query = new URLSearchParams();
   if (assessoria && assessoria !== "Todas") query.set("assessoria", assessoria);
+  if (dateFrom) query.set("dateFrom", dateFrom);
+  if (dateTo) query.set("dateTo", dateTo);
   const suffix = query.toString() ? `?${query.toString()}` : "";
   return request<ApiEnvelope<PrimeiraParcelaDiaRow>>(`/dashboard/primeira-parcela-dia/${db}${suffix}`);
 }
@@ -635,6 +640,7 @@ export interface RitmoDiaBanda {
   real: number | null;
   delta: number | null;
   status: "acima" | "ok" | "abaixo" | "em_andamento" | "futuro";
+  acumulado: number | null;
 }
 
 export interface RitmoDiaResponse {

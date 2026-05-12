@@ -2,14 +2,21 @@ import config.settings as settings
 from core.utils.sql_helpers import build_assessoria_clause
 
 
-def wrap_todos_or_single(db: str, base_fn, agg_select: str, order_by: str) -> str:
+def wrap_todos_or_single(db: str, base_fn, agg_select: str, order_by: str, date_from: str = None, date_to_exclusive: str = None) -> str:
     """
     Helper central dos builders. Monta o query final a partir de:
       - `base_fn(database)` → SELECT base pra um único banco
       - `agg_select` → SELECT de agregação externa quando db == 'todos'
       - `order_by` → ORDER BY final
+      - `date_from`/`date_to_exclusive` → quando fornecidos, substituem @Hoje/@Amanha
     """
-    header = """
+    if date_from and date_to_exclusive:
+        header = f"""
+        DECLARE @Hoje DATE = '{date_from}';
+        DECLARE @Amanha DATE = '{date_to_exclusive}';
+    """
+    else:
+        header = """
         DECLARE @Hoje DATE = CAST(GETDATE() AS DATE);
         DECLARE @Amanha DATE = DATEADD(DAY, 1, @Hoje);
     """
@@ -30,7 +37,7 @@ def wrap_todos_or_single(db: str, base_fn, agg_select: str, order_by: str) -> st
     """
 
 
-def build_primeira_parcela_dia_query(db: str, assessoria_token: str = "") -> str:
+def build_primeira_parcela_dia_query(db: str, assessoria_token: str = "", date_from: str = None, date_to_exclusive: str = None) -> str:
     """
     Card de topo: soma da 1ª parcela de hoje e quantidade de acordos.
     Considera acordos aprovados (ATIVO, BAIXA POR PAGAMENTO, BAIXA AVULSA).
@@ -55,7 +62,7 @@ def build_primeira_parcela_dia_query(db: str, assessoria_token: str = "") -> str
             SUM(sub.total_valor) AS total_valor,
             SUM(sub.total_acordos) AS total_acordos
     """
-    return wrap_todos_or_single(db, _base, agg, order_by="")
+    return wrap_todos_or_single(db, _base, agg, order_by="", date_from=date_from, date_to_exclusive=date_to_exclusive)
 
 
 def build_excecoes_por_portfolio_query(db: str) -> str:

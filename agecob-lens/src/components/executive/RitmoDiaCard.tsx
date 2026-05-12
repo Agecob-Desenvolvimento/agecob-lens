@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { type DatabaseOption, fetchRitmoDia, type RitmoDiaResponse } from "@/services/api";
 
 const STATUS_ICON: Record<string, string> = {
@@ -16,7 +17,11 @@ const FAIXA_LABEL: Record<string, string> = {
   basal: "Basal",
 };
 
-export default function RitmoDiaCard({ db }: { db: DatabaseOption }) {
+function Wrapper({ embedded, children }: { embedded?: boolean; children: ReactNode }) {
+  return embedded ? <>{children}</> : <Card>{children}</Card>;
+}
+
+export default function RitmoDiaCard({ db, embedded }: { db: DatabaseOption; embedded?: boolean }) {
   const [resp, setResp] = useState<RitmoDiaResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -32,23 +37,33 @@ export default function RitmoDiaCard({ db }: { db: DatabaseOption }) {
 
   if (error) {
     return (
-      <Card>
+      <Wrapper embedded={embedded}>
         <CardHeader className="pb-2 pt-3 px-4">
           <CardTitle className="text-sm font-semibold">Ritmo do Dia</CardTitle>
           <CardDescription className="text-xs text-red-600">{error}</CardDescription>
         </CardHeader>
-      </Card>
+      </Wrapper>
     );
   }
 
   if (!resp) {
     return (
-      <Card>
+      <Wrapper embedded={embedded}>
         <CardHeader className="pb-2 pt-3 px-4">
           <CardTitle className="text-sm font-semibold">Ritmo do Dia</CardTitle>
-          <CardDescription className="text-xs">Carregando…</CardDescription>
+          <CardDescription className="text-xs">
+            <Skeleton className="h-3 w-48" />
+          </CardDescription>
         </CardHeader>
-      </Card>
+        <CardContent className="px-4 pb-3">
+          <div className="grid grid-cols-12 gap-1">
+            {Array.from({ length: 12 }).map((_, i) => (
+              <Skeleton key={i} className="h-16 w-full" />
+            ))}
+          </div>
+          <Skeleton className="mt-2 h-3 w-32" />
+        </CardContent>
+      </Wrapper>
     );
   }
 
@@ -57,17 +72,17 @@ export default function RitmoDiaCard({ db }: { db: DatabaseOption }) {
 
   if (!meta.em_operacao) {
     return (
-      <Card>
+      <Wrapper embedded={embedded}>
         <CardHeader className="pb-2 pt-3 px-4">
           <CardTitle className="text-sm font-semibold">Ritmo do Dia</CardTitle>
           <CardDescription className="text-xs">Fora do horário operacional (08h–19h).</CardDescription>
         </CardHeader>
-      </Card>
+      </Wrapper>
     );
   }
 
   return (
-    <Card>
+    <Wrapper embedded={embedded}>
       <CardHeader className="pb-2 pt-3 px-4">
         <CardTitle className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
           Ritmo do Dia
@@ -91,6 +106,7 @@ export default function RitmoDiaCard({ db }: { db: DatabaseOption }) {
             const icon = STATUS_ICON[b.status] ?? "·";
             const deltaText = b.delta == null ? "" : (b.delta > 0 ? `+${b.delta}` : `${b.delta}`);
             const realText = b.real == null ? "—" : String(b.real);
+            const acumText = b.acumulado == null ? "—" : String(b.acumulado);
             const isCurrent = b.status === "em_andamento";
             return (
               <div
@@ -98,11 +114,12 @@ export default function RitmoDiaCard({ db }: { db: DatabaseOption }) {
                 className={`flex flex-col items-center rounded-md border p-1 ${
                   isCurrent ? "border-emerald-500 bg-emerald-50" : "border-border"
                 }`}
-                title={`Hora ${b.hora}h — esperado ${b.esperado} · real ${realText} · delta ${deltaText || "—"}`}
+                title={`Hora ${b.hora}h — esperado ${b.esperado} · real ${realText} · acumulado ${acumText} · delta ${deltaText || "—"}`}
               >
                 <span className="font-semibold">{b.hora}h</span>
                 <span className="text-muted-foreground">esp {b.esperado}</span>
                 <span>real {realText}</span>
+                <span className="text-muted-foreground">acum {acumText}</span>
                 <span>{icon}{deltaText && ` ${deltaText}`}</span>
               </div>
             );
@@ -112,6 +129,6 @@ export default function RitmoDiaCard({ db }: { db: DatabaseOption }) {
           Acumulado atual: <span className="font-medium">{data.acumulado_atual}</span>
         </div>
       </CardContent>
-    </Card>
+    </Wrapper>
   );
 }
