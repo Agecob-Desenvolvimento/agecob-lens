@@ -1,0 +1,26 @@
+@echo off
+set APP_ENV=production
+
+echo [build] Installing frontend dependencies...
+cd agecob-lens
+call npm install
+if errorlevel 1 goto :err
+
+echo [build] Building frontend (production)...
+call npm run build
+if errorlevel 1 goto :err
+cd ..
+
+echo [build] Starting backend on 0.0.0.0:8000 ...
+start "Backend-build" cmd /k "set APP_ENV=production && "C:\Users\Edson Vitor TI\AppData\Local\Python\pythoncore-3.14-64\python.exe" -m uvicorn main:app --host 0.0.0.0 --port 8000"
+
+echo [build] Serving frontend preview on 0.0.0.0:5173 ...
+start "Frontend-build" cmd /k "cd agecob-lens && npm run preview -- --host 0.0.0.0 --port 5173"
+
+echo [build] Backend  http://192.168.0.20:8000
+echo [build] Frontend http://192.168.0.20:5173
+goto :eof
+
+:err
+echo [build] FAILED
+exit /b 1
