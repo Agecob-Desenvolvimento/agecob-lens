@@ -55,6 +55,7 @@ export interface ProdutividadeRow {
   valor_primeira_parcela: number;
   qtd_excecoes: number;
   valor_excecoes: number;
+  valor_primeira_parcela_excecoes: number;
 }
 
 export interface ProdutividadeFilters {
@@ -294,9 +295,13 @@ export interface StatusCargaRow {
 export async function fetchPrimeiraParcelaDia(
   db: DatabaseOption,
   assessoria?: string,
+  dateFrom?: string,
+  dateTo?: string,
 ): Promise<ApiEnvelope<PrimeiraParcelaDiaRow>> {
   const query = new URLSearchParams();
   if (assessoria && assessoria !== "Todas") query.set("assessoria", assessoria);
+  if (dateFrom) query.set("dateFrom", dateFrom);
+  if (dateTo) query.set("dateTo", dateTo);
   const suffix = query.toString() ? `?${query.toString()}` : "";
   return request<ApiEnvelope<PrimeiraParcelaDiaRow>>(`/dashboard/primeira-parcela-dia/${db}${suffix}`);
 }
@@ -627,4 +632,35 @@ export async function fetchEfResumo(
   if (db && db !== "todos") params.set("db", db);
   if (idPortfolio != null) params.set("id_portfolio", String(idPortfolio));
   return request<EfResumoEnvelope>(`/efetividade/resumo?${params.toString()}`);
+}
+
+export interface RitmoDiaBanda {
+  hora: number;
+  esperado: number;
+  real: number | null;
+  delta: number | null;
+  status: "acima" | "ok" | "abaixo" | "em_andamento" | "futuro";
+  acumulado: number | null;
+}
+
+export interface RitmoDiaResponse {
+  meta: {
+    generated_at: string;
+    em_operacao: boolean;
+    modelo: string;
+    faixa_batimento?: string;
+    dias_desde_ultimo_batimento?: number;
+  };
+  data: {
+    hora_atual: number;
+    acumulado_atual: number;
+    esperado_total?: number;
+    projecao_fechamento?: number;
+    bandas: RitmoDiaBanda[];
+  };
+  errors: ApiErrorItem[];
+}
+
+export async function fetchRitmoDia(db: DatabaseOption): Promise<RitmoDiaResponse> {
+  return request<RitmoDiaResponse>(`/dashboard/ritmo-dia/${db}`);
 }

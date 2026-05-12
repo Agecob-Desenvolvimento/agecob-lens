@@ -53,13 +53,13 @@ export default function AnaliseProdutividade() {
 
   useEffect(() => {
     setPrimeiraParcelaDia(null);
-    fetchPrimeiraParcelaDia(selectedDatabase)
+    fetchPrimeiraParcelaDia(selectedDatabase, undefined, dateFrom, dateTo)
       .then((env) => {
         const row = env.data[0];
         if (row) setPrimeiraParcelaDia({ total_valor: Number(row.total_valor) || 0, total_acordos: Number(row.total_acordos) || 0 });
       })
       .catch(() => {});
-  }, [selectedDatabase]);
+  }, [selectedDatabase, dateFrom, dateTo]);
 
   const filteredRows = useMemo(
     () => rows.filter((row) => (teamBU === "(Todos)" ? true : row.source === teamBU)),

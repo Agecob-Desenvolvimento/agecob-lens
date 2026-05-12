@@ -97,6 +97,22 @@ export function generateDailyReadout(
       text: `Primeira parcela representa ${fmtPct(ppRatio)} do valor acordado — bom sinal de entrada de caixa.`,
       rank: SEVERITY_RANK.positive,
     });
+  } else if (ppRatio > 0 && ppRatio < 5) {
+    insights.push({
+      ruleId: "insight_first_installment_critical",
+      category: "first_installment",
+      severity: "critical",
+      text: `Desbalanceamento: 1ª parcela é ${fmtPct(ppRatio)} do total.`,
+      rank: SEVERITY_RANK.critical,
+    });
+  } else if (ppRatio >= 5 && ppRatio < 10) {
+    insights.push({
+      ruleId: "insight_first_installment_warning",
+      category: "first_installment",
+      severity: "warning",
+      text: `1ª parcela está abaixo do esperado (${fmtPct(ppRatio)} do total). Verifique se o fluxo de caixa está compatível com as parcelas futuras.`,
+      rank: SEVERITY_RANK.warning,
+    });
   }
 
   if (concentracao > 70 && rows.length > 3) {

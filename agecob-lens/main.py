@@ -48,11 +48,11 @@ EXCLUDED_AGENT_PREFIXES = ("ANTLIA", "INTERNA")
 #   12 = BAIXA POR PAGAMENTO AVULSO
 #
 # "Acordos aprovados" = ATIVO + BAIXA POR PAGAMENTO + BAIXA POR PAGAMENTO AVULSO
-# "Exceções" = EXCEÇÃO (11)
+# "Exceções" = PENDENTE (5)
 # "Universo de acordos considerados" = aprovados + exceções
 STATUS_APROVADOS = (1, 3, 12)
-STATUS_EXCECAO = (11,)
-STATUS_UNIVERSO_ACORDOS = STATUS_APROVADOS + STATUS_EXCECAO  # (1, 3, 11, 12)
+STATUS_EXCECAO = (5,)
+STATUS_UNIVERSO_ACORDOS = STATUS_APROVADOS + STATUS_EXCECAO  # (1, 3, 5, 12)
 
 # IDs de complementos que contam como CPC (Contato com a Pessoa Certa).
 # Gerenciado manualmente pelo cientista de dados; se a ops criar um novo
