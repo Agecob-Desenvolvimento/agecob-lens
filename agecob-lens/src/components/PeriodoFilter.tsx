@@ -7,6 +7,7 @@ interface PeriodoFilterProps {
   dateTo: string;
   onDateFromChange: (v: string) => void;
   onDateToChange: (v: string) => void;
+  inline?: boolean;
 }
 
 export default function PeriodoFilter({
@@ -14,7 +15,30 @@ export default function PeriodoFilter({
   dateTo,
   onDateFromChange,
   onDateToChange,
+  inline,
 }: PeriodoFilterProps) {
+  if (inline) {
+    return (
+      <div className="flex items-center gap-2">
+        <Label htmlFor="period-from" className="text-xs font-medium text-muted-foreground">De</Label>
+        <Input
+          id="period-from"
+          type="date"
+          value={dateFrom}
+          onChange={(e) => onDateFromChange(e.target.value)}
+          className="h-8 w-36 text-xs"
+        />
+        <Label htmlFor="period-to" className="text-xs font-medium text-muted-foreground">Até</Label>
+        <Input
+          id="period-to"
+          type="date"
+          value={dateTo}
+          onChange={(e) => onDateToChange(e.target.value)}
+          className="h-8 w-36 text-xs"
+        />
+      </div>
+    );
+  }
   return (
     <Card>
       <CardContent className="pt-4 pb-3 px-4">

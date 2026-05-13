@@ -4,6 +4,7 @@ import { useLocation } from "react-router-dom";
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
@@ -12,6 +13,15 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useGlobalFilters } from "@/contexts/GlobalFiltersContext";
 
 const navItems = [
   { title: "Produtividade Escritórios", url: "/", icon: TrendingUp, enabled: true },
@@ -24,6 +34,7 @@ const navItems = [
 
 export function AppSidebar() {
   const location = useLocation();
+  const { category, assessoria, setCategory, setAssessoria } = useGlobalFilters();
 
   return (
     <Sidebar collapsible="offcanvas" className="border-r border-sidebar-border">
@@ -87,6 +98,47 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
+
+      <SidebarFooter className="border-t border-sidebar-border p-3 space-y-3">
+        <div className="space-y-1.5">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/60">
+            Categoria
+          </span>
+          <div className="flex gap-1">
+            {["Todas", "AUTOS", "CONSUMER"].map((opt) => (
+              <Button
+                key={opt}
+                size="sm"
+                variant={category === opt ? "default" : "outline"}
+                onClick={() => setCategory(opt)}
+                className={
+                  category === opt
+                    ? "flex-1 h-7 text-xs px-1 bg-emerald-600 text-white hover:bg-emerald-700 border-emerald-600"
+                    : "flex-1 h-7 text-xs px-1"
+                }
+              >
+                {opt}
+              </Button>
+            ))}
+          </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/60">
+            Assessoria
+          </span>
+          <Select value={assessoria} onValueChange={setAssessoria}>
+            <SelectTrigger className="h-7 text-xs">
+              <SelectValue placeholder="Selecione..." />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos</SelectItem>
+              <SelectItem value="963:AGECOB_LP">963:AGECOB_LP</SelectItem>
+              <SelectItem value="929:LP_COB">929:LP_COB</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </SidebarFooter>
     </Sidebar>
   );
 }

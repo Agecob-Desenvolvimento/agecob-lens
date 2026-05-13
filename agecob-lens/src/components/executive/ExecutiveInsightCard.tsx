@@ -12,31 +12,47 @@ interface ExecutiveInsightCardProps {
   embedded?: boolean;
 }
 
+type RenderSlot = {
+  text: string;
+  severity: InsightSeverity | "action";
+  key: string;
+  headline?: string;
+};
+
 function Wrapper({ embedded, children }: { embedded?: boolean; children: ReactNode }) {
   return embedded ? <>{children}</> : <Card>{children}</Card>;
 }
 
-const SEVERITY_STYLES: Record<InsightSeverity | "action", { icon: typeof Lightbulb; className: string; label: string }> = {
-  positive: { icon: CheckCircle2, className: "text-emerald-600", label: "Positivo" },
-  warning: { icon: AlertTriangle, className: "text-amber-600", label: "Atenção" },
-  critical: { icon: AlertCircle, className: "text-rose-600", label: "Crítico" },
-  action: { icon: Lightbulb, className: "text-sky-600", label: "Ação sugerida" },
+const SEVERITY_TILE: Record<InsightSeverity | "action", {
+  icon: typeof Lightbulb;
+  bg: string;
+  ring: string;
+  border: string;
+  iconColor: string;
+  headlineColor: string;
+  badgeBg: string;
+  label: string;
+}> = {
+  critical: { icon: AlertCircle,   bg: "bg-rose-50",    ring: "ring-rose-200",    border: "border-rose-500",    iconColor: "text-rose-600",    headlineColor: "text-rose-700",    badgeBg: "bg-rose-600 text-white",    label: "CRÍTICO"  },
+  warning:  { icon: AlertTriangle, bg: "bg-amber-50",   ring: "ring-amber-200",   border: "border-amber-500",   iconColor: "text-amber-600",   headlineColor: "text-amber-700",   badgeBg: "bg-amber-500 text-white",   label: "ATENÇÃO"  },
+  positive: { icon: CheckCircle2,  bg: "bg-emerald-50", ring: "ring-emerald-200", border: "border-emerald-500", iconColor: "text-emerald-600", headlineColor: "text-emerald-700", badgeBg: "bg-emerald-600 text-white", label: "POSITIVO" },
+  action:   { icon: Lightbulb,     bg: "bg-sky-50",     ring: "ring-sky-200",     border: "border-sky-500",     iconColor: "text-sky-600",     headlineColor: "text-sky-700",     badgeBg: "bg-sky-600 text-white",     label: "AÇÃO"     },
 };
 
 export function ExecutiveInsightCard({ data, loading, title = "Resumo do dia", embedded }: ExecutiveInsightCardProps) {
   if (loading) {
     return (
       <Wrapper embedded={embedded}>
-        <CardHeader className="pb-2 pt-3 px-4">
-          <CardTitle className="text-base font-semibold flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-primary" />
+        <CardHeader className="pb-3 pt-4 px-4">
+          <CardTitle className="text-lg font-semibold flex items-center gap-2">
+            <Sparkles className="h-5 w-5 text-primary" />
             {title}
           </CardTitle>
         </CardHeader>
-        <CardContent className="px-4 pb-3 space-y-2">
-          <Skeleton className="h-5 w-3/4" />
-          <Skeleton className="h-5 w-2/3" />
-          <Skeleton className="h-5 w-1/2" />
+        <CardContent className="px-4 pb-4 space-y-3">
+          <Skeleton className="h-20 w-full" />
+          <Skeleton className="h-20 w-full" />
+          <Skeleton className="h-20 w-full" />
         </CardContent>
       </Wrapper>
     );
@@ -45,13 +61,13 @@ export function ExecutiveInsightCard({ data, loading, title = "Resumo do dia", e
   if (data.empty) {
     return (
       <Wrapper embedded={embedded}>
-        <CardHeader className="pb-2 pt-3 px-4">
-          <CardTitle className="text-base font-semibold flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-primary" />
+        <CardHeader className="pb-3 pt-4 px-4">
+          <CardTitle className="text-lg font-semibold flex items-center gap-2">
+            <Sparkles className="h-5 w-5 text-primary" />
             {title}
           </CardTitle>
         </CardHeader>
-        <CardContent className="px-4 pb-3">
+        <CardContent className="px-4 pb-4">
           <p className="text-sm text-muted-foreground">
             Sem sinais operacionais detectados.
           </p>
@@ -60,31 +76,53 @@ export function ExecutiveInsightCard({ data, loading, title = "Resumo do dia", e
     );
   }
 
-  const slots = [
+  const slots: RenderSlot[] = [
     data.insight1 ? { ...data.insight1, key: "i1" } : null,
     data.insight2 ? { ...data.insight2, key: "i2" } : null,
-    data.action ? { text: data.action.text, severity: "action" as const, key: "a1" } : null,
-  ].filter((s): s is { text: string; severity: InsightSeverity | "action"; key: string } => Boolean(s));
+    data.action ? { text: data.action.text, severity: "action" as const, key: "a1", headline: data.action.headline } : null,
+  ].filter((s): s is RenderSlot => Boolean(s));
 
   return (
     <Wrapper embedded={embedded}>
-      <CardHeader className="pb-2 pt-3 px-4">
-        <CardTitle className="text-base font-semibold flex items-center gap-2">
-          <Sparkles className="h-4 w-4 text-primary" />
+      <CardHeader className="pb-3 pt-4 px-4">
+        <CardTitle className="text-lg font-semibold flex items-center gap-2">
+          <Sparkles className="h-5 w-5 text-primary" />
           {title}
         </CardTitle>
       </CardHeader>
-      <CardContent className="px-4 pb-3 space-y-2">
+      <CardContent className="px-4 pb-4 space-y-3">
         {slots.length === 0 ? (
           <p className="text-sm text-muted-foreground">Dados insuficientes para gerar insights automáticos.</p>
         ) : (
           slots.map((slot) => {
-            const style = SEVERITY_STYLES[slot.severity];
-            const Icon = style.icon;
+            const tile = SEVERITY_TILE[slot.severity];
+            const Icon = tile.icon;
+            const ringEmphasis = slot.severity === "critical" ? "ring-2 shadow-sm" : "ring-1";
             return (
-              <div key={slot.key} className="flex items-start gap-2 text-sm">
-                <Icon className={cn("h-4 w-4 mt-0.5 shrink-0", style.className)} aria-label={style.label} />
-                <p className="text-foreground leading-snug">{slot.text}</p>
+              <div
+                key={slot.key}
+                className={cn(
+                  "rounded-md border-l-4 p-3 flex items-start gap-3",
+                  tile.bg,
+                  tile.border,
+                  ringEmphasis,
+                  tile.ring,
+                )}
+              >
+                <Icon className={cn("h-7 w-7 mt-0.5 shrink-0", tile.iconColor)} aria-label={tile.label} />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-baseline justify-between gap-2">
+                    {slot.headline ? (
+                      <span className={cn("text-3xl font-bold leading-none", tile.headlineColor)}>
+                        {slot.headline}
+                      </span>
+                    ) : <span />}
+                    <span className={cn("text-[10px] font-semibold tracking-wide rounded px-1.5 py-0.5", tile.badgeBg)}>
+                      {tile.label}
+                    </span>
+                  </div>
+                  <p className="text-sm text-foreground leading-snug mt-1">{slot.text}</p>
+                </div>
               </div>
             );
           })

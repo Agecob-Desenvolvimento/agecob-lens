@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { RefreshCw } from "lucide-react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +15,7 @@ interface ExecutiveHeaderProps {
   onRefresh?: () => void;
   refreshing?: boolean;
   refreshHint?: string;
+  periodControl?: ReactNode;
 }
 
 export function ExecutiveHeader({
@@ -23,6 +25,7 @@ export function ExecutiveHeader({
   onRefresh,
   refreshing,
   refreshHint,
+  periodControl,
 }: ExecutiveHeaderProps) {
   return (
     <header className="border-b border-border bg-card px-4 py-3 flex flex-wrap items-center gap-3">
@@ -46,11 +49,11 @@ export function ExecutiveHeader({
         {title}
       </h1>
       <div className="flex flex-wrap items-center gap-2">
-        {period ? (
+        {periodControl ?? (period ? (
           <Badge variant="outline" className="text-xs capitalize">
             {period}
           </Badge>
-        ) : null}
+        ) : null)}
         {filters?.map((chip) => (
           <Badge key={`${chip.label}-${chip.value}`} variant="secondary" className="text-xs">
             <span className="text-muted-foreground mr-1">{chip.label}:</span>

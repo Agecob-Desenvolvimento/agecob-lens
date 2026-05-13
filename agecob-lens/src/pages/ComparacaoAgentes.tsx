@@ -1,5 +1,4 @@
 import { lazy, Suspense, useState } from "react";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import FilterBar from "@/components/FilterBar";
 import PeriodoFilter from "@/components/PeriodoFilter";
 import { type DatabaseOption } from "@/services/api";
@@ -10,22 +9,22 @@ import { ROUTE_LOAD_PRIORITY } from "@/config/loadPriorities";
 import { useRefreshGuard } from "@/hooks/useRefreshGuard";
 import { trackEvent } from "@/services/analytics";
 import ExecutiveHeader from "@/components/executive/ExecutiveHeader";
+import { useGlobalFilters } from "@/contexts/GlobalFiltersContext";
 
 const AgentComparisonDashboard = lazy(() => import("@/components/AgentComparisonDashboard"));
-
-const DB_OPTIONS: { value: DatabaseOption; label: string }[] = [
-  { value: "COBwebRCBAUTOS", label: "AUTOS" },
-  { value: "COBwebRCBCONSUMER", label: "CONSUMER" },
-  { value: "todos", label: "Todos" },
-];
 
 function todayStr() { return new Date().toISOString().slice(0, 10); }
 function firstOfMonthStr() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`; }
 
 export default function ComparacaoAgentes() {
-  const [db, setDb] = useState<DatabaseOption>("todos");
+  const { category, assessoria } = useGlobalFilters();
+  const db: DatabaseOption =
+    category === "AUTOS"
+      ? "COBwebRCBAUTOS"
+      : category === "CONSUMER"
+        ? "COBwebRCBCONSUMER"
+        : "todos";
   const [carteira, setCarteira] = useState("Geral");
-  const [assessoria, setAssessoria] = useState("todos");
   const [dateFrom, setDateFrom] = useState(firstOfMonthStr);
   const [dateTo, setDateTo] = useState(todayStr);
   const [refreshTick, setRefreshTick] = useState(0);
@@ -41,23 +40,13 @@ export default function ComparacaoAgentes() {
     }
   });
 
-  const handleDbChange = (nextDb: DatabaseOption) => {
-    trackEvent("filter_changed", { page: "/comparacao-agentes", filter_name: "categoria_db", value: nextDb });
-    setDb(nextDb);
-  };
-
   const handleCarteiraChange = (nextCarteira: string) => {
     trackEvent("filter_changed", { page: "/comparacao-agentes", filter_name: "carteira", value: nextCarteira });
     setCarteira(nextCarteira);
   };
 
-  const handleAssessoriaChange = (nextAssessoria: string) => {
-    trackEvent("filter_changed", { page: "/comparacao-agentes", filter_name: "assessoria", value: nextAssessoria });
-    setAssessoria(nextAssessoria);
-  };
-
   const filterChips = [
-    { label: "BU", value: DB_OPTIONS.find((o) => o.value === db)?.label ?? db },
+    { label: "Categoria", value: category },
     ...(assessoria !== "todos" ? [{ label: "Assessoria", value: assessoria }] : []),
   ];
 
@@ -77,23 +66,11 @@ export default function ComparacaoAgentes() {
           />
 
           <div className="max-w-7xl mx-auto px-4 py-6 space-y-6 w-full">
-            <Tabs value={db} onValueChange={(v) => handleDbChange(v as DatabaseOption)}>
-              <TabsList>
-                {DB_OPTIONS.map((opt) => (
-                  <TabsTrigger key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-            </Tabs>
-
             <PeriodoFilter dateFrom={dateFrom} dateTo={dateTo} onDateFromChange={setDateFrom} onDateToChange={setDateTo} />
 
             <FilterBar
               carteira={carteira}
               onCarteiraChange={handleCarteiraChange}
-              assessoria={assessoria}
-              onAssessoriaChange={handleAssessoriaChange}
             />
 
             <LazyVisibleSection

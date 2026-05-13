@@ -15,11 +15,13 @@ export interface ExecutiveKpi {
 export interface InsightSlot {
   text: string;
   severity: InsightSeverity;
+  headline?: string;
 }
 
 export interface ActionSlot {
   text: string;
   severity: "action";
+  headline?: string;
 }
 
 export interface InsightEngineOutput {
