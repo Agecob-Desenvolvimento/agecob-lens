@@ -22,5 +22,8 @@ echo [build] Frontend http://192.168.0.20/
 goto :eof
 
 :err
-echo [build] FAILED
+echo.
+echo [build] FAILED - veja erro acima
+echo.
+pause
 exit /b 1
