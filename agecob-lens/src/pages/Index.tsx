@@ -1,15 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import PeriodoFilter from "@/components/PeriodoFilter";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { AppSidebar } from "@/components/AppSidebar";
+import { useGlobalFilters } from "@/contexts/GlobalFiltersContext";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { useRefreshGuard } from "@/hooks/useRefreshGuard";
 import { useProdutividadeData } from "@/hooks/useProdutividadeData";
@@ -40,10 +33,24 @@ import type { ExecutiveKpi, RankingRow } from "@/types/executive";
 
 function todayStr() { return new Date().toISOString().slice(0, 10); }
 function firstOfMonthStr() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`; }
+function lastOfMonthStr() {
+  const d = new Date();
+  const last = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+  return `${last.getFullYear()}-${String(last.getMonth() + 1).padStart(2, "0")}-${String(last.getDate()).padStart(2, "0")}`;
+}
+function countBusinessDays(fromIso: string, toIso: string): number {
+  const start = new Date(`${fromIso}T00:00:00`);
+  const end = new Date(`${toIso}T00:00:00`);
+  let n = 0;
+  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    const dow = d.getDay();
+    if (dow !== 0 && dow !== 6) n++;
+  }
+  return n;
+}
 
 export default function Index() {
-  const [category, setCategory] = useState("Todas");
-  const [assessoria, setAssessoria] = useState("todos");
+  const { category, assessoria } = useGlobalFilters();
   const [dateFrom, setDateFrom] = useState(firstOfMonthStr);
   const [dateTo, setDateTo] = useState(todayStr);
   const selectedDatabase: DatabaseOption =
@@ -61,6 +68,7 @@ export default function Index() {
   );
 
   const [primeiraParcelaDia, setPrimeiraParcelaDia] = useState<{ total_valor: number; total_acordos: number } | null>(null);
+  const [primeiraParcelaMes, setPrimeiraParcelaMes] = useState<number | null>(null);
 
   const { guardedRefresh, refreshing, remainingMs } = useRefreshGuard(async () => {
     const startedAt = performance.now();
@@ -75,16 +83,6 @@ export default function Index() {
     }
   });
 
-  const handleCategoryChange = (nextCategory: string) => {
-    trackEvent("filter_changed", { page: "/", filter_name: "categoria", value: nextCategory });
-    setCategory(nextCategory);
-  };
-
-  const handleAssessoriaChange = (nextAssessoria: string) => {
-    trackEvent("filter_changed", { page: "/", filter_name: "assessoria", value: nextAssessoria });
-    setAssessoria(nextAssessoria);
-  };
-
   useEffect(() => {
     setPrimeiraParcelaDia(null);
     fetchPrimeiraParcelaDia(selectedDatabase, undefined, dateFrom, dateTo)
@@ -94,6 +92,29 @@ export default function Index() {
       })
       .catch(() => {});
   }, [selectedDatabase, dateFrom, dateTo]);
+
+  useEffect(() => {
+    setPrimeiraParcelaMes(null);
+    const monthStart = firstOfMonthStr();
+    const today = todayStr();
+    fetchPrimeiraParcelaDia(selectedDatabase, undefined, monthStart, today)
+      .then((env) => {
+        const row = env.data[0];
+        if (row) setPrimeiraParcelaMes(Number(row.total_valor) || 0);
+      })
+      .catch(() => {});
+  }, [selectedDatabase]);
+
+  const projecaoMes = useMemo(() => {
+    if (primeiraParcelaMes == null || primeiraParcelaMes <= 0) return undefined;
+    const monthStart = firstOfMonthStr();
+    const monthEnd = lastOfMonthStr();
+    const today = todayStr();
+    const diasDecorridos = countBusinessDays(monthStart, today);
+    const diasTotais = countBusinessDays(monthStart, monthEnd);
+    if (diasDecorridos <= 0) return undefined;
+    return (primeiraParcelaMes / diasDecorridos) * diasTotais;
+  }, [primeiraParcelaMes]);
 
   const totals = useMemo(() => aggregateTotals(rows), [rows]);
 
@@ -138,7 +159,7 @@ export default function Index() {
     ];
   }, [rows, totals, primeiraParcelaDia]);
 
-  const readout = useMemo(() => generateDailyReadout(rows), [rows]);
+  const readout = useMemo(() => generateDailyReadout(rows, projecaoMes), [rows, projecaoMes]);
 
   const topByValor: RankingRow[] = useMemo(() => {
     return [...rows]
@@ -198,55 +219,19 @@ export default function Index() {
             onRefresh={guardedRefresh}
             refreshing={refreshing}
             refreshHint={remainingMs > 0 ? `Aguarde ${Math.ceil(remainingMs / 1000)}s` : "Atualizar"}
-            period="Hoje"
             filters={filterChips}
+            periodControl={
+              <PeriodoFilter
+                inline
+                dateFrom={dateFrom}
+                dateTo={dateTo}
+                onDateFromChange={setDateFrom}
+                onDateToChange={setDateTo}
+              />
+            }
           />
 
           <div className="flex-1 bg-background p-6 space-y-6 overflow-auto">
-            {/* Filters */}
-            <PeriodoFilter dateFrom={dateFrom} dateTo={dateTo} onDateFromChange={setDateFrom} onDateToChange={setDateTo} />
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Card>
-                <CardHeader className="pb-2 pt-3 px-4">
-                  <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Categoria (BU)</CardTitle>
-                </CardHeader>
-                <CardContent className="px-4 pb-3 flex gap-2">
-                  {["Todas", "AUTOS", "CONSUMER"].map((opt) => (
-                    <Button
-                      key={opt}
-                      size="sm"
-                      variant={category === opt ? "default" : "outline"}
-                      onClick={() => handleCategoryChange(opt)}
-                      className={
-                        category === opt
-                          ? "flex-1 bg-emerald-600 text-white hover:bg-emerald-700 border-emerald-600"
-                          : "flex-1"
-                      }
-                    >
-                      {opt}
-                    </Button>
-                  ))}
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="pb-2 pt-3 px-4">
-                  <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Assessoria</CardTitle>
-                </CardHeader>
-                <CardContent className="px-4 pb-3">
-                  <Select value={assessoria} onValueChange={handleAssessoriaChange}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="963:AGECOB_LP">963:AGECOB_LP</SelectItem>
-                      <SelectItem value="todos">Todos</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </CardContent>
-              </Card>
-            </div>
-
             {/* API debug banner — aparece quando há falha de conexão */}
             <ApiDebugBanner
               error={loadError}

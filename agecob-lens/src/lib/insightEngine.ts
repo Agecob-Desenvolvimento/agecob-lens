@@ -11,13 +11,14 @@ import {
   calcConcentracao,
   calcConversao,
   calcExcecoesPctQtd,
+  fmtBRL,
   fmtNum,
   fmtPct,
 } from "@/lib/metrics";
 
 interface CandidateInsight extends InsightSlot {
   ruleId: string;
-  category: "cpc" | "conversion" | "exceptions" | "first_installment" | "concentration";
+  category: "cpc" | "conversion" | "exceptions" | "first_installment" | "concentration" | "month_projection";
   rank: number;
 }
 
@@ -34,6 +35,7 @@ const SEVERITY_RANK: Record<InsightSeverity, number> = {
 
 export function generateDailyReadout(
   rows: ProdutividadeRowWithSource[],
+  projecaoMes?: number,
 ): InsightEngineOutput {
   if (!rows.length) {
     return { insight1: null, insight2: null, action: null, empty: true };
@@ -56,7 +58,8 @@ export function generateDailyReadout(
       ruleId: "insight_cpc_above_avg",
       category: "cpc",
       severity: "positive",
-      text: `CPC está em ${fmtPct(cpc)}, acima do patamar operacional.`,
+      headline: fmtPct(cpc),
+      text: "CPC acima do patamar operacional.",
       rank: SEVERITY_RANK.positive,
     });
   } else if (cpc < 20 && totals.qtd_acionamentos > 0) {
@@ -64,7 +67,8 @@ export function generateDailyReadout(
       ruleId: "insight_cpc_below_avg",
       category: "cpc",
       severity: "warning",
-      text: `CPC em ${fmtPct(cpc)} — abaixo do patamar operacional.`,
+      headline: fmtPct(cpc),
+      text: "CPC abaixo do patamar operacional.",
       rank: SEVERITY_RANK.warning,
     });
   }
@@ -74,7 +78,8 @@ export function generateDailyReadout(
       ruleId: "insight_conversion_drop",
       category: "conversion",
       severity: "critical",
-      text: `Conversão em ${fmtPct(conversao)} com alto volume de acionamentos. Verificar qualidade dos contatos.`,
+      headline: fmtPct(conversao),
+      text: "Conversão baixa com alto volume de acionamentos. Verificar qualidade dos contatos.",
       rank: SEVERITY_RANK.critical,
     });
   }
@@ -84,7 +89,8 @@ export function generateDailyReadout(
       ruleId: "insight_exception_spike",
       category: "exceptions",
       severity: "warning",
-      text: `Volume de exceções elevado: ${fmtNum(totals.qtd_excecoes)} hoje.`,
+      headline: fmtNum(totals.qtd_excecoes),
+      text: "Volume de exceções elevado hoje.",
       rank: SEVERITY_RANK.warning,
     });
   }
@@ -94,7 +100,8 @@ export function generateDailyReadout(
       ruleId: "insight_first_installment_high",
       category: "first_installment",
       severity: "positive",
-      text: `Primeira parcela representa ${fmtPct(ppRatio)} do valor acordado — bom sinal de entrada de caixa.`,
+      headline: fmtPct(ppRatio),
+      text: "1ª parcela alta — bom sinal de entrada de caixa.",
       rank: SEVERITY_RANK.positive,
     });
   } else if (ppRatio > 0 && ppRatio < 5) {
@@ -102,7 +109,8 @@ export function generateDailyReadout(
       ruleId: "insight_first_installment_critical",
       category: "first_installment",
       severity: "critical",
-      text: `Desbalanceamento: 1ª parcela é ${fmtPct(ppRatio)} do total.`,
+      headline: fmtPct(ppRatio),
+      text: "Desbalanceamento crítico da 1ª parcela vs. valor acordado.",
       rank: SEVERITY_RANK.critical,
     });
   } else if (ppRatio >= 5 && ppRatio < 10) {
@@ -110,8 +118,20 @@ export function generateDailyReadout(
       ruleId: "insight_first_installment_warning",
       category: "first_installment",
       severity: "warning",
-      text: `1ª parcela está abaixo do esperado (${fmtPct(ppRatio)} do total). Verifique se o fluxo de caixa está compatível com as parcelas futuras.`,
+      headline: fmtPct(ppRatio),
+      text: "1ª parcela abaixo do esperado. Verifique fluxo de caixa vs. parcelas futuras.",
       rank: SEVERITY_RANK.warning,
+    });
+  }
+
+  if (projecaoMes !== undefined && projecaoMes > 0) {
+    insights.push({
+      ruleId: "insight_projection_month",
+      category: "month_projection",
+      severity: "positive",
+      headline: fmtBRL(projecaoMes),
+      text: "Projeção de 1ª parcela até fim do mês (extrapolação linear).",
+      rank: SEVERITY_RANK.positive,
     });
   }
 
@@ -120,7 +140,8 @@ export function generateDailyReadout(
       ruleId: "insight_concentration",
       category: "concentration",
       severity: "warning",
-      text: `Concentração alta: Top 3 agentes respondem por ${fmtPct(concentracao)} do valor total.`,
+      headline: fmtPct(concentracao),
+      text: "Top 3 agentes concentram o valor total.",
       rank: SEVERITY_RANK.warning,
     });
   }
@@ -147,7 +168,8 @@ export function generateDailyReadout(
         actions.push({
           ruleId: "action_bu_focus",
           severity: "action",
-          text: `Considere realocar capacidade para ${winner.label} — conversão ${fmtPct(delta)} maior.`,
+          headline: fmtPct(delta),
+          text: `Realocar capacidade para ${winner.label} — conversão maior.`,
           rank: 3,
         });
       }
@@ -158,7 +180,8 @@ export function generateDailyReadout(
     actions.push({
       ruleId: "action_exception_review",
       severity: "action",
-      text: `Revisar política de exceções — taxa em ${fmtPct(excPct)}.`,
+      headline: fmtPct(excPct),
+      text: "Revisar política de exceções.",
       rank: 2,
     });
   }
@@ -192,8 +215,8 @@ export function generateDailyReadout(
   }
 
   return {
-    insight1: slot1 ? { text: slot1.text, severity: slot1.severity } : null,
-    insight2: slot2 ? { text: slot2.text, severity: slot2.severity } : null,
+    insight1: slot1 ? { text: slot1.text, severity: slot1.severity, headline: slot1.headline } : null,
+    insight2: slot2 ? { text: slot2.text, severity: slot2.severity, headline: slot2.headline } : null,
     action,
     empty: false,
   };

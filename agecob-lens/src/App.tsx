@@ -7,6 +7,8 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { loadQueue } from "@/lib/loadQueue";
 import { routeHeatManager } from "@/lib/routeHeatManager";
 import { trackPageView } from "@/services/analytics";
+import { GlobalFiltersProvider } from "@/contexts/GlobalFiltersContext";
+import { NotificationProvider } from "@/contexts/NotificationProvider";
 
 const Index = lazy(() => import("./pages/Index.tsx"));
 const ComparacaoAgentes = lazy(() => import("./pages/ComparacaoAgentes.tsx"));
@@ -118,7 +120,11 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <AppRoutes />
+        <GlobalFiltersProvider>
+          <NotificationProvider>
+            <AppRoutes />
+          </NotificationProvider>
+        </GlobalFiltersProvider>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
