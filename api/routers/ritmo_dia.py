@@ -68,12 +68,12 @@ def _esperado(
     acumulado: int,
     banco_bin: int,
     acum_primeiras_2h: int,
-) -> int:
+) -> float:
     ds_sin = np.sin(2 * np.pi * (dia_semana - _DS_MIN) / _DS_PERIOD)
     ds_cos = np.cos(2 * np.pi * (dia_semana - _DS_MIN) / _DS_PERIOD)
     X = np.array([[hora, dias_desde, ds_sin, ds_cos, acumulado, banco_bin, acum_primeiras_2h]])
-    pred = model.predict(scaler.transform(X))[0]
-    return max(0, int(round(pred)))
+    pred = float(model.predict(scaler.transform(X))[0])
+    return round(max(0.0, pred), 1)
 
 
 def _obter_dias_desde_batimento(db: str) -> int:
@@ -156,7 +156,7 @@ def _bandas_para_banco(
             real, delta, status = None, None, "futuro"
         elif h < hora_atual:
             real = int(reais.get(h, 0))
-            delta = real - esp
+            delta = round(real - esp, 1)
             status = "acima" if delta > 0 else ("abaixo" if delta < 0 else "ok")
             acumulado += real
         elif h == hora_atual:
@@ -180,7 +180,7 @@ def _agregar_bandas(bandas_por_banco: List[List[Dict[str, object]]]) -> List[Dic
     out: List[Dict[str, object]] = []
     for i in range(12):
         per = [b[i] for b in bandas_por_banco]
-        esp = sum(int(p["esperado"]) for p in per)
+        esp = round(sum(float(p["esperado"]) for p in per), 1)
         reals = [p["real"] for p in per]
         base_status = per[0]["status"]
         if all(r is None for r in reals):
@@ -194,7 +194,7 @@ def _agregar_bandas(bandas_por_banco: List[List[Dict[str, object]]]) -> List[Dic
             })
         else:
             real = sum(int(r) for r in reals if r is not None)
-            delta = real - esp
+            delta = round(real - esp, 1)
             status = "acima" if delta > 0 else ("abaixo" if delta < 0 else "ok")
             acum = sum(int(p["acumulado"]) for p in per if p.get("acumulado") is not None)
             out.append({
@@ -264,9 +264,12 @@ def ritmo_dia(db: str) -> Dict[str, object]:
     acumulado_atual = sum(
         reais.get(h, 0) for _, reais in por_banco.values() for h in range(8, hora_atual)
     )
-    esperado_total = sum(int(b["esperado"]) for b in bandas)
-    projecao_fechamento = acumulado_atual + sum(
-        int(b["esperado"]) for b in bandas if b["status"] in ("em_andamento", "futuro")
+    esperado_total = round(sum(float(b["esperado"]) for b in bandas), 1)
+    projecao_fechamento = round(
+        acumulado_atual + sum(
+            float(b["esperado"]) for b in bandas if b["status"] in ("em_andamento", "futuro")
+        ),
+        1,
     )
 
     return {
