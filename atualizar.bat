@@ -36,10 +36,21 @@ if not exist "%NSSM%" (
 rem Backend FastAPI serve API + dist/ (StaticFiles). Porta unica 8000.
 "%NSSM%" set AgecobAPI AppDirectory C:\agecob
 "%NSSM%" set AgecobAPI AppParameters "-m uvicorn main:app --host 0.0.0.0 --port 8000 --workers 4"
+rem Garante kill da arvore de processos (uvicorn + workers).
+"%NSSM%" set AgecobAPI AppKillProcessTree 1
+"%NSSM%" set AgecobAPI AppStopMethodSkip 0
+"%NSSM%" set AgecobAPI AppStopMethodConsole 5000
+"%NSSM%" set AgecobAPI AppStopMethodWindow 5000
+"%NSSM%" set AgecobAPI AppStopMethodThreads 5000
 
-rem Stop + sleep + start evita SERVICE_STOP_PENDING com multiplos workers uvicorn.
+rem Stop + poll + start evita SERVICE_STOP_PENDING com multiplos workers uvicorn.
 "%NSSM%" stop AgecobAPI
-timeout /t 5 /nobreak >nul
+:wait_stop
+"%NSSM%" status AgecobAPI | findstr /i SERVICE_STOPPED >nul
+if errorlevel 1 (
+    timeout /t 2 /nobreak >nul
+    goto wait_stop
+)
 "%NSSM%" start AgecobAPI
 timeout /t 3 /nobreak >nul
 
