@@ -1,10 +1,22 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
+import { execSync } from "child_process";
 import { componentTagger } from "lovable-tagger";
+
+function gitShortSha(): string {
+  try {
+    return execSync("git rev-parse --short HEAD", { cwd: __dirname }).toString().trim();
+  } catch {
+    return "dev";
+  }
+}
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
+  define: {
+    __COMMIT_SHA__: JSON.stringify(gitShortSha()),
+  },
   server: {
     host: "0.0.0.0",
     port: 5173,

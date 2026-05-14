@@ -47,6 +47,9 @@ export function ExecutiveHeader({
       </div>
       <h1 className="text-base font-semibold text-foreground tracking-tight truncate flex-1 min-w-0">
         {title}
+        <span className="ml-2 text-[10px] font-mono font-normal text-muted-foreground align-middle" title="Versão do dashboard (git short SHA)">
+          v{__COMMIT_SHA__}
+        </span>
       </h1>
       <div className="flex flex-wrap items-center gap-2">
         {periodControl ?? (period ? (
