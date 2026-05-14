@@ -29,15 +29,8 @@ import {
   shortAgentName,
 } from "@/lib/metrics";
 import { generateDailyReadout } from "@/lib/insightEngine";
+import { todayStr, firstOfMonthStr, lastOfMonthStr } from "@/lib/dates";
 import type { ExecutiveKpi, RankingRow } from "@/types/executive";
-
-function todayStr() { return new Date().toISOString().slice(0, 10); }
-function firstOfMonthStr() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`; }
-function lastOfMonthStr() {
-  const d = new Date();
-  const last = new Date(d.getFullYear(), d.getMonth() + 1, 0);
-  return `${last.getFullYear()}-${String(last.getMonth() + 1).padStart(2, "0")}-${String(last.getDate()).padStart(2, "0")}`;
-}
 function countBusinessDays(fromIso: string, toIso: string): number {
   const start = new Date(`${fromIso}T00:00:00`);
   const end = new Date(`${toIso}T00:00:00`);
@@ -50,7 +43,7 @@ function countBusinessDays(fromIso: string, toIso: string): number {
 }
 
 export default function Index() {
-  const { category, assessoria } = useGlobalFilters();
+  const { category } = useGlobalFilters();
   const [dateFrom, setDateFrom] = useState(firstOfMonthStr);
   const [dateTo, setDateTo] = useState(todayStr);
   const selectedDatabase: DatabaseOption =
@@ -59,12 +52,9 @@ export default function Index() {
       : category === "CONSUMER"
         ? "COBwebRCBCONSUMER"
         : "todos";
-  const filters = assessoria === "todos"
-    ? { dateFrom, dateTo }
-    : { assessoria, dateFrom, dateTo };
   const { rows, loading, error: loadError, warnings, refresh } = useProdutividadeData(
     selectedDatabase,
-    filters,
+    { dateFrom, dateTo },
   );
 
   const [primeiraParcelaDia, setPrimeiraParcelaDia] = useState<{ total_valor: number; total_acordos: number } | null>(null);
@@ -205,7 +195,6 @@ export default function Index() {
 
   const filterChips = [
     { label: "Categoria", value: category },
-    ...(assessoria !== "todos" ? [{ label: "Assessoria", value: assessoria }] : []),
   ];
 
   return (

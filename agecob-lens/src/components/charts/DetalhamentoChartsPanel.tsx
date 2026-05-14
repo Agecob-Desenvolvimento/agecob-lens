@@ -22,7 +22,6 @@ interface DetalhamentoChartsPanelProps {
   rows: ProdutividadeRowWithSource[];
   selectedAgent: string;
   db: DatabaseOption;
-  assessoria?: string;
   primeiraParcelaSelecionada?: number;
   dateFrom?: string;
   dateTo?: string;
@@ -32,7 +31,6 @@ export default function DetalhamentoChartsPanel({
   rows,
   selectedAgent,
   db,
-  assessoria: _assessoria,
   primeiraParcelaSelecionada = 0,
   dateFrom,
   dateTo,

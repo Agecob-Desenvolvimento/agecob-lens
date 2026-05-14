@@ -28,10 +28,9 @@ import type { ExecutiveKpi } from "@/types/executive";
 
 const AnaliseChartsPanel = lazy(() => import("@/components/charts/AnaliseChartsPanel"));
 
-const normalizeOfficeName = (office: string) => office.replace("COBwebRCB", "");
+import { todayStr, firstOfMonthStr } from "@/lib/dates";
 
-function todayStr() { return new Date().toISOString().slice(0, 10); }
-function firstOfMonthStr() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`; }
+const normalizeOfficeName = (office: string) => office.replace("COBwebRCB", "");
 
 export default function AnaliseProdutividade() {
   const { category } = useGlobalFilters();

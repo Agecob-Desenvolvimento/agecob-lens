@@ -190,6 +190,9 @@ def build_tabela_performance_periodo_query(
     Primeira parcela: PARCELA = 0 (convenção do banco — PARCELA=0 é a 1ª, PARCELA=1+ são demais).
     """
 
+    df = date_from.replace("-", "")
+    dt = date_to_exclusive.replace("-", "")
+
     def _single_db(db: str) -> str:
         return f"""
             SELECT
@@ -211,7 +214,7 @@ def build_tabela_performance_periodo_query(
                     COUNT(DISTINCT CASE WHEN CM.ID_COMPLEMENTO IN {settings.CPC_IDS_SQL} THEN DM.CPF_CNPJ END) AS qtd_contatos
                 FROM {db}.dbo.CTO_MASTER CM
                 JOIN {db}.dbo.DEV_MASTER DM ON DM.ID_DEV = CM.ID_DEV
-                WHERE CM.DATA >= CAST('{date_from}' AS DATE) AND CM.DATA < CAST('{date_to_exclusive}' AS DATE)
+                WHERE CM.DATA >= CAST('{df}' AS DATE) AND CM.DATA < CAST('{dt}' AS DATE)
                 GROUP BY CM.ID_USUARIO
             ) A ON A.ID_USUARIO = U.ID_USUARIO
             LEFT JOIN (
@@ -222,7 +225,7 @@ def build_tabela_performance_periodo_query(
                     SUM(VALOR) AS valor_total,
                     SUM(CASE WHEN PARCELA = 0 THEN VALOR ELSE 0 END) AS soma_primeira_parcela
                 FROM {db}.dbo.REC_MASTER
-                WHERE DT_EMISSAO >= CAST('{date_from}' AS DATE) AND DT_EMISSAO < CAST('{date_to_exclusive}' AS DATE)
+                WHERE DT_EMISSAO >= CAST('{df}' AS DATE) AND DT_EMISSAO < CAST('{dt}' AS DATE)
                   AND ID_REC_STATUS IN (1, 3, 12)
                 GROUP BY ID_USUARIO
             ) AC ON AC.ID_USUARIO = U.ID_USUARIO
@@ -231,7 +234,7 @@ def build_tabela_performance_periodo_query(
                 SELECT RM.ID_USUARIO, COUNT(DISTINCT RM.NR_RECEBIMENTO) AS qtd_reprovados
                 FROM {db}.dbo.REC_MASTER RM
                 JOIN {db}.dbo.REC_STATUS RS ON RM.ID_REC_STATUS = RS.ID_REC_STATUS
-                WHERE RM.DT_EMISSAO >= CAST('{date_from}' AS DATE) AND RM.DT_EMISSAO < CAST('{date_to_exclusive}' AS DATE)
+                WHERE RM.DT_EMISSAO >= CAST('{df}' AS DATE) AND RM.DT_EMISSAO < CAST('{dt}' AS DATE)
                   AND (
                       RS.DESCR LIKE '%REJEITADO%'
                       OR RS.DESCR LIKE '%REPROVADO%'
@@ -245,7 +248,7 @@ def build_tabela_performance_periodo_query(
                     COUNT(DISTINCT NR_RECEBIMENTO) AS qtd_excecoes,
                     SUM(VALOR) AS valor_excecoes
                 FROM {db}.dbo.REC_MASTER
-                WHERE DT_EMISSAO >= CAST('{date_from}' AS DATE) AND DT_EMISSAO < CAST('{date_to_exclusive}' AS DATE)
+                WHERE DT_EMISSAO >= CAST('{df}' AS DATE) AND DT_EMISSAO < CAST('{dt}' AS DATE)
                   AND ID_REC_STATUS IN {settings.STATUS_EXCECAO_SQL}
                 GROUP BY ID_USUARIO
             ) EX ON EX.ID_USUARIO = U.ID_USUARIO

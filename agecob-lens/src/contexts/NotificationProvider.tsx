@@ -9,6 +9,7 @@ import { aggregateTotals } from "@/lib/metrics";
 import { generateDailyReadout } from "@/lib/insightEngine";
 import { useGlobalFilters } from "@/contexts/GlobalFiltersContext";
 import { notify, requestNotificationPermission } from "@/lib/notifications";
+import { todayStr } from "@/lib/dates";
 import type { InsightSeverity } from "@/types/executive";
 
 const SEVERITY_RANK: Record<InsightSeverity, number> = {
@@ -17,12 +18,8 @@ const SEVERITY_RANK: Record<InsightSeverity, number> = {
   critical: 3,
 };
 
-function todayStr(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
 export function NotificationProvider({ children }: { children: ReactNode }) {
-  const { category, assessoria } = useGlobalFilters();
+  const { category } = useGlobalFilters();
   const db: DatabaseOption =
     category === "AUTOS"
       ? "COBwebRCBAUTOS"
@@ -47,14 +44,13 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   });
 
   const prodQuery = useQuery({
-    queryKey: ["notif-produtividade-hoje", db, assessoria, today],
+    queryKey: ["notif-produtividade-hoje", db, today],
     queryFn: () => {
       const targets: Array<Exclude<DatabaseOption, "todos">> =
         db === "todos" ? ["COBwebRCBAUTOS", "COBwebRCBCONSUMER"] : [db];
       return Promise.all(
         targets.map((t) =>
           fetchProdutividade(t, {
-            ...(assessoria !== "todos" ? { assessoria } : {}),
             dateFrom: today,
             dateTo: today,
           }).then((env) => ({ env, source: t })),

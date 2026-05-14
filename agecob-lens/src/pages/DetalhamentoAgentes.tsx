@@ -23,14 +23,12 @@ import {
   calcTicketMedio,
 } from "@/lib/metrics";
 import type { ExecutiveKpi } from "@/types/executive";
+import { todayStr, firstOfMonthStr } from "@/lib/dates";
 
 const DetalhamentoChartsPanel = lazy(() => import("@/components/charts/DetalhamentoChartsPanel"));
 
-function todayStr() { return new Date().toISOString().slice(0, 10); }
-function firstOfMonthStr() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`; }
-
 export default function DetalhamentoAgentes() {
-  const { category, assessoria } = useGlobalFilters();
+  const { category } = useGlobalFilters();
   const [selectedAgent, setSelectedAgent] = useState("Todos");
   const [agentFilter, setAgentFilter] = useState("");
   const [dateFrom, setDateFrom] = useState(firstOfMonthStr);
@@ -44,12 +42,9 @@ export default function DetalhamentoAgentes() {
       : category === "CONSUMER"
         ? "COBwebRCBCONSUMER"
         : "todos";
-  const filters = assessoria === "todos"
-    ? { dateFrom, dateTo }
-    : { assessoria, dateFrom, dateTo };
   const { rows, loading, error: loadError, warnings, refresh } = useProdutividadeData(
     selectedDatabase,
-    filters,
+    { dateFrom, dateTo },
   );
   const { guardedRefresh, refreshing, remainingMs } = useRefreshGuard(async () => {
     const startedAt = performance.now();
@@ -66,14 +61,13 @@ export default function DetalhamentoAgentes() {
 
   useEffect(() => {
     let cancelled = false;
-    const assessoriaFilter = assessoria === "todos" ? undefined : assessoria;
 
     setPrimeiraParcelaDia(null);
     setPrimeiraParcelaPorAgente({});
 
     Promise.all([
-      fetchPrimeiraParcelaDia(selectedDatabase, assessoriaFilter, dateFrom, dateTo),
-      fetchPrimeiraParcelaPorAgente(selectedDatabase, assessoriaFilter),
+      fetchPrimeiraParcelaDia(selectedDatabase, undefined, dateFrom, dateTo),
+      fetchPrimeiraParcelaPorAgente(selectedDatabase, undefined),
     ])
       .then(([diaEnv, agenteEnv]) => {
         if (cancelled) return;
@@ -99,7 +93,7 @@ export default function DetalhamentoAgentes() {
     return () => {
       cancelled = true;
     };
-  }, [selectedDatabase, assessoria, dateFrom, dateTo]);
+  }, [selectedDatabase, dateFrom, dateTo]);
 
   const agentNames = useMemo(
     () =>
@@ -161,7 +155,6 @@ export default function DetalhamentoAgentes() {
   const filterChips = [
     { label: "Categoria", value: category },
     ...(selectedAgent !== "Todos" ? [{ label: "Agente", value: selectedAgent }] : []),
-    ...(assessoria !== "todos" ? [{ label: "Assessoria", value: assessoria }] : []),
   ];
 
   return (
@@ -244,7 +237,6 @@ export default function DetalhamentoAgentes() {
                     rows={rows}
                     selectedAgent={selectedAgent}
                     db={selectedDatabase}
-                    assessoria={assessoria === "todos" ? undefined : assessoria}
                     primeiraParcelaSelecionada={primeiraParcelaSelecionada}
                     dateFrom={dateFrom}
                     dateTo={dateTo}

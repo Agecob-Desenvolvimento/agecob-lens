@@ -13,6 +13,9 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { AppSidebar } from "@/components/AppSidebar";
 import { SidebarProvider } from "@/components/ui/sidebar";
+import PeriodoFilter from "@/components/PeriodoFilter";
+import { useGlobalFilters } from "@/contexts/GlobalFiltersContext";
+import { todayStr, firstOfMonthStr } from "@/lib/dates";
 import ExecutiveHeader from "@/components/executive/ExecutiveHeader";
 import {
   Bar,
@@ -67,10 +70,6 @@ interface AgenteData {
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────
-function toISO(d: Date): string {
-  return d.toISOString().split("T")[0];
-}
-
 function fmtDia(dateStr: string): string {
   const [, month, day] = dateStr.split("-");
   return `${day}/${month}`;
@@ -157,15 +156,18 @@ const TOOLTIP_STYLE = {
 
 // ── Page ─────────────────────────────────────────────────────────────
 export default function EfetividadeBoletos() {
-  const now = new Date();
+  const { category } = useGlobalFilters();
   const [tipo, setTipo] = useState<"primeira" | "colchao">("primeira");
   const [colchaoView, setColchaoView] = useState<"vencimento" | "emissao">("vencimento");
-  const [banco, setBanco] = useState<"todos" | "COBwebRCBAUTOS" | "COBwebRCBCONSUMER">("todos");
-  const [dateFrom, setDateFrom] = useState(
-    toISO(new Date(now.getFullYear(), now.getMonth(), 1)),
-  );
-  const [dateTo, setDateTo] = useState(toISO(now));
+  const [dateFrom, setDateFrom] = useState(firstOfMonthStr);
+  const [dateTo, setDateTo] = useState(todayStr);
 
+  const banco: "todos" | "COBwebRCBAUTOS" | "COBwebRCBCONSUMER" =
+    category === "AUTOS"
+      ? "COBwebRCBAUTOS"
+      : category === "CONSUMER"
+        ? "COBwebRCBCONSUMER"
+        : "todos";
   const dbParam = banco === "todos" ? undefined : banco;
 
   // ── Live resumo query (KPIs + daily chart) ───────────────────────
@@ -262,7 +264,7 @@ export default function EfetividadeBoletos() {
                   : colchaoView === "vencimento" ? "Colchão · Por Vencimento" : "Colchão · Por Emissão",
               },
               { label: "Período", value: periodLabel },
-              { label: "Banco", value: banco === "todos" ? "Todas" : banco === "COBwebRCBAUTOS" ? "AUTOS" : "CONSUMER" },
+              { label: "Categoria", value: category },
             ]}
           />
 
@@ -270,56 +272,12 @@ export default function EfetividadeBoletos() {
 
             {/* ── Global Filters ─────────────────────────────────── */}
             <div className="flex flex-wrap gap-3 items-end">
-              {/* Date range */}
-              <Card className="flex-none">
-                <CardHeader className="pb-2 pt-3 px-4">
-                  <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-                    Período
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="px-4 pb-3 flex items-center gap-2">
-                  <div className="flex flex-col gap-0.5">
-                    <label className="text-xs text-muted-foreground">De</label>
-                    <Input
-                      type="date"
-                      value={dateFrom}
-                      onChange={(e) => setDateFrom(e.target.value)}
-                      className="w-36 h-8 text-sm"
-                    />
-                  </div>
-                  <span className="text-muted-foreground mt-4">→</span>
-                  <div className="flex flex-col gap-0.5">
-                    <label className="text-xs text-muted-foreground">Até</label>
-                    <Input
-                      type="date"
-                      value={dateTo}
-                      onChange={(e) => setDateTo(e.target.value)}
-                      className="w-36 h-8 text-sm"
-                    />
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Banco */}
-              <Card className="flex-none">
-                <CardHeader className="pb-2 pt-3 px-4">
-                  <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-                    Banco
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="px-4 pb-3">
-                  <Select value={banco} onValueChange={(v) => setBanco(v as typeof banco)}>
-                    <SelectTrigger className="w-40">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="todos">Todas</SelectItem>
-                      <SelectItem value="COBwebRCBAUTOS">AUTOS</SelectItem>
-                      <SelectItem value="COBwebRCBCONSUMER">CONSUMER</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </CardContent>
-              </Card>
+              <PeriodoFilter
+                dateFrom={dateFrom}
+                dateTo={dateTo}
+                onDateFromChange={setDateFrom}
+                onDateToChange={setDateTo}
+              />
 
               {/* Tipo */}
               <Card className="flex-none">

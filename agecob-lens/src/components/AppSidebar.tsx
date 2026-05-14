@@ -14,13 +14,6 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { useGlobalFilters } from "@/contexts/GlobalFiltersContext";
 
 const navItems = [
@@ -34,7 +27,7 @@ const navItems = [
 
 export function AppSidebar() {
   const location = useLocation();
-  const { category, assessoria, setCategory, setAssessoria } = useGlobalFilters();
+  const { category, setCategory } = useGlobalFilters();
 
   return (
     <Sidebar collapsible="offcanvas" className="border-r border-sidebar-border">
@@ -121,22 +114,6 @@ export function AppSidebar() {
               </Button>
             ))}
           </div>
-        </div>
-
-        <div className="space-y-1.5">
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/60">
-            Assessoria
-          </span>
-          <Select value={assessoria} onValueChange={setAssessoria}>
-            <SelectTrigger className="h-7 text-xs">
-              <SelectValue placeholder="Selecione..." />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="todos">Todos</SelectItem>
-              <SelectItem value="963:AGECOB_LP">963:AGECOB_LP</SelectItem>
-              <SelectItem value="929:LP_COB">929:LP_COB</SelectItem>
-            </SelectContent>
-          </Select>
         </div>
       </SidebarFooter>
     </Sidebar>

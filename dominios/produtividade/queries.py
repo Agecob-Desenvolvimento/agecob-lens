@@ -5,7 +5,9 @@ import config.settings as settings
 
 def _date_decl(date_from: Optional[str], date_to_exclusive: Optional[str]) -> str:
     if date_from and date_to_exclusive:
-        return f"DECLARE @Hoje DATE = '{date_from}'; DECLARE @Amanha DATE = '{date_to_exclusive}';"
+        df = date_from.replace("-", "")
+        dt = date_to_exclusive.replace("-", "")
+        return f"DECLARE @Hoje DATE = '{df}'; DECLARE @Amanha DATE = '{dt}';"
     return "DECLARE @Hoje DATE = CAST(GETDATE() AS DATE); DECLARE @Amanha DATE = DATEADD(DAY, 1, @Hoje);"
 
 

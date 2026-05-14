@@ -11,9 +11,11 @@ def wrap_todos_or_single(db: str, base_fn, agg_select: str, order_by: str, date_
       - `date_from`/`date_to_exclusive` → quando fornecidos, substituem @Hoje/@Amanha
     """
     if date_from and date_to_exclusive:
+        df = date_from.replace("-", "")
+        dt = date_to_exclusive.replace("-", "")
         header = f"""
-        DECLARE @Hoje DATE = '{date_from}';
-        DECLARE @Amanha DATE = '{date_to_exclusive}';
+        DECLARE @Hoje DATE = '{df}';
+        DECLARE @Amanha DATE = '{dt}';
     """
     else:
         header = """

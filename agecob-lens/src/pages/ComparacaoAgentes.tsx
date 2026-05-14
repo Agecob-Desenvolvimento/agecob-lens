@@ -10,14 +10,12 @@ import { useRefreshGuard } from "@/hooks/useRefreshGuard";
 import { trackEvent } from "@/services/analytics";
 import ExecutiveHeader from "@/components/executive/ExecutiveHeader";
 import { useGlobalFilters } from "@/contexts/GlobalFiltersContext";
+import { todayStr, firstOfMonthStr } from "@/lib/dates";
 
 const AgentComparisonDashboard = lazy(() => import("@/components/AgentComparisonDashboard"));
 
-function todayStr() { return new Date().toISOString().slice(0, 10); }
-function firstOfMonthStr() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`; }
-
 export default function ComparacaoAgentes() {
-  const { category, assessoria } = useGlobalFilters();
+  const { category } = useGlobalFilters();
   const db: DatabaseOption =
     category === "AUTOS"
       ? "COBwebRCBAUTOS"
@@ -47,7 +45,6 @@ export default function ComparacaoAgentes() {
 
   const filterChips = [
     { label: "Categoria", value: category },
-    ...(assessoria !== "todos" ? [{ label: "Assessoria", value: assessoria }] : []),
   ];
 
   return (
@@ -80,7 +77,7 @@ export default function ComparacaoAgentes() {
               fallback={<div className="text-sm text-muted-foreground">Preparando dashboard...</div>}
             >
               <Suspense fallback={<div className="text-sm text-muted-foreground">Carregando comparação...</div>}>
-                <AgentComparisonDashboard key={`${db}-${assessoria}-${dateFrom}-${dateTo}-${refreshTick}`} db={db} assessoria={assessoria} dateFrom={dateFrom} dateTo={dateTo} />
+                <AgentComparisonDashboard key={`${db}-${dateFrom}-${dateTo}-${refreshTick}`} db={db} dateFrom={dateFrom} dateTo={dateTo} />
               </Suspense>
             </LazyVisibleSection>
           </div>
