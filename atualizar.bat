@@ -42,14 +42,14 @@ rem NSSM antigo nao tem AppKillProcessTree. AppStopMethodSkip=0 = tenta CTRL_C+W
 "%NSSM%" set AgecobAPI AppStopMethodWindow 5000
 "%NSSM%" set AgecobAPI AppStopMethodThreads 5000
 
-rem Stop + poll + start evita SERVICE_STOP_PENDING com multiplos workers uvicorn.
-"%NSSM%" stop AgecobAPI
-:wait_stop
-"%NSSM%" status AgecobAPI | findstr /i SERVICE_STOPPED >nul
-if errorlevel 1 (
-    timeout /t 2 /nobreak >nul
-    goto wait_stop
+rem Para se estiver rodando, mata orfaos na porta 8000 (workers que ficaram), depois start.
+"%NSSM%" stop AgecobAPI >nul 2>&1
+timeout /t 3 /nobreak >nul
+for /f "tokens=5" %%P in ('netstat -ano ^| findstr LISTENING ^| findstr ":8000"') do (
+    echo Matando processo orfao PID %%P na porta 8000...
+    taskkill /F /PID %%P >nul 2>&1
 )
+timeout /t 1 /nobreak >nul
 "%NSSM%" start AgecobAPI
 timeout /t 3 /nobreak >nul
 
