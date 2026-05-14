@@ -27,20 +27,20 @@ if not exist agecob-lens\dist\index.html (
 echo Build OK. index.html atualizado em:
 dir agecob-lens\dist\index.html | findstr index.html
 
-echo [5/5] Reiniciando servicos NSSM...
+echo [5/5] Reiniciando servico NSSM...
 if not exist "%NSSM%" (
     echo ERRO: NSSM nao encontrado em %NSSM%
     pause
     exit /b 1
 )
-"%NSSM%" set AgecobAPI AppParameters "-m uvicorn main:app --host 0.0.0.0 --port 8001 --workers 4"
+rem Backend FastAPI serve API + dist/ (StaticFiles). Porta unica 8000.
+"%NSSM%" set AgecobAPI AppDirectory C:\agecob
+"%NSSM%" set AgecobAPI AppParameters "-m uvicorn main:app --host 0.0.0.0 --port 8000 --workers 4"
 "%NSSM%" restart AgecobAPI
-"%NSSM%" restart AgecobFront
 
 echo.
-echo Status dos servicos:
+echo Status do servico:
 "%NSSM%" status AgecobAPI
-"%NSSM%" status AgecobFront
 
 echo.
 echo Pronto. Dashboard atualizado.
