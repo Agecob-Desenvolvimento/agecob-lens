@@ -36,8 +36,7 @@ if not exist "%NSSM%" (
 rem Backend FastAPI serve API + dist/ (StaticFiles). Porta unica 8000.
 "%NSSM%" set AgecobAPI AppDirectory C:\agecob
 "%NSSM%" set AgecobAPI AppParameters "-m uvicorn main:app --host 0.0.0.0 --port 8000 --workers 4"
-rem Garante kill da arvore de processos (uvicorn + workers).
-"%NSSM%" set AgecobAPI AppKillProcessTree 1
+rem NSSM antigo nao tem AppKillProcessTree. AppStopMethodSkip=0 = tenta CTRL_C+WM_CLOSE+TerminateProcess em sequencia.
 "%NSSM%" set AgecobAPI AppStopMethodSkip 0
 "%NSSM%" set AgecobAPI AppStopMethodConsole 5000
 "%NSSM%" set AgecobAPI AppStopMethodWindow 5000
