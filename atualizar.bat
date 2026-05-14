@@ -36,11 +36,17 @@ if not exist "%NSSM%" (
 rem Backend FastAPI serve API + dist/ (StaticFiles). Porta unica 8000.
 "%NSSM%" set AgecobAPI AppDirectory C:\agecob
 "%NSSM%" set AgecobAPI AppParameters "-m uvicorn main:app --host 0.0.0.0 --port 8000 --workers 4"
-"%NSSM%" restart AgecobAPI
+
+rem Stop + sleep + start evita SERVICE_STOP_PENDING com multiplos workers uvicorn.
+"%NSSM%" stop AgecobAPI
+timeout /t 5 /nobreak >nul
+"%NSSM%" start AgecobAPI
+timeout /t 3 /nobreak >nul
 
 echo.
 echo Status do servico:
 "%NSSM%" status AgecobAPI
+netstat -ano | findstr LISTENING | findstr ":8000"
 
 echo.
 echo Pronto. Dashboard atualizado.
