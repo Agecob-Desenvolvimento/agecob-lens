@@ -23,6 +23,8 @@ import BuEfficiencyChart, { type BuEfficiencyDatum } from "@/components/executiv
 interface AnaliseChartsPanelProps {
   rows: ProdutividadeRowWithSource[];
   db: DatabaseOption;
+  dateFrom?: string;
+  dateTo?: string;
 }
 
 const COLOR_AUTOS = "hsl(142, 71%, 38%)";
@@ -31,13 +33,13 @@ const COLOR_PORTFOLIO = "hsl(142, 71%, 38%)";
 const COLOR_FIRST_INSTALLMENT = "hsl(142, 65%, 55%)";
 const COLOR_EXCEPTION = "hsl(0, 75%, 55%)";
 
-export default function AnaliseChartsPanel({ rows, db }: AnaliseChartsPanelProps) {
+export default function AnaliseChartsPanel({ rows, db, dateFrom, dateTo }: AnaliseChartsPanelProps) {
   const [qExcPort, qExcAg, qAcdPort, qPpAg] = useQueries({
     queries: [
-      { queryKey: ["excecoes-por-portfolio", db] as const, queryFn: () => fetchExcecoesPorPortfolio(db) },
-      { queryKey: ["excecoes-por-agente", db] as const, queryFn: () => fetchExcecoesPorAgente(db) },
-      { queryKey: ["acordos-por-portfolio", db] as const, queryFn: () => fetchAcordosPorPortfolio(db) },
-      { queryKey: ["primeira-parcela-por-agente", db] as const, queryFn: () => fetchPrimeiraParcelaPorAgente(db) },
+      { queryKey: ["excecoes-por-portfolio", db, dateFrom, dateTo] as const, queryFn: () => fetchExcecoesPorPortfolio(db, dateFrom, dateTo) },
+      { queryKey: ["excecoes-por-agente", db, dateFrom, dateTo] as const, queryFn: () => fetchExcecoesPorAgente(db, dateFrom, dateTo) },
+      { queryKey: ["acordos-por-portfolio", db, dateFrom, dateTo] as const, queryFn: () => fetchAcordosPorPortfolio(db, dateFrom, dateTo) },
+      { queryKey: ["primeira-parcela-por-agente", db, dateFrom, dateTo] as const, queryFn: () => fetchPrimeiraParcelaPorAgente(db, undefined, dateFrom, dateTo) },
     ],
   });
 

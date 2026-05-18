@@ -308,28 +308,50 @@ export async function fetchPrimeiraParcelaDia(
 
 export async function fetchExcecoesPorPortfolio(
   db: DatabaseOption,
+  dateFrom?: string,
+  dateTo?: string,
 ): Promise<ApiEnvelope<ExcecoesPorPortfolioRow>> {
-  return request<ApiEnvelope<ExcecoesPorPortfolioRow>>(`/dashboard/excecoes-por-portfolio/${db}`);
+  const query = new URLSearchParams();
+  if (dateFrom) query.set("dateFrom", dateFrom);
+  if (dateTo) query.set("dateTo", dateTo);
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<ApiEnvelope<ExcecoesPorPortfolioRow>>(`/dashboard/excecoes-por-portfolio/${db}${suffix}`);
 }
 
 export async function fetchExcecoesPorAgente(
   db: DatabaseOption,
+  dateFrom?: string,
+  dateTo?: string,
 ): Promise<ApiEnvelope<ExcecoesPorAgenteRow>> {
-  return request<ApiEnvelope<ExcecoesPorAgenteRow>>(`/dashboard/excecoes-por-agente/${db}`);
+  const query = new URLSearchParams();
+  if (dateFrom) query.set("dateFrom", dateFrom);
+  if (dateTo) query.set("dateTo", dateTo);
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<ApiEnvelope<ExcecoesPorAgenteRow>>(`/dashboard/excecoes-por-agente/${db}${suffix}`);
 }
 
 export async function fetchAcordosPorPortfolio(
   db: DatabaseOption,
+  dateFrom?: string,
+  dateTo?: string,
 ): Promise<ApiEnvelope<AcordosPorPortfolioRow>> {
-  return request<ApiEnvelope<AcordosPorPortfolioRow>>(`/dashboard/acordos-por-portfolio/${db}`);
+  const query = new URLSearchParams();
+  if (dateFrom) query.set("dateFrom", dateFrom);
+  if (dateTo) query.set("dateTo", dateTo);
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<ApiEnvelope<AcordosPorPortfolioRow>>(`/dashboard/acordos-por-portfolio/${db}${suffix}`);
 }
 
 export async function fetchPrimeiraParcelaPorAgente(
   db: DatabaseOption,
   assessoria?: string,
+  dateFrom?: string,
+  dateTo?: string,
 ): Promise<ApiEnvelope<PrimeiraParcelaPorAgenteRow>> {
   const query = new URLSearchParams();
   if (assessoria && assessoria !== "Todas") query.set("assessoria", assessoria);
+  if (dateFrom) query.set("dateFrom", dateFrom);
+  if (dateTo) query.set("dateTo", dateTo);
   const suffix = query.toString() ? `?${query.toString()}` : "";
   return request<ApiEnvelope<PrimeiraParcelaPorAgenteRow>>(`/dashboard/primeira-parcela-por-agente/${db}${suffix}`);
 }

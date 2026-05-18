@@ -164,7 +164,7 @@ export default function AnaliseProdutividade() {
               fallback={<Skeleton className="h-64 w-full" />}
             >
               <Suspense fallback={<Skeleton className="h-64 w-full" />}>
-                <AnaliseChartsPanel rows={filteredRows} db={selectedDatabase} />
+                <AnaliseChartsPanel rows={filteredRows} db={selectedDatabase} dateFrom={dateFrom} dateTo={dateTo} />
               </Suspense>
             </LazyVisibleSection>
           </div>

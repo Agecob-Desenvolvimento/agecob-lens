@@ -506,29 +506,56 @@ def get_primeira_parcela_dia(
 
 
 @router.get("/excecoes-por-portfolio/{db}")
-def get_excecoes_por_portfolio(db: str, request: Request = None) -> Dict[str, Any]:
+def get_excecoes_por_portfolio(
+    db: str,
+    dateFrom: Optional[str] = Query(default=None),
+    dateTo: Optional[str] = Query(default=None),
+    request: Request = None,
+) -> Dict[str, Any]:
+    parsed_from, parsed_to_excl = _parse_period(dateFrom, dateTo)
+    period_suffix = f"|period:{parsed_from or 'hoje'}-{parsed_to_excl or 'hoje'}"
     return _run_dashboard_chart(
         db, build_excecoes_por_portfolio_query,
         "dashboard/excecoes-por-portfolio", request,
-        cache_key_suffix="",
+        query_args=(parsed_from, parsed_to_excl),
+        filters_extra={"date": f"{parsed_from}/{parsed_to_excl}" if parsed_from else "today"},
+        cache_key_suffix=period_suffix,
     )
 
 
 @router.get("/excecoes-por-agente/{db}")
-def get_excecoes_por_agente(db: str, request: Request = None) -> Dict[str, Any]:
+def get_excecoes_por_agente(
+    db: str,
+    dateFrom: Optional[str] = Query(default=None),
+    dateTo: Optional[str] = Query(default=None),
+    request: Request = None,
+) -> Dict[str, Any]:
+    parsed_from, parsed_to_excl = _parse_period(dateFrom, dateTo)
+    period_suffix = f"|period:{parsed_from or 'hoje'}-{parsed_to_excl or 'hoje'}"
     return _run_dashboard_chart(
         db, build_excecoes_por_agente_query,
         "dashboard/excecoes-por-agente", request,
-        cache_key_suffix="",
+        query_args=(parsed_from, parsed_to_excl),
+        filters_extra={"date": f"{parsed_from}/{parsed_to_excl}" if parsed_from else "today"},
+        cache_key_suffix=period_suffix,
     )
 
 
 @router.get("/acordos-por-portfolio/{db}")
-def get_acordos_por_portfolio(db: str, request: Request = None) -> Dict[str, Any]:
+def get_acordos_por_portfolio(
+    db: str,
+    dateFrom: Optional[str] = Query(default=None),
+    dateTo: Optional[str] = Query(default=None),
+    request: Request = None,
+) -> Dict[str, Any]:
+    parsed_from, parsed_to_excl = _parse_period(dateFrom, dateTo)
+    period_suffix = f"|period:{parsed_from or 'hoje'}-{parsed_to_excl or 'hoje'}"
     return _run_dashboard_chart(
         db, build_acordos_por_portfolio_query,
         "dashboard/acordos-por-portfolio", request,
-        cache_key_suffix="",
+        query_args=(parsed_from, parsed_to_excl),
+        filters_extra={"date": f"{parsed_from}/{parsed_to_excl}" if parsed_from else "today"},
+        cache_key_suffix=period_suffix,
     )
 
 
@@ -536,18 +563,22 @@ def get_acordos_por_portfolio(db: str, request: Request = None) -> Dict[str, Any
 def get_primeira_parcela_por_agente(
     db: str,
     assessoria: Optional[str] = Query(default=None),
+    dateFrom: Optional[str] = Query(default=None),
+    dateTo: Optional[str] = Query(default=None),
     request: Request = None,
 ) -> Dict[str, Any]:
     assessoria_applied, assessoria_token = normalize_assessoria_filter(assessoria)
     validated_db = validate_database_or_todos(db)
+    parsed_from, parsed_to_excl = _parse_period(dateFrom, dateTo)
+    period_suffix = f"|period:{parsed_from or 'hoje'}-{parsed_to_excl or 'hoje'}"
     return _run_dashboard_chart(
         validated_db, build_primeira_parcela_por_agente_query,
         "dashboard/primeira-parcela-por-agente", request,
-        query_args=(assessoria_token,),
+        query_args=(assessoria_token, parsed_from, parsed_to_excl),
         params=build_assessoria_params(
             assessoria_token,
             2 if validated_db == "todos" else 1,
         ) or None,
-        filters_extra={"assessoria": assessoria_applied},
-        cache_key_suffix=f"|assessoria:{assessoria_token or 'todos'}",
+        filters_extra={"assessoria": assessoria_applied, "date": f"{parsed_from}/{parsed_to_excl}" if parsed_from else "today"},
+        cache_key_suffix=f"|assessoria:{assessoria_token or 'todos'}{period_suffix}",
     )

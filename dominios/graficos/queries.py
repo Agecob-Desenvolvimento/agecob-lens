@@ -67,7 +67,7 @@ def build_primeira_parcela_dia_query(db: str, assessoria_token: str = "", date_f
     return wrap_todos_or_single(db, _base, agg, order_by="", date_from=date_from, date_to_exclusive=date_to_exclusive)
 
 
-def build_excecoes_por_portfolio_query(db: str) -> str:
+def build_excecoes_por_portfolio_query(db: str, date_from: str = None, date_to_exclusive: str = None) -> str:
     """
     Gráfico: exceções agrupadas por nome do portfolio (CAMPO010 da DIV_AUX).
     Usa CROSS APPLY com TOP 1 para evitar multiplicação de linhas quando
@@ -103,10 +103,10 @@ def build_excecoes_por_portfolio_query(db: str) -> str:
             SUM(valor_excecoes) AS valor_excecoes
     """
     order = "GROUP BY portfolio_name ORDER BY qtd_excecoes DESC" if db == "todos" else "ORDER BY qtd_excecoes DESC"
-    return wrap_todos_or_single(db, _base, agg, order_by=order)
+    return wrap_todos_or_single(db, _base, agg, order_by=order, date_from=date_from, date_to_exclusive=date_to_exclusive)
 
 
-def build_excecoes_por_agente_query(db: str) -> str:
+def build_excecoes_por_agente_query(db: str, date_from: str = None, date_to_exclusive: str = None) -> str:
     """
     Gráfico: exceções agrupadas por agente.
     """
@@ -132,10 +132,10 @@ def build_excecoes_por_agente_query(db: str) -> str:
             SUM(valor_excecoes) AS valor_excecoes
     """
     order = "GROUP BY agente ORDER BY qtd_excecoes DESC" if db == "todos" else "ORDER BY qtd_excecoes DESC"
-    return wrap_todos_or_single(db, _base, agg, order_by=order)
+    return wrap_todos_or_single(db, _base, agg, order_by=order, date_from=date_from, date_to_exclusive=date_to_exclusive)
 
 
-def build_acordos_por_portfolio_query(db: str) -> str:
+def build_acordos_por_portfolio_query(db: str, date_from: str = None, date_to_exclusive: str = None) -> str:
     """
     Gráfico: acordos aprovados agrupados por portfolio (CAMPO010 da DIV_AUX).
     """
@@ -169,10 +169,10 @@ def build_acordos_por_portfolio_query(db: str) -> str:
             SUM(valor_acordos) AS valor_acordos
     """
     order = "GROUP BY portfolio_name ORDER BY qtd_acordos DESC" if db == "todos" else "ORDER BY qtd_acordos DESC"
-    return wrap_todos_or_single(db, _base, agg, order_by=order)
+    return wrap_todos_or_single(db, _base, agg, order_by=order, date_from=date_from, date_to_exclusive=date_to_exclusive)
 
 
-def build_primeira_parcela_por_agente_query(db: str, assessoria_token: str = "") -> str:
+def build_primeira_parcela_por_agente_query(db: str, assessoria_token: str = "", date_from: str = None, date_to_exclusive: str = None) -> str:
     """
     Gráfico: valor e quantidade da 1ª parcela por agente (acordos aprovados).
     """
@@ -200,4 +200,4 @@ def build_primeira_parcela_por_agente_query(db: str, assessoria_token: str = "")
             SUM(valor_primeira_parcela) AS valor_primeira_parcela
     """
     order = "GROUP BY agente ORDER BY valor_primeira_parcela DESC" if db == "todos" else "ORDER BY valor_primeira_parcela DESC"
-    return wrap_todos_or_single(db, _base, agg, order_by=order)
+    return wrap_todos_or_single(db, _base, agg, order_by=order, date_from=date_from, date_to_exclusive=date_to_exclusive)
