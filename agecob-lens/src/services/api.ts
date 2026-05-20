@@ -267,6 +267,15 @@ export interface RejeitadosPorPortfolioRow {
   valor_rejeitados: number;
 }
 
+export interface ExcecaoSemPortfolioRow {
+  NR_RECEBIMENTO: number;
+  ID_CARTEIRA: number;
+  VALOR: number;
+  agente: string;
+  cpf_mask: string;
+  nome_devedor: string;
+}
+
 export interface PrimeiraParcelaPorAgenteRow {
   agente: string;
   qtd_acordos_primeira_parcela: number;
@@ -346,6 +355,18 @@ export async function fetchAcordosPorPortfolio(
   if (dateTo) query.set("dateTo", dateTo);
   const suffix = query.toString() ? `?${query.toString()}` : "";
   return request<ApiEnvelope<AcordosPorPortfolioRow>>(`/dashboard/acordos-por-portfolio/${db}${suffix}`);
+}
+
+export async function fetchExcecoesSemPortfolio(
+  db: DatabaseOption,
+  dateFrom?: string,
+  dateTo?: string,
+): Promise<ApiEnvelope<ExcecaoSemPortfolioRow>> {
+  const query = new URLSearchParams();
+  if (dateFrom) query.set("dateFrom", dateFrom);
+  if (dateTo) query.set("dateTo", dateTo);
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<ApiEnvelope<ExcecaoSemPortfolioRow>>(`/dashboard/excecoes-sem-portfolio/${db}${suffix}`);
 }
 
 export async function fetchRejeitadosPorPortfolio(

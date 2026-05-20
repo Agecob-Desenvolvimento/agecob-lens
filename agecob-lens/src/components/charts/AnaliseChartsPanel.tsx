@@ -5,6 +5,7 @@ import {
   fetchAcordosPorPortfolio,
   fetchExcecoesPorAgente,
   fetchExcecoesPorPortfolio,
+  fetchExcecoesSemPortfolio,
   fetchPrimeiraParcelaPorAgente,
   fetchRejeitadosPorPortfolio,
 } from "@/services/api";
@@ -14,6 +15,7 @@ import {
   buFromSource,
   calcCpc,
   calcConversao,
+  fmtBRL,
   shortAgentName,
 } from "@/lib/metrics";
 import SectionHeader from "@/components/executive/SectionHeader";
@@ -36,17 +38,18 @@ const COLOR_EXCEPTION = "hsl(0, 75%, 55%)";
 const COLOR_REJECTED = "hsl(25, 85%, 50%)";
 
 export default function AnaliseChartsPanel({ rows, db, dateFrom, dateTo }: AnaliseChartsPanelProps) {
-  const [qExcPort, qExcAg, qAcdPort, qPpAg, qRejPort] = useQueries({
+  const [qExcPort, qExcAg, qAcdPort, qPpAg, qRejPort, qExcNull] = useQueries({
     queries: [
       { queryKey: ["excecoes-por-portfolio", db, dateFrom, dateTo] as const, queryFn: () => fetchExcecoesPorPortfolio(db, dateFrom, dateTo) },
       { queryKey: ["excecoes-por-agente", db, dateFrom, dateTo] as const, queryFn: () => fetchExcecoesPorAgente(db, dateFrom, dateTo) },
       { queryKey: ["acordos-por-portfolio", db, dateFrom, dateTo] as const, queryFn: () => fetchAcordosPorPortfolio(db, dateFrom, dateTo) },
       { queryKey: ["primeira-parcela-por-agente", db, dateFrom, dateTo] as const, queryFn: () => fetchPrimeiraParcelaPorAgente(db, undefined, dateFrom, dateTo) },
       { queryKey: ["rejeitados-por-portfolio", db, dateFrom, dateTo] as const, queryFn: () => fetchRejeitadosPorPortfolio(db, dateFrom, dateTo) },
+      { queryKey: ["excecoes-sem-portfolio", db, dateFrom, dateTo] as const, queryFn: () => fetchExcecoesSemPortfolio(db, dateFrom, dateTo) },
     ],
   });
 
-  const errs = [qExcPort, qExcAg, qAcdPort, qPpAg, qRejPort]
+  const errs = [qExcPort, qExcAg, qAcdPort, qPpAg, qRejPort, qExcNull]
     .filter((q) => q.isError)
     .map((q) => (q.error as Error)?.message ?? "Falha")
     .join(" | ");
@@ -124,6 +127,8 @@ export default function AnaliseChartsPanel({ rows, db, dateFrom, dateTo }: Anali
   const rejPortfolioLoaded = !qRejPort.isLoading && !qRejPort.isError;
   const rejPortfolioZero = rejPortfolioLoaded && rejPortfolioData.length === 0;
 
+  const excSemPortfolio = qExcNull.data?.data ?? [];
+
   // C2: exception rate by agent (qtd_excecoes / qtd_acordos) — top 10
   const excAgenteData = rows
     .filter((r) => Number(r.qtd_acordos || 0) > 0 && Number(r.qtd_excecoes || 0) > 0)
@@ -165,6 +170,31 @@ export default function AnaliseChartsPanel({ rows, db, dateFrom, dateTo }: Anali
           title="Portfólio"
           description="Acordos, exceções e rejeitados agrupados por portfólio (CAMPO010)."
         />
+        {excSemPortfolio.length > 0 ? (
+          <div className="rounded-lg border border-amber-300/60 bg-amber-50 dark:bg-amber-950/20 px-4 py-3 text-sm text-amber-900 dark:text-amber-300">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0 text-amber-700 dark:text-amber-400" />
+              <div className="space-y-1">
+                <div className="font-semibold">
+                  {excSemPortfolio.length} exceção{excSemPortfolio.length > 1 ? "ões" : ""} sem portfólio (CAMPO010 nulo) — não contabilizada{excSemPortfolio.length > 1 ? "s" : ""} no gráfico.
+                </div>
+                <div className="text-xs text-amber-800/90 dark:text-amber-300/80">
+                  Cadastrar o portfólio em DIV_AUX.CAMPO010 no sistema-fonte para o registro voltar a aparecer:
+                </div>
+                <ul className="text-xs space-y-0.5 pt-1">
+                  {excSemPortfolio.slice(0, 10).map((r) => (
+                    <li key={r.NR_RECEBIMENTO} className="font-mono">
+                      • NR {r.NR_RECEBIMENTO} · CPF {r.cpf_mask} · {r.nome_devedor} · {fmtBRL(Number(r.VALOR || 0))} · agente {r.agente}
+                    </li>
+                  ))}
+                  {excSemPortfolio.length > 10 ? (
+                    <li className="text-amber-800/70 dark:text-amber-300/60">… +{excSemPortfolio.length - 10} outros</li>
+                  ) : null}
+                </ul>
+              </div>
+            </div>
+          </div>
+        ) : null}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <HorizontalRankingChart
             title="Valor de Acordos por Portfólio"

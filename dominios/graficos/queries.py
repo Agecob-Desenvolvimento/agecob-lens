@@ -172,6 +172,49 @@ def build_acordos_por_portfolio_query(db: str, date_from: str = None, date_to_ex
     return wrap_todos_or_single(db, _base, agg, order_by=order, date_from=date_from, date_to_exclusive=date_to_exclusive)
 
 
+def build_excecoes_sem_portfolio_query(db: str, date_from: str = None, date_to_exclusive: str = None) -> str:
+    """
+    Lista detalhe das exceções (PARCELA=0, ID_REC_STATUS na faixa de exceção) cujo
+    portfólio (DIV_AUX.CAMPO010) é NULL ou inexistente — invisíveis no gráfico
+    `excecoes-por-portfolio`. CPF mascarado: primeiros 3 + últimos 2 dígitos.
+    """
+    def _base(database: str) -> str:
+        return f"""
+            SELECT
+                R.NR_RECEBIMENTO,
+                R.ID_CARTEIRA,
+                R.VALOR,
+                U.NOME AS agente,
+                CASE
+                    WHEN LEN(D.CPF_CNPJ) >= 5
+                    THEN LEFT(D.CPF_CNPJ, 3) + '.***.***-' + RIGHT(D.CPF_CNPJ, 2)
+                    ELSE D.CPF_CNPJ
+                END AS cpf_mask,
+                D.NOME_RAZAO AS nome_devedor
+            FROM {database}.dbo.REC_MASTER R (NOLOCK)
+            JOIN {database}.dbo.USU_MASTER U (NOLOCK) ON R.ID_USUARIO = U.ID_USUARIO
+            LEFT JOIN {database}.dbo.DEV_MASTER D (NOLOCK) ON R.ID_DEV = D.ID_DEV
+            WHERE R.DT_EMISSAO >= @Hoje AND R.DT_EMISSAO < @Amanha
+              AND R.PARCELA = {settings.PRIMEIRA_PARCELA}
+              AND R.ID_REC_STATUS IN {settings.STATUS_EXCECAO_SQL}
+              {settings.FILTRO_AGENTES_EXCLUIDOS_SQL}
+              AND NOT EXISTS (
+                SELECT 1
+                FROM {database}.dbo.REC_DIVIDAS RD (NOLOCK)
+                JOIN {database}.dbo.DIV_AUX DA2 (NOLOCK) ON RD.ID_DIVIDA = DA2.ID_DIVIDA
+                WHERE RD.NR_RECEBIMENTO = R.NR_RECEBIMENTO
+                  AND RD.ID_CARTEIRA = R.ID_CARTEIRA
+                  AND DA2.{settings.PORTFOLIO_COLUMN} IS NOT NULL
+              )
+        """
+
+    agg = """
+        SELECT NR_RECEBIMENTO, ID_CARTEIRA, VALOR, agente, cpf_mask, nome_devedor
+    """
+    order = "ORDER BY VALOR DESC"
+    return wrap_todos_or_single(db, _base, agg, order_by=order, date_from=date_from, date_to_exclusive=date_to_exclusive)
+
+
 def build_rejeitados_por_portfolio_query(db: str, date_from: str = None, date_to_exclusive: str = None) -> str:
     """
     Gráfico: acordos rejeitados (ID_REC_STATUS = 7) por portfolio (CAMPO010).
