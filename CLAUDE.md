@@ -65,8 +65,8 @@ Graph (após mudanças relevantes): `/graphify . --update`
 |---|---|
 | Primeira parcela | `PARCELA = 0` |
 | Acordos aprovados (`ID_REC_STATUS`) | `IN (1, 3, 12)` |
-| Exceções (`ID_REC_STATUS`) | `IN (11)` (EXCEÇÃO — aguardando aprovação do banco) |
-| Pré-filtro CTE | `IN (1, 3, 11, 12)` |
+| Exceções (`ID_REC_STATUS`) | `IN (5)` — negócio chama de "Exceção" o status que o enum REC_MASTER nomeia como PENDENTE |
+| Pré-filtro CTE | `IN (1, 3, 5, 12)` |
 | Portfólio | `DIV_AUX.CAMPO010` |
 | Filtro de data padrão | `DT_EMISSAO >= @Hoje AND DT_EMISSAO < @Amanha` |
 | `NOLOCK` | **Obrigatório** em todas as tabelas de leitura |

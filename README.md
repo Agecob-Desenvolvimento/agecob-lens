@@ -184,7 +184,7 @@ O `atualizar.bat` já força `--workers 4` via `nssm set` antes de reiniciar.
 | Endpoint | Descrição |
 |---|---|
 | `GET /dashboard/primeira-parcela-dia/{db}` | Soma/qtd de 1ª parcela (PARCELA=0) do dia |
-| `GET /dashboard/excecoes-por-portfolio/{db}` | Exceções (status 11 - EXCEÇÃO) por portfólio |
+| `GET /dashboard/excecoes-por-portfolio/{db}` | Exceções (status 5 - PENDENTE, "Exceção" no negócio) por portfólio |
 | `GET /dashboard/rejeitados-por-portfolio/{db}` | Rejeitados (status 7 - REJEITADO) por portfólio |
 | `GET /dashboard/excecoes-por-agente/{db}` | Exceções por agente |
 | `GET /dashboard/acordos-por-portfolio/{db}` | Acordos aprovados por portfólio |
@@ -206,9 +206,9 @@ O `atualizar.bat` já força `--workers 4` via `nssm set` antes de reiniciar.
 |---|---|
 | Primeira parcela | `PARCELA = 0` |
 | Acordos válidos (`ID_REC_STATUS`) | `IN (1, 3, 12)` — ATIVO + BAIXAS POR PAGAMENTO |
-| Exceções (`ID_REC_STATUS`) | `IN (11)` (EXCEÇÃO — aguardando aprovação do banco) |
+| Exceções (`ID_REC_STATUS`) | `IN (5)` — enum chama de PENDENTE; negócio chama de "Exceção" |
 | Rejeitados (`ID_REC_STATUS`) | `IN (7)` (REJEITADO — supervisor/banco negou) |
-| Pré-filtro CTE | `IN (1, 3, 11, 12)` |
+| Pré-filtro CTE | `IN (1, 3, 5, 12)` |
 | Portfólio | `DIV_AUX.CAMPO010` |
 | Filtro de data | `DT_EMISSAO >= @Hoje AND DT_EMISSAO < @Amanha` |
 | NOLOCK | Obrigatório em todas as tabelas |
