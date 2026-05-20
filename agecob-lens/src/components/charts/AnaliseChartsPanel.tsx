@@ -6,6 +6,7 @@ import {
   fetchExcecoesPorAgente,
   fetchExcecoesPorPortfolio,
   fetchPrimeiraParcelaPorAgente,
+  fetchRejeitadosPorPortfolio,
 } from "@/services/api";
 import { type ProdutividadeRowWithSource } from "@/hooks/useProdutividadeData";
 import {
@@ -32,18 +33,20 @@ const COLOR_CONSUMER = "hsl(142, 65%, 65%)";
 const COLOR_PORTFOLIO = "hsl(142, 71%, 38%)";
 const COLOR_FIRST_INSTALLMENT = "hsl(142, 65%, 55%)";
 const COLOR_EXCEPTION = "hsl(0, 75%, 55%)";
+const COLOR_REJECTED = "hsl(25, 85%, 50%)";
 
 export default function AnaliseChartsPanel({ rows, db, dateFrom, dateTo }: AnaliseChartsPanelProps) {
-  const [qExcPort, qExcAg, qAcdPort, qPpAg] = useQueries({
+  const [qExcPort, qExcAg, qAcdPort, qPpAg, qRejPort] = useQueries({
     queries: [
       { queryKey: ["excecoes-por-portfolio", db, dateFrom, dateTo] as const, queryFn: () => fetchExcecoesPorPortfolio(db, dateFrom, dateTo) },
       { queryKey: ["excecoes-por-agente", db, dateFrom, dateTo] as const, queryFn: () => fetchExcecoesPorAgente(db, dateFrom, dateTo) },
       { queryKey: ["acordos-por-portfolio", db, dateFrom, dateTo] as const, queryFn: () => fetchAcordosPorPortfolio(db, dateFrom, dateTo) },
       { queryKey: ["primeira-parcela-por-agente", db, dateFrom, dateTo] as const, queryFn: () => fetchPrimeiraParcelaPorAgente(db, undefined, dateFrom, dateTo) },
+      { queryKey: ["rejeitados-por-portfolio", db, dateFrom, dateTo] as const, queryFn: () => fetchRejeitadosPorPortfolio(db, dateFrom, dateTo) },
     ],
   });
 
-  const errs = [qExcPort, qExcAg, qAcdPort, qPpAg]
+  const errs = [qExcPort, qExcAg, qAcdPort, qPpAg, qRejPort]
     .filter((q) => q.isError)
     .map((q) => (q.error as Error)?.message ?? "Falha")
     .join(" | ");
@@ -107,6 +110,20 @@ export default function AnaliseChartsPanel({ rows, db, dateFrom, dateTo }: Anali
   const excPortfolioLoaded = !qExcPort.isLoading && !qExcPort.isError;
   const excPortfolioZero = excPortfolioLoaded && excPortfolioData.length === 0;
 
+  // Rejeitados por portfolio — ID_REC_STATUS = 7
+  const rejPortfolioData = (qRejPort.data?.data ?? [])
+    .filter((r) => Number(r.qtd_rejeitados || 0) > 0)
+    .map((r) => ({
+      name: r.portfolio_name,
+      value: Number(r.qtd_rejeitados || 0),
+      secondaryValue: Number(r.valor_rejeitados || 0),
+      secondaryUnit: "BRL" as const,
+    }))
+    .sort((a, b) => b.value - a.value);
+
+  const rejPortfolioLoaded = !qRejPort.isLoading && !qRejPort.isError;
+  const rejPortfolioZero = rejPortfolioLoaded && rejPortfolioData.length === 0;
+
   // C2: exception rate by agent (qtd_excecoes / qtd_acordos) — top 10
   const excAgenteData = rows
     .filter((r) => Number(r.qtd_acordos || 0) > 0 && Number(r.qtd_excecoes || 0) > 0)
@@ -129,17 +146,10 @@ export default function AnaliseChartsPanel({ rows, db, dateFrom, dateTo }: Anali
       <section className="space-y-3">
         <SectionHeader
           title="Financeiro"
-          description="Resultados em valor de acordos e entrada de caixa (1ª parcela)."
+          description="Entrada de caixa (1ª parcela) por agente."
           unit="BRL"
         />
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <HorizontalRankingChart
-            title="Valor de Acordos por Portfólio"
-            data={portfolioData}
-            unit="BRL"
-            defaultColor={COLOR_PORTFOLIO}
-            empty={portfolioData.length === 0}
-          />
           <HorizontalRankingChart
             title="Top 10 Agentes por 1ª Parcela"
             data={ppAgenteData}
@@ -147,6 +157,48 @@ export default function AnaliseChartsPanel({ rows, db, dateFrom, dateTo }: Anali
             defaultColor={COLOR_FIRST_INSTALLMENT}
             empty={ppAgenteData.length === 0}
           />
+        </div>
+      </section>
+
+      <section className="space-y-3">
+        <SectionHeader
+          title="Portfólio"
+          description="Acordos, exceções e rejeitados agrupados por portfólio (CAMPO010)."
+        />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <HorizontalRankingChart
+            title="Valor de Acordos por Portfólio"
+            data={portfolioData}
+            unit="BRL"
+            defaultColor={COLOR_PORTFOLIO}
+            empty={portfolioData.length === 0}
+          />
+          {excPortfolioZero ? (
+            <div className="flex items-center gap-2 rounded-lg border border-emerald-300/50 bg-emerald-50 dark:bg-emerald-950/20 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-400">
+              <span className="font-semibold">Nenhuma exceção registrada hoje.</span>
+            </div>
+          ) : (
+            <HorizontalRankingChart
+              title="Exceções por Portfólio (Qtd)"
+              data={excPortfolioData}
+              unit="count"
+              defaultColor={COLOR_EXCEPTION}
+              empty={excPortfolioData.length === 0}
+            />
+          )}
+          {rejPortfolioZero ? (
+            <div className="flex items-center gap-2 rounded-lg border border-emerald-300/50 bg-emerald-50 dark:bg-emerald-950/20 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-400">
+              <span className="font-semibold">Nenhum acordo rejeitado hoje.</span>
+            </div>
+          ) : (
+            <HorizontalRankingChart
+              title="Rejeitados por Portfólio (Qtd)"
+              data={rejPortfolioData}
+              unit="count"
+              defaultColor={COLOR_REJECTED}
+              empty={rejPortfolioData.length === 0}
+            />
+          )}
         </div>
       </section>
 
@@ -174,23 +226,9 @@ export default function AnaliseChartsPanel({ rows, db, dateFrom, dateTo }: Anali
       <section className="space-y-3">
         <SectionHeader
           title="Risco / Qualidade"
-          description="Exceções reais por portfólio (qtd + valor) e taxa de exceções por agente (% sobre acordos)."
+          description="Taxa de exceções por agente (% sobre acordos)."
         />
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {excPortfolioZero ? (
-            <div className="flex items-center gap-2 rounded-lg border border-emerald-300/50 bg-emerald-50 dark:bg-emerald-950/20 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-400">
-              <span className="font-semibold">Nenhuma exceção registrada hoje.</span>
-              <span className="text-xs text-muted-foreground ml-1">(portfólios com exceções aparecerão aqui)</span>
-            </div>
-          ) : (
-            <HorizontalRankingChart
-              title="Exceções por Portfólio (Qtd)"
-              data={excPortfolioData}
-              unit="count"
-              defaultColor={COLOR_EXCEPTION}
-              empty={excPortfolioData.length === 0}
-            />
-          )}
           <HorizontalRankingChart
             title="Top 10 Agentes por Taxa de Exceção (%)"
             data={excAgenteData}

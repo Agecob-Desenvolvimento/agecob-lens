@@ -1,78 +1,147 @@
 # CLAUDE.md
 
-Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-specific instructions as needed.
-
-**Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.
-
-## 1. Think Before Coding
-
-**Don't assume. Don't hide confusion. Surface tradeoffs.**
-
-Before implementing:
-- State your assumptions explicitly. If uncertain, ask.
-- If multiple interpretations exist, present them - don't pick silently.
-- If a simpler approach exists, say so. Push back when warranted.
-- If something is unclear, stop. Name what's confusing. Ask.
-
-## 2. Simplicity First
-
-**Minimum code that solves the problem. Nothing speculative.**
-
-- No features beyond what was asked.
-- No abstractions for single-use code.
-- No "flexibility" or "configurability" that wasn't requested.
-- No error handling for impossible scenarios.
-- If you write 200 lines and it could be 50, rewrite it.
-
-Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
-
-## 3. Surgical Changes
-
-**Touch only what you must. Clean up only your own mess.**
-
-When editing existing code:
-- Don't "improve" adjacent code, comments, or formatting.
-- Don't refactor things that aren't broken.
-- Match existing style, even if you'd do it differently.
-- If you notice unrelated dead code, mention it - don't delete it.
-
-When your changes create orphans:
-- Remove imports/variables/functions that YOUR changes made unused.
-- Don't remove pre-existing dead code unless asked.
-
-The test: Every changed line should trace directly to the user's request.
-
-## 4. Goal-Driven Execution
-
-**Define success criteria. Loop until verified.**
-
-Transform tasks into verifiable goals:
-- "Add validation" → "Write tests for invalid inputs, then make them pass"
-- "Fix the bug" → "Write a test that reproduces it, then make it pass"
-- "Refactor X" → "Ensure tests pass before and after"
-
-For multi-step tasks, state a brief plan:
-```
-1. [Step] → verify: [check]
-2. [Step] → verify: [check]
-3. [Step] → verify: [check]
-```
-
-Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
+Contexto persistente do projeto **dash relatorio** (AgDash). Lido automaticamente em cada sessão.
 
 ---
 
-**These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
+## Projeto
 
-## Context Navigation (token reduction)
+Monorepo: dashboard executivo de cobrança para AgeCob. Consome SQL Server (bancos `COBwebRCBAUTOS` e `COBwebRCBCONSUMER`), serve API FastAPI + SPA React buildada.
 
-**Protocol — follow in order, stop when enough context:**
+- **Backend:** Python 3.8+, FastAPI, pyodbc, SQL Server (ODBC Driver 17). Monolito histórico em `main.py` + módulos `api/`, `core/`, `dominios/`, `config/` (ADR-001).
+- **Frontend:** `agecob-lens/` — Vite + React 18 + TypeScript + Tailwind + shadcn/ui + Recharts + TanStack Query + React Router.
+- **Deploy:** Windows Server via NSSM (`AgecobAPI`), porta 8000, `atualizar.bat` faz pull + build + restart.
 
-1. Read `graphify-out/GRAPH_REPORT.md` — god nodes, communities, surprising connections. ~2KB. Always start here.
-2. Search `graphify-out/graph.json` for specific node by label — find `source_file` + `source_location` for any symbol.
-3. Read only the specific file:line identified. Do NOT read whole files speculatively.
-4. Raw file read allowed only if user explicitly asks OR graph has no entry for the symbol.
+## Leitura obrigatória no início da sessão
 
-**Never** glob/read entire directories. **Never** read `node_modules`, `.venv`, `graphify-out/cache`.
+Antes de qualquer ação, leia nesta ordem:
 
-**Update graph** after code changes: `/graphify . --update`
+1. @agecob-lens/docs/CLAUDE.md — redesign executivo: regra "Errado ou Agir", dicionário oficial de métricas, regras de apresentação, anti-padrões, arquitetura de informação, componentes, critérios de aceite.
+2. @agecob-lens/docs/TASKS.md — backlog em ondas (A → D). Execute apenas itens **não marcados** com `[x]`. Marque `[x]` **imediatamente** ao concluir, antes do próximo.
+3. @README.md — quickstart, endpoints, configuração de `.env`, rollback, índices SQL.
+
+Essas regras prevalecem sobre interpretações alternativas do código.
+
+---
+
+## Commands
+
+Frontend (rodar dentro de `agecob-lens/`):
+
+```cmd
+npm run dev       # vite dev server
+npm run build     # production build → dist/
+npm run lint      # eslint
+npm run test      # vitest run
+npm run test:watch
+```
+
+Backend:
+
+```cmd
+python -m pip install -r requirements.txt
+python -m uvicorn main:app --host 0.0.0.0 --port 8000
+```
+
+Servidor (produção `C:\agecob`): `atualizar.bat` faz git pull + pip + npm build + restart NSSM.
+
+Graph (após mudanças relevantes): `/graphify . --update`
+
+---
+
+## Code Style
+
+- **Python:** PEP 8, 4 espaços, type hints onde já existem, docstrings curtas. `run_query()` para SQL — não criar conexões manuais. Usar `build_response_envelope()` para respostas padronizadas.
+- **TypeScript/React:** 2 espaços, named exports, funções de formatação centralizadas (`fmtBRL`, `fmtPct`, `fmtNum`). Componentes de UI vêm de `src/components/ui/` (shadcn) — não duplicar. `cn()` de `lib/utils.ts` para classes condicionais.
+- **Estado:** TanStack Query para dados de servidor, contexto global (`GlobalFiltersContext`) para filtros de período/banco. Não bloatar contextos.
+- **Imports:** absolutos com alias `@/` no frontend.
+- **Sem comentários explicativos do óbvio.** Comentário só para *por quê* não-óbvio (constraint, invariante, workaround). Nunca comentar o *o quê*.
+
+---
+
+## Regras de negócio (críticas — não inferir do código)
+
+| Regra | Valor canônico |
+|---|---|
+| Primeira parcela | `PARCELA = 0` |
+| Acordos aprovados (`ID_REC_STATUS`) | `IN (1, 3, 12)` |
+| Exceções (`ID_REC_STATUS`) | `IN (11)` (EXCEÇÃO — aguardando aprovação do banco) |
+| Pré-filtro CTE | `IN (1, 3, 11, 12)` |
+| Portfólio | `DIV_AUX.CAMPO010` |
+| Filtro de data padrão | `DT_EMISSAO >= @Hoje AND DT_EMISSAO < @Amanha` |
+| `NOLOCK` | **Obrigatório** em todas as tabelas de leitura |
+| Agentes excluídos | `COBDESANTOS`, `ANTLIA%`, `INTERNA%`, `suporte%`, `SISTEMA%` — aplicar **no SQL** (ADR-005), nunca em pós-processamento |
+| CPC IDs | hardcoded em `CPC_COMPLEMENTO_IDS` (ADR-006) |
+| Bancos | `COBwebRCBAUTOS` \| `COBwebRCBCONSUMER` \| `todos` |
+
+Dicionário oficial de métricas (CPC, Conversão, Ticket médio, Exceções) está em `agecob-lens/docs/CLAUDE.md`. **Não criar variações.**
+
+---
+
+## Arquitetura — pontos críticos
+
+- **God nodes** (alta conectividade — cuidado ao mexer): `run_query()`, `config/settings.py`, `cn()`, `request()`, `build_response_envelope()`, `_agent_ndjson()`, `get_efetividade()`.
+- **CTEs separadas** para agregados (ADR-002). Não unificar sem justificativa.
+- **CROSS APPLY TOP 1** para portfólio em vez de JOIN (ADR-004).
+- **Tabela fato sem dimensão de agente** na fase 1 (ADR-003).
+- **Cache em memória** com TTL configurável (`DASHBOARD_CACHE_TTL`, default 60s). Reiniciar serviço limpa cache.
+- **Pool de conexões** por database por worker (`DB_POOL_SIZE`, default 6).
+- **Rotas-chave:** `/dashboard/*` (KPIs), `/efetividade/*` (boletos), `/admin/indexes/*` (DBA, gated por `ENABLE_INDEX_ADMIN`), `/health/db/{db}`, `/ritmo-dia` (KNN).
+
+Frontend páginas → pergunta que respondem:
+
+| Página | Pergunta |
+|---|---|
+| `Index.tsx` / Dashboard | "Como estamos?" |
+| `AnaliseProdutividade.tsx` | "Por quê?" |
+| `DetalhamentoAgentes.tsx` | "Quem / como este agente?" |
+| `ComparacaoAgentes.tsx` | "Quem priorizar / alocar?" |
+| `EfetividadeBoletos.tsx` | "Boletos estão pagando?" |
+
+---
+
+## Context Navigation (redução de tokens)
+
+Protocolo de leitura — siga em ordem, pare quando tiver contexto suficiente:
+
+1. `graphify-out/GRAPH_REPORT.md` — god nodes, communities, surprising connections.
+2. `graphify-out/graph.json` — buscar nó por label, achar `source_file` + `source_location`.
+3. Ler **apenas** o `file:line` identificado. Sem leituras especulativas de arquivo inteiro.
+4. Leitura crua de arquivo só se usuário pedir explicitamente OU graph não tiver o símbolo.
+
+**Nunca** glob/ler diretório inteiro. **Nunca** ler `node_modules`, `.venv`, `graphify-out/cache`, `dist`.
+
+---
+
+## Behavioral guidelines
+
+### 1. Pensar antes de codar
+Não assumir. Não esconder confusão. Se houver múltiplas interpretações, apresentar — não escolher silenciosamente. Se mais simples existe, dizer. Se algo não está claro, parar e perguntar.
+
+### 2. Simplicidade primeiro
+Código mínimo. Sem features extras, sem abstrações para uso único, sem flexibilidade não pedida, sem tratamento de erros para cenários impossíveis. Se 200 linhas viram 50, reescreva.
+
+### 3. Mudanças cirúrgicas
+Mexer apenas no necessário. Não "melhorar" código adjacente. Não refatorar o que não está quebrado. Match no estilo existente. Limpar apenas orphans **criados pelas suas próprias mudanças** — código morto pré-existente: mencionar, não deletar.
+
+### 4. Execução orientada a objetivo
+Transformar tarefa em critério verificável. Para multi-step, declarar plano breve com checagem por passo. Critérios fortes permitem loop independente; critérios fracos ("fazer funcionar") geram retrabalho.
+
+---
+
+## Configuração rápida — `.env` (backend)
+
+Variáveis críticas (ver `.env.example` e README para a lista completa):
+
+```
+DB_DRIVER / DB_SERVER / DB_USER / DB_PASSWORD   # SQL Server
+API_KEY / API_TOKEN                              # Auth
+REQUIRE_API_AUTH=false                           # true em prod
+DASHBOARD_CACHE_TTL=60                           # 0 desliga
+ENABLE_INDEX_ADMIN=false                         # true só para janela DBA
+ENABLE_AGENT_TELEMETRY=false
+```
+
+Frontend `.env`: `VITE_API_BASE_URL=/api`, `VITE_API_PROXY_TARGET=http://127.0.0.1:8000`.
+
+`.env` **nunca** vai pro git com dados sensíveis.

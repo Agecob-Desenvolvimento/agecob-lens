@@ -31,6 +31,7 @@ from dominios.graficos.queries import (
     build_excecoes_por_portfolio_query,
     build_primeira_parcela_dia_query,
     build_primeira_parcela_por_agente_query,
+    build_rejeitados_por_portfolio_query,
 )
 from dominios.produtividade.queries import build_produtividade_query
 from dominios.produtividade.servico import produtividade_servico
@@ -553,6 +554,24 @@ def get_acordos_por_portfolio(
     return _run_dashboard_chart(
         db, build_acordos_por_portfolio_query,
         "dashboard/acordos-por-portfolio", request,
+        query_args=(parsed_from, parsed_to_excl),
+        filters_extra={"date": f"{parsed_from}/{parsed_to_excl}" if parsed_from else "today"},
+        cache_key_suffix=period_suffix,
+    )
+
+
+@router.get("/rejeitados-por-portfolio/{db}")
+def get_rejeitados_por_portfolio(
+    db: str,
+    dateFrom: Optional[str] = Query(default=None),
+    dateTo: Optional[str] = Query(default=None),
+    request: Request = None,
+) -> Dict[str, Any]:
+    parsed_from, parsed_to_excl = _parse_period(dateFrom, dateTo)
+    period_suffix = f"|period:{parsed_from or 'hoje'}-{parsed_to_excl or 'hoje'}"
+    return _run_dashboard_chart(
+        db, build_rejeitados_por_portfolio_query,
+        "dashboard/rejeitados-por-portfolio", request,
         query_args=(parsed_from, parsed_to_excl),
         filters_extra={"date": f"{parsed_from}/{parsed_to_excl}" if parsed_from else "today"},
         cache_key_suffix=period_suffix,

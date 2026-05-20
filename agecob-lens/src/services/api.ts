@@ -261,6 +261,12 @@ export interface AcordosPorPortfolioRow {
   valor_acordos: number;
 }
 
+export interface RejeitadosPorPortfolioRow {
+  portfolio_name: string;
+  qtd_rejeitados: number;
+  valor_rejeitados: number;
+}
+
 export interface PrimeiraParcelaPorAgenteRow {
   agente: string;
   qtd_acordos_primeira_parcela: number;
@@ -340,6 +346,18 @@ export async function fetchAcordosPorPortfolio(
   if (dateTo) query.set("dateTo", dateTo);
   const suffix = query.toString() ? `?${query.toString()}` : "";
   return request<ApiEnvelope<AcordosPorPortfolioRow>>(`/dashboard/acordos-por-portfolio/${db}${suffix}`);
+}
+
+export async function fetchRejeitadosPorPortfolio(
+  db: DatabaseOption,
+  dateFrom?: string,
+  dateTo?: string,
+): Promise<ApiEnvelope<RejeitadosPorPortfolioRow>> {
+  const query = new URLSearchParams();
+  if (dateFrom) query.set("dateFrom", dateFrom);
+  if (dateTo) query.set("dateTo", dateTo);
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<ApiEnvelope<RejeitadosPorPortfolioRow>>(`/dashboard/rejeitados-por-portfolio/${db}${suffix}`);
 }
 
 export async function fetchPrimeiraParcelaPorAgente(

@@ -172,6 +172,43 @@ def build_acordos_por_portfolio_query(db: str, date_from: str = None, date_to_ex
     return wrap_todos_or_single(db, _base, agg, order_by=order, date_from=date_from, date_to_exclusive=date_to_exclusive)
 
 
+def build_rejeitados_por_portfolio_query(db: str, date_from: str = None, date_to_exclusive: str = None) -> str:
+    """
+    Gráfico: acordos rejeitados (ID_REC_STATUS = 7) por portfolio (CAMPO010).
+    """
+    def _base(database: str) -> str:
+        return f"""
+            SELECT
+                DA.{settings.PORTFOLIO_COLUMN} AS portfolio_name,
+                COUNT(DISTINCT R.NR_RECEBIMENTO) AS qtd_rejeitados,
+                SUM(R.VALOR) AS valor_rejeitados
+            FROM {database}.dbo.REC_MASTER R (NOLOCK)
+            JOIN {database}.dbo.USU_MASTER U (NOLOCK) ON R.ID_USUARIO = U.ID_USUARIO
+            CROSS APPLY (
+                SELECT TOP 1 DA2.{settings.PORTFOLIO_COLUMN}
+                FROM {database}.dbo.REC_DIVIDAS RD (NOLOCK)
+                JOIN {database}.dbo.DIV_AUX DA2 (NOLOCK) ON RD.ID_DIVIDA = DA2.ID_DIVIDA
+                WHERE RD.NR_RECEBIMENTO = R.NR_RECEBIMENTO
+                  AND RD.ID_CARTEIRA = R.ID_CARTEIRA
+                  AND DA2.{settings.PORTFOLIO_COLUMN} IS NOT NULL
+            ) DA
+            WHERE R.DT_EMISSAO >= @Hoje AND R.DT_EMISSAO < @Amanha
+              AND R.PARCELA = {settings.PRIMEIRA_PARCELA}
+              AND R.ID_REC_STATUS IN {settings.STATUS_REJEITADO_SQL}
+              {settings.FILTRO_AGENTES_EXCLUIDOS_SQL}
+            GROUP BY DA.{settings.PORTFOLIO_COLUMN}
+        """
+
+    agg = """
+        SELECT
+            portfolio_name,
+            SUM(qtd_rejeitados) AS qtd_rejeitados,
+            SUM(valor_rejeitados) AS valor_rejeitados
+    """
+    order = "GROUP BY portfolio_name ORDER BY qtd_rejeitados DESC" if db == "todos" else "ORDER BY qtd_rejeitados DESC"
+    return wrap_todos_or_single(db, _base, agg, order_by=order, date_from=date_from, date_to_exclusive=date_to_exclusive)
+
+
 def build_primeira_parcela_por_agente_query(db: str, assessoria_token: str = "", date_from: str = None, date_to_exclusive: str = None) -> str:
     """
     Gráfico: valor e quantidade da 1ª parcela por agente (acordos aprovados).
