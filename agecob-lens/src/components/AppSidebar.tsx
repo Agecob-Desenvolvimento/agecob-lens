@@ -14,6 +14,7 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
+import PeriodoFilter from "@/components/PeriodoFilter";
 import { useGlobalFilters } from "@/contexts/GlobalFiltersContext";
 
 const navItems = [
@@ -27,7 +28,7 @@ const navItems = [
 
 export function AppSidebar() {
   const location = useLocation();
-  const { category, setCategory } = useGlobalFilters();
+  const { category, setCategory, dateFrom, setDateFrom, dateTo, setDateTo } = useGlobalFilters();
 
   return (
     <Sidebar collapsible="offcanvas" className="border-r border-sidebar-border">
@@ -92,7 +93,19 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="border-t border-sidebar-border p-3 space-y-3">
+      <SidebarFooter className="border-t border-sidebar-border p-3 space-y-3 overflow-hidden">
+        <div className="space-y-1.5 min-w-0">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/60">
+            Período
+          </span>
+          <PeriodoFilter
+            inline
+            dateFrom={dateFrom}
+            dateTo={dateTo}
+            onDateFromChange={setDateFrom}
+            onDateToChange={setDateTo}
+          />
+        </div>
         <div className="space-y-1.5">
           <span className="text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/60">
             Categoria

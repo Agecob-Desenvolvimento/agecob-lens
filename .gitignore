@@ -29,3 +29,7 @@ agecob-lens/.vite/
 
 # ML — raw training data (não versionar; baixar do repo KNN-agecob quando precisar retreinar)
 deploy/d.csv
+
+# graphify artifacts (generated)
+graphify-out/
+.graphify_*

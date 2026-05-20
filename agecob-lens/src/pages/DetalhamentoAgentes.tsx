@@ -1,7 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import PeriodoFilter from "@/components/PeriodoFilter";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { useGlobalFilters } from "@/contexts/GlobalFiltersContext";
@@ -23,16 +22,13 @@ import {
   calcTicketMedio,
 } from "@/lib/metrics";
 import type { ExecutiveKpi } from "@/types/executive";
-import { todayStr, firstOfMonthStr } from "@/lib/dates";
 
 const DetalhamentoChartsPanel = lazy(() => import("@/components/charts/DetalhamentoChartsPanel"));
 
 export default function DetalhamentoAgentes() {
-  const { category } = useGlobalFilters();
+  const { category, dateFrom, dateTo } = useGlobalFilters();
   const [selectedAgent, setSelectedAgent] = useState("Todos");
   const [agentFilter, setAgentFilter] = useState("");
-  const [dateFrom, setDateFrom] = useState(firstOfMonthStr);
-  const [dateTo, setDateTo] = useState(todayStr);
   const [primeiraParcelaDia, setPrimeiraParcelaDia] = useState<{ total_valor: number; total_acordos: number } | null>(null);
   const [primeiraParcelaPorAgente, setPrimeiraParcelaPorAgente] = useState<Record<string, number>>({});
 
@@ -212,9 +208,6 @@ export default function DetalhamentoAgentes() {
             </aside>
 
             <main className="flex-1 overflow-y-auto p-6 space-y-6 bg-background">
-              {/* Filters */}
-              <PeriodoFilter dateFrom={dateFrom} dateTo={dateTo} onDateFromChange={setDateFrom} onDateToChange={setDateTo} />
-
               {/* API debug banner */}
               <ApiDebugBanner
                 error={loadError}

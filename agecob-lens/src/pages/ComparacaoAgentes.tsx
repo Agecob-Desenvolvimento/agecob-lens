@@ -1,6 +1,5 @@
 import { lazy, Suspense, useState } from "react";
 import FilterBar from "@/components/FilterBar";
-import PeriodoFilter from "@/components/PeriodoFilter";
 import { type DatabaseOption } from "@/services/api";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
@@ -10,12 +9,11 @@ import { useRefreshGuard } from "@/hooks/useRefreshGuard";
 import { trackEvent } from "@/services/analytics";
 import ExecutiveHeader from "@/components/executive/ExecutiveHeader";
 import { useGlobalFilters } from "@/contexts/GlobalFiltersContext";
-import { todayStr, firstOfMonthStr } from "@/lib/dates";
 
 const AgentComparisonDashboard = lazy(() => import("@/components/AgentComparisonDashboard"));
 
 export default function ComparacaoAgentes() {
-  const { category } = useGlobalFilters();
+  const { category, dateFrom, dateTo } = useGlobalFilters();
   const db: DatabaseOption =
     category === "AUTOS"
       ? "COBwebRCBAUTOS"
@@ -23,8 +21,6 @@ export default function ComparacaoAgentes() {
         ? "COBwebRCBCONSUMER"
         : "todos";
   const [carteira, setCarteira] = useState("Geral");
-  const [dateFrom, setDateFrom] = useState(firstOfMonthStr);
-  const [dateTo, setDateTo] = useState(todayStr);
   const [refreshTick, setRefreshTick] = useState(0);
   const { guardedRefresh, refreshing, remainingMs } = useRefreshGuard(async () => {
     const startedAt = performance.now();
@@ -63,8 +59,6 @@ export default function ComparacaoAgentes() {
           />
 
           <div className="max-w-7xl mx-auto px-4 py-6 space-y-6 w-full">
-            <PeriodoFilter dateFrom={dateFrom} dateTo={dateTo} onDateFromChange={setDateFrom} onDateToChange={setDateTo} />
-
             <FilterBar
               carteira={carteira}
               onCarteiraChange={handleCarteiraChange}

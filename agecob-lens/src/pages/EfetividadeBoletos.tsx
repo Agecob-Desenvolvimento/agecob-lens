@@ -13,9 +13,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { AppSidebar } from "@/components/AppSidebar";
 import { SidebarProvider } from "@/components/ui/sidebar";
-import PeriodoFilter from "@/components/PeriodoFilter";
 import { useGlobalFilters } from "@/contexts/GlobalFiltersContext";
-import { todayStr, firstOfMonthStr } from "@/lib/dates";
 import ExecutiveHeader from "@/components/executive/ExecutiveHeader";
 import {
   Bar,
@@ -156,11 +154,9 @@ const TOOLTIP_STYLE = {
 
 // ── Page ─────────────────────────────────────────────────────────────
 export default function EfetividadeBoletos() {
-  const { category } = useGlobalFilters();
+  const { category, dateFrom, dateTo } = useGlobalFilters();
   const [tipo, setTipo] = useState<"primeira" | "colchao">("primeira");
   const [colchaoView, setColchaoView] = useState<"vencimento" | "emissao">("vencimento");
-  const [dateFrom, setDateFrom] = useState(firstOfMonthStr);
-  const [dateTo, setDateTo] = useState(todayStr);
 
   const banco: "todos" | "COBwebRCBAUTOS" | "COBwebRCBCONSUMER" =
     category === "AUTOS"
@@ -272,13 +268,6 @@ export default function EfetividadeBoletos() {
 
             {/* ── Global Filters ─────────────────────────────────── */}
             <div className="flex flex-wrap gap-3 items-end">
-              <PeriodoFilter
-                dateFrom={dateFrom}
-                dateTo={dateTo}
-                onDateFromChange={setDateFrom}
-                onDateToChange={setDateTo}
-              />
-
               {/* Tipo */}
               <Card className="flex-none">
                 <CardHeader className="pb-2 pt-3 px-4">

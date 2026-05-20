@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
-import PeriodoFilter from "@/components/PeriodoFilter";
 import { AppSidebar } from "@/components/AppSidebar";
 import { useGlobalFilters } from "@/contexts/GlobalFiltersContext";
 import { SidebarProvider } from "@/components/ui/sidebar";
@@ -30,6 +29,7 @@ import {
 } from "@/lib/metrics";
 import { generateDailyReadout } from "@/lib/insightEngine";
 import { todayStr, firstOfMonthStr, lastOfMonthStr } from "@/lib/dates";
+
 import type { ExecutiveKpi, RankingRow } from "@/types/executive";
 function countBusinessDays(fromIso: string, toIso: string): number {
   const start = new Date(`${fromIso}T00:00:00`);
@@ -43,9 +43,7 @@ function countBusinessDays(fromIso: string, toIso: string): number {
 }
 
 export default function Index() {
-  const { category } = useGlobalFilters();
-  const [dateFrom, setDateFrom] = useState(firstOfMonthStr);
-  const [dateTo, setDateTo] = useState(todayStr);
+  const { category, dateFrom, dateTo } = useGlobalFilters();
   const selectedDatabase: DatabaseOption =
     category === "AUTOS"
       ? "COBwebRCBAUTOS"
@@ -209,15 +207,6 @@ export default function Index() {
             refreshing={refreshing}
             refreshHint={remainingMs > 0 ? `Aguarde ${Math.ceil(remainingMs / 1000)}s` : "Atualizar"}
             filters={filterChips}
-            periodControl={
-              <PeriodoFilter
-                inline
-                dateFrom={dateFrom}
-                dateTo={dateTo}
-                onDateFromChange={setDateFrom}
-                onDateToChange={setDateTo}
-              />
-            }
           />
 
           <div className="flex-1 bg-background p-6 space-y-6 overflow-auto">

@@ -1,7 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import PeriodoFilter from "@/components/PeriodoFilter";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { useGlobalFilters } from "@/contexts/GlobalFiltersContext";
@@ -28,15 +27,11 @@ import type { ExecutiveKpi } from "@/types/executive";
 
 const AnaliseChartsPanel = lazy(() => import("@/components/charts/AnaliseChartsPanel"));
 
-import { todayStr, firstOfMonthStr } from "@/lib/dates";
-
 const normalizeOfficeName = (office: string) => office.replace("COBwebRCB", "");
 
 export default function AnaliseProdutividade() {
-  const { category } = useGlobalFilters();
+  const { category, dateFrom, dateTo } = useGlobalFilters();
   const [teamBU, setTeamBU] = useState("(Todos)");
-  const [dateFrom, setDateFrom] = useState(firstOfMonthStr);
-  const [dateTo, setDateTo] = useState(todayStr);
   const [primeiraParcelaDia, setPrimeiraParcelaDia] = useState<{ total_valor: number; total_acordos: number } | null>(null);
   const selectedDatabase: DatabaseOption =
     category === "AUTOS"
@@ -122,7 +117,6 @@ export default function AnaliseProdutividade() {
           <div className="flex-1 bg-background p-6 space-y-6 overflow-auto">
             {/* Filters */}
             <div className="flex flex-col md:flex-row md:items-center gap-3">
-              <PeriodoFilter dateFrom={dateFrom} dateTo={dateTo} onDateFromChange={setDateFrom} onDateToChange={setDateTo} />
               <Card className="md:flex-1">
                 <CardHeader className="pb-2 pt-3 px-4">
                   <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Unidade de Negócio</CardTitle>
