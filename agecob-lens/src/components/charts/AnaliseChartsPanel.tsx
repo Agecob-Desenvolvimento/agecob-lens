@@ -99,28 +99,28 @@ export default function AnaliseChartsPanel({ rows, db, dateFrom, dateTo }: Anali
       secondaryUnit: "count" as const,
     }));
 
-  // C1: exceptions by portfolio — secondary = valor_excecoes; all portfolios with > 0
+  // C1: exceptions by portfolio — primary = valor_excecoes; secondary = qtd
   const excPortfolioData = (qExcPort.data?.data ?? [])
     .filter((r) => Number(r.qtd_excecoes || 0) > 0)
     .map((r) => ({
       name: r.portfolio_name,
-      value: Number(r.qtd_excecoes || 0),
-      secondaryValue: Number(r.valor_excecoes || 0),
-      secondaryUnit: "BRL" as const,
+      value: Number(r.valor_excecoes || 0),
+      secondaryValue: Number(r.qtd_excecoes || 0),
+      secondaryUnit: "count" as const,
     }))
     .sort((a, b) => b.value - a.value);
 
   const excPortfolioLoaded = !qExcPort.isLoading && !qExcPort.isError;
   const excPortfolioZero = excPortfolioLoaded && excPortfolioData.length === 0;
 
-  // Rejeitados por portfolio — ID_REC_STATUS = 7
+  // Rejeitados por portfolio — ID_REC_STATUS = 7; primary = valor_rejeitados; secondary = qtd
   const rejPortfolioData = (qRejPort.data?.data ?? [])
     .filter((r) => Number(r.qtd_rejeitados || 0) > 0)
     .map((r) => ({
       name: r.portfolio_name,
-      value: Number(r.qtd_rejeitados || 0),
-      secondaryValue: Number(r.valor_rejeitados || 0),
-      secondaryUnit: "BRL" as const,
+      value: Number(r.valor_rejeitados || 0),
+      secondaryValue: Number(r.qtd_rejeitados || 0),
+      secondaryUnit: "count" as const,
     }))
     .sort((a, b) => b.value - a.value);
 
@@ -209,9 +209,9 @@ export default function AnaliseChartsPanel({ rows, db, dateFrom, dateTo }: Anali
             </div>
           ) : (
             <HorizontalRankingChart
-              title="Exceções por Portfólio (Qtd)"
+              title="Exceções por Portfólio (Valor)"
               data={excPortfolioData}
-              unit="count"
+              unit="BRL"
               defaultColor={COLOR_EXCEPTION}
               empty={excPortfolioData.length === 0}
             />
@@ -222,9 +222,9 @@ export default function AnaliseChartsPanel({ rows, db, dateFrom, dateTo }: Anali
             </div>
           ) : (
             <HorizontalRankingChart
-              title="Rejeitados por Portfólio (Qtd)"
+              title="Rejeitados por Portfólio (Valor)"
               data={rejPortfolioData}
-              unit="count"
+              unit="BRL"
               defaultColor={COLOR_REJECTED}
               empty={rejPortfolioData.length === 0}
             />
