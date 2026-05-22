@@ -22,9 +22,14 @@ import {
   calcCpc,
   calcExcecoesPctValor,
   calcTicketMedio,
-  shortAgentName,
 } from "@/lib/metrics";
-import type { ExecutiveKpi, RankingRow } from "@/types/executive";
+import {
+  TODOS_BU,
+  filterByBu,
+  selectBuOptions,
+  selectTopByCpc,
+} from "@/selectors/analiseSelectors";
+import type { ExecutiveKpi } from "@/types/executive";
 
 const AnaliseChartsPanel = lazy(() => import("@/components/charts/AnaliseChartsPanel"));
 
@@ -32,7 +37,7 @@ const normalizeOfficeName = (office: string) => office.replace("COBwebRCB", "");
 
 export default function AnaliseProdutividade() {
   const { category, dateFrom, dateTo } = useGlobalFilters();
-  const [teamBU, setTeamBU] = useState("(Todos)");
+  const [teamBU, setTeamBU] = useState(TODOS_BU);
   const [primeiraParcelaDia, setPrimeiraParcelaDia] = useState<{ total_valor: number; total_acordos: number } | null>(null);
   const selectedDatabase: DatabaseOption =
     category === "AUTOS"
@@ -56,10 +61,8 @@ export default function AnaliseProdutividade() {
       .catch(() => {});
   }, [selectedDatabase, dateFrom, dateTo]);
 
-  const filteredRows = useMemo(
-    () => rows.filter((row) => (teamBU === "(Todos)" ? true : row.source === teamBU)),
-    [rows, teamBU],
-  );
+  const filteredRows = useMemo(() => filterByBu(rows, teamBU), [rows, teamBU]);
+  const buOptions = useMemo(() => selectBuOptions(rows), [rows]);
 
   const totals = useMemo(() => aggregateTotals(filteredRows), [filteredRows]);
 
@@ -70,7 +73,7 @@ export default function AnaliseProdutividade() {
     const excPct = calcExcecoesPctValor(totals);
     const concentracao = calcConcentracao(filteredRows, 3);
     const primeiraParcelaKpiValue =
-      teamBU === "(Todos)"
+      teamBU === TODOS_BU
         ? (primeiraParcelaDia?.total_valor ?? 0)
         : totals.valor_primeira_parcela;
     return [
@@ -80,7 +83,7 @@ export default function AnaliseProdutividade() {
         value: primeiraParcelaKpiValue,
         unit: "BRL",
         priority: "primary",
-        formula: teamBU === "(Todos)" ? "Σ primeira_parcela_do_dia (endpoint dedicado)" : "Σ valor_primeira_parcela",
+        formula: teamBU === TODOS_BU ? "Σ primeira_parcela_do_dia (endpoint dedicado)" : "Σ valor_primeira_parcela",
       },
       { label: "CPC %", value: cpc, unit: "%", priority: "primary", formula: "qtd_contatos / qtd_acionamentos" },
       { label: "Conversão %", value: conv, unit: "%", priority: "primary", formula: "qtd_acordos / qtd_acionamentos" },
@@ -93,33 +96,11 @@ export default function AnaliseProdutividade() {
     ];
   }, [filteredRows, totals, teamBU, primeiraParcelaDia]);
 
-  const MIN_ACIONAMENTOS_THRESHOLD = 10;
-  const topByCpc: RankingRow[] = useMemo(() => {
-    return filteredRows
-      .filter((r) => Number(r.qtd_acionamentos || 0) >= MIN_ACIONAMENTOS_THRESHOLD)
-      .map((row) => {
-        const acionamentos = Number(row.qtd_acionamentos || 0);
-        const contatos = Number(row.qtd_contatos || 0);
-        const acordos = Number(row.qtd_acordos || 0);
-        const cpc = acionamentos > 0 ? (contatos * 100) / acionamentos : 0;
-        const conversao = acionamentos > 0 ? (acordos * 100) / acionamentos : 0;
-        return { agente: row.NOME, cpc, conversao };
-      })
-      .sort((a, b) => b.cpc - a.cpc)
-      .slice(0, 10)
-      .map((r, idx) => ({
-        rank: idx + 1,
-        label: shortAgentName(r.agente),
-        primaryValue: r.cpc,
-        primaryUnit: "%" as const,
-        secondaryValue: r.conversao,
-        secondaryUnit: "%" as const,
-      }));
-  }, [filteredRows]);
+  const topByCpc = useMemo(() => selectTopByCpc(filteredRows), [filteredRows]);
 
   const filterChips = [
     { label: "Categoria", value: category },
-    ...(teamBU !== "(Todos)" ? [{ label: "BU", value: normalizeOfficeName(teamBU) }] : []),
+    ...(teamBU !== TODOS_BU ? [{ label: "BU", value: normalizeOfficeName(teamBU) }] : []),
   ];
 
   return (
@@ -150,8 +131,8 @@ export default function AnaliseProdutividade() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="(Todos)">(Todos)</SelectItem>
-                      {Array.from(new Set(rows.map((row) => row.source))).map((source) => (
+                      <SelectItem value={TODOS_BU}>{TODOS_BU}</SelectItem>
+                      {buOptions.map((source) => (
                         <SelectItem key={source} value={source}>{normalizeOfficeName(source)}</SelectItem>
                       ))}
                     </SelectContent>
