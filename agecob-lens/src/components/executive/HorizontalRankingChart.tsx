@@ -11,8 +11,7 @@ import {
   YAxis,
 } from "recharts";
 import { Maximize2 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { ChartShell } from "@/components/executive/ChartShell";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { MetricUnit } from "@/types/executive";
@@ -123,42 +122,38 @@ export function HorizontalRankingChart({
   const canExpand = !loading && !empty && data.length > 0;
   const expandedHeight = Math.max(420, data.length * 44);
 
+  const toolbar = canExpand ? (
+    <Button
+      variant="ghost"
+      size="icon"
+      className="h-7 w-7 shrink-0"
+      onClick={() => setExpanded(true)}
+      aria-label="Ampliar gráfico"
+      title="Ampliar gráfico"
+    >
+      <Maximize2 className="h-4 w-4" />
+    </Button>
+  ) : undefined;
+
   return (
     <>
-      <Card>
-        <CardHeader className="pb-2 pt-3 px-4 flex flex-row items-center justify-between gap-2 space-y-0">
-          <CardTitle className="text-base font-semibold leading-snug">{title}</CardTitle>
-          {canExpand ? (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 shrink-0"
-              onClick={() => setExpanded(true)}
-              aria-label="Ampliar gráfico"
-              title="Ampliar gráfico"
-            >
-              <Maximize2 className="h-4 w-4" />
-            </Button>
-          ) : null}
-        </CardHeader>
-        <CardContent className="px-4 pb-4">
-          {loading ? (
-            <Skeleton className="h-72 w-full" />
-          ) : empty || !data.length ? (
-            <p className="text-sm text-muted-foreground">Sem dados.</p>
-          ) : (
-            <RankingBarChart
-              data={data}
-              unit={unit}
-              defaultColor={defaultColor}
-              height={chartHeight}
-              yAxisWidth={170}
-              truncateChars={22}
-              barSize={26}
-            />
-          )}
-        </CardContent>
-      </Card>
+      <ChartShell
+        title={title}
+        toolbar={toolbar}
+        loading={loading}
+        empty={empty || !data.length}
+        height={288}
+      >
+        <RankingBarChart
+          data={data}
+          unit={unit}
+          defaultColor={defaultColor}
+          height={chartHeight}
+          yAxisWidth={170}
+          truncateChars={22}
+          barSize={26}
+        />
+      </ChartShell>
 
       <Dialog open={expanded} onOpenChange={setExpanded}>
         <DialogContent className="max-w-[95vw] w-[95vw] sm:max-w-[95vw] max-h-[95vh] overflow-hidden flex flex-col">

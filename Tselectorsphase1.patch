@@ -1,0 +1,619 @@
+diff --git a/agecob-lens/docs/TASKS.md b/agecob-lens/docs/TASKS.md
+index dfb7c0f..528547c 100644
+--- a/agecob-lens/docs/TASKS.md
++++ b/agecob-lens/docs/TASKS.md
+@@ -1,7 +1,182 @@
+-# AgDash Redesign — Pipeline de Execução
++# AgDash Redesign — Execution Pipeline
+ 
+-> **Regra de ouro:** execute as ondas em ordem. Dentro de cada onda, de cima para baixo.
+-> Marque `[x]` apenas ao concluir e testar. Não pule itens.
++> **Golden rule:** execute phases in order. Within a phase, top to bottom.
++> Mark `[x]` only when completed and tested. Do not skip items.
++
++---
++
++## Current State Audit (2026-05-22)
++
++Ondas A/B/C are ✅ complete (terminology, formatting, base components, page redesign). The work below replaces the previous Onda D/E/Fase 5 framing with an architectural roadmap (Phases 1–9) that builds the missing structural layers (Selectors, ChartShell, RouteErrorBoundary, extended filters, ViewModels) without destabilizing the working pages.
++
++Source of truth for the redesign rules (metric dictionary, anti-patterns, acceptance criteria) remains `agecob-lens/docs/CLAUDE.md`.
++
++| Layer | Status | Notes |
++|---|---|---|
++| API (`src/services/api.ts`) | ✅ | 35+ fetchers, inflight dedup, multi-candidate failover. No runtime validation. |
++| TanStack Query (`App.tsx`) | ✅ | staleTime 60s, gcTime 5m, retry 1, focus off. No `invalidateQueries` — refresh uses a `CustomEvent`. |
++| Adapters | 🟡 | `useProdutividadeData.ts` is canonical (used by all 3 redesigned pages). `useExecutiveData.ts` is parallel and **not adopted**. Phase 5 consolidates. |
++| Metrics (`src/lib/metrics.ts` + `src/transforms/executiveMetrics.ts`) | ✅ | Formulas centralized. No list helpers (topN/percentile/threshold) — these become selectors in Phase 1. |
++| Domain (`src/types/executive.ts`) | 🟡 | Sparse. No per-page ViewModel types. |
++| Selectors | ❌ | **Missing.** `[...].filter().sort().slice(0,10).map()` duplicated 4× across pages. |
++| ViewModels | ❌ | Pages compose KPIs/rankings inline (Index alone has 10 `useMemo`). |
++| Charts (executive/*) | ✅ | Pure presentational. Do not touch. |
++| **ChartShell** | ❌ | **Missing.** 7 charts/tables re-implement the same `Skeleton + "Sem dados"` block. |
++| Pages | 🟡 | 150–270 LOC of `useMemo` data derivation; `selectedDatabase` derived 4× from `category`. |
++| Global Filter Context | 🟡 | Has only `category`, `dateFrom`, `dateTo`. Needs `assessoria`, derived `selectedDatabase`, `minAcionamentos`. |
++| Rogue local state | ❌ | `primeiraParcela*` held in `useState + useEffect + fetch` (Index, Analise, Detalhamento) instead of `useQuery`. |
++| Error Boundary | ❌ | `.catch(() => {})` confirmed in `App.tsx:74`, `Index.tsx:88, 100`, `AnaliseProdutividade.tsx:56`. |
++| Simulated series | 🟡 | 4 series in `mocks/executiveData.ts` (`mockCpcAnomaliaBanda`, `mockCpcConvDualAxis`, `mockAgentDailySeries`, `mockAbOverlay`) marked `isSimulated: true` with `warnOnce` shim. Gated; remove in Phase 7. |
++| Feature flag | ❌ | Redesign is live; no rollback toggle. |
++
++**Coverage:** Ondas A/B/C ✅; Onda D 🟡 ~80%; Onda E 🟡 ~40% (uniform skeleton, enter-stagger, 1366×768 validation, contrast, keyboard nav open); Fase 5 (integration test, flag, rollout) ❌.
++
++---
++
++## Architectural Roadmap (Phases 1–9)
++
++Each phase ships small, sequentially, and is verifiable. Within a phase, items can interleave.
++
++### Phase 1 — Selectors layer (highest leverage)
++
++Goal: kill duplicated `useMemo` derivations across the 4 pages.
++
++Create `src/selectors/` with pure functions (no React). One file per page + a barrel.
++
++| File | Exports |
++|---|---|
++| `homeSelectors.ts` | `selectTopByValor(rows, n=10)`, `selectBuValueData(rows)`, `selectBuEfficiencyData(rows)`, `selectTopByField(rows, field, n, secondaryField?)` |
++| `analiseSelectors.ts` | `selectTopByCpc(rows, n=10, minAcionamentos=10)`, `selectBuOptions(rows)`, `filterByBu(rows, bu)` |
++| `detalhamentoSelectors.ts` | `selectAgentNames(rows)`, `selectBuRows(rows, bu)`, `selectAgentPercentile(rows, agentLabel, buRows)`, `selectTeamRanking(buRows, n=10)` |
++| `comparacaoSelectors.ts` | `selectRadarDimensions(rowsA, rowsB, buRows)`, `selectComparacaoTotals(rows, agente)` |
++| `index.ts` | barrel |
++
++Migrate **one page at a time**, replacing inline `useMemo` blocks 1:1. Visual diff must be identical; rendered ranking values byte-equal. Add `*.test.ts` per selector reusing row fixtures from `lib/metrics.test.ts`.
++
++- [ ] 1.1 — Create `src/selectors/homeSelectors.ts` + tests
++- [ ] 1.2 — Migrate `Index.tsx` to selectors
++- [ ] 1.3 — Create `src/selectors/analiseSelectors.ts` + tests
++- [ ] 1.4 — Migrate `AnaliseProdutividade.tsx` to selectors
++- [ ] 1.5 — Create `src/selectors/detalhamentoSelectors.ts` + tests
++- [ ] 1.6 — Migrate `DetalhamentoAgentes.tsx` to selectors
++- [ ] 1.7 — Create `src/selectors/comparacaoSelectors.ts` + tests
++- [ ] 1.8 — Migrate `ComparacaoAgentes.tsx` / `AgentComparisonDashboard` to selectors
++
++### Phase 2 — ChartShell wrapper
++
++Goal: collapse 7 copies of "skeleton / empty text / chart" into one component.
++
++Create `src/components/executive/ChartShell.tsx`:
++
++```ts
++interface ChartShellProps {
++  title?: string;
++  loading?: boolean;
++  empty?: boolean;
++  error?: string | null;
++  emptyMessage?: string;     // default "Sem dados para o período."
++  toolbar?: ReactNode;
++  height?: number;            // for skeleton sizing
++  children: ReactNode;
++}
++```
++
++Wraps the existing `Card + CardHeader + Skeleton` pattern. Charts remain pure render of `data`.
++
++- [ ] 2.1 — Implement `ChartShell.tsx`
++- [ ] 2.2 — Refactor `BuValueChart`, `BuEfficiencyChart`, `HomeBarChart`, `GroupedVolumeChart`, `HorizontalRankingChart`, `AgentRegressionScatter`, `ExecutiveRankingTable` to use it
++
++### Phase 3 — Filters & state cleanup
++
++Goal: stop computing `selectedDatabase` in pages; stop holding fetch results in `useState`.
++
++- [ ] 3.1 — Extend `GlobalFiltersContext.tsx` with `assessoria` (default `"Todas"`), derived `selectedDatabase`, `minAcionamentos` (default `10`)
++- [ ] 3.2 — Remove the `selectedDatabase` ternary from `Index.tsx`, `AnaliseProdutividade.tsx`, `DetalhamentoAgentes.tsx`, `ComparacaoAgentes.tsx` (consume from context)
++- [ ] 3.3 — Migrate `primeiraParcelaDia`/`primeiraParcelaMes`/`primeiraParcelaPorAgente` from `useState + useEffect + fetch` to `useQuery` (3 pages)
++- [ ] 3.4 — Add `src/components/RouteErrorBoundary.tsx`; wrap each `<Route>` in `App.tsx`
++- [ ] 3.5 — Remove all `.catch(() => {})` swallows (3 pages + App.tsx)
++
++### Phase 4 — Runtime validation at API boundary *(deferred)*
++
++Deferred per user. `zod` is already in `package.json:67`, so re-entry cost is low. Re-evaluate if a silent NaN incident reaches production. Phase numbering preserved.
++
++### Phase 5 — Consolidate adapter + ViewModel contracts
++
++Goal: one adapter, one explicit ViewModel per page.
++
++- [ ] 5.1 — Pick `useProdutividadeData` as canonical; delete `useExecutiveData.ts`
++- [ ] 5.2 — Move the 4 simulated-series getters into `src/hooks/useSimulatedSeries.ts` keyed by `(route, agente?, agenteB?)`
++- [ ] 5.3 — Define `src/types/viewModels.ts` (`HomeViewModel`, `AnaliseViewModel`, `DetalhamentoViewModel`, `ComparacaoViewModel`)
++- [ ] 5.4 — Add `src/hooks/use{Home,Analise,Detalhamento,Comparacao}ViewModel.ts` composing `useProdutividadeData` + selectors + Phase 3 queries
++- [ ] 5.5 — Refactor pages to consume only the ViewModel (Index data-logic block ≤ 60 lines)
++
++### Phase 6 — Onda E polish
++
++- [ ] 6.1 — Verify ChartShell yields uniform skeletons across all charts
++- [ ] 6.2 — Enter-stagger on `ExecutiveKpiStrip` (Tailwind `animate-in` + `delay-[Nms]`, 100ms between cards; suppress on filter re-render)
++- [ ] 6.3 — Responsive validation at 1366×768, 1920×1080, 2560×1440 (commit screenshots under `docs/screenshots/phase-6/`)
++- [ ] 6.4 — A11y: focusable rows on `ExecutiveRankingTable`, axis labels on Recharts, contrast audit
++
++### Phase 7 — Remove simulated series
++
++Gated on backend exposing time-series endpoints (`/dashboard/serie/*`).
++
++- [ ] 7.1 — Replace `mockCpcAnomaliaBanda` with a real `useQuery`
++- [ ] 7.2 — Replace `mockCpcConvDualAxis` with a real `useQuery`
++- [ ] 7.3 — Replace `mockAgentDailySeries` with a real `useQuery`
++- [ ] 7.4 — Replace `mockAbOverlay` with a real `useQuery`
++- [ ] 7.5 — Delete `src/mocks/executiveData.ts`, `useSimulatedSeries.ts`; remove `VITE_USE_MOCKS` from `vite-env.d.ts`
++
++### Phase 8 — Feature flag + rollout
++
++- [ ] 8.1 — Implement `?v2=1` / `VITE_SHOW_EXECUTIVE_V2`
++- [ ] 8.2 — Merge to `main` with flag off
++- [ ] 8.3 — Ramp 25 → 50 → 100% monitoring `trackEvent`
++- [ ] 8.4 — Remove legacy code paths 7 days after 100% stable
++
++### Phase 9 — Hardening
++
++- [ ] 9.1 — Selector tests (one file per selector module)
++- [ ] 9.2 — ChartShell tests (loading / empty / error / data)
++- [ ] 9.3 — Snapshot tests on `ExecutiveKpiStrip` + `ExecutiveRankingTable`
++- [ ] 9.4 — Lighthouse pass: ≥ 85 perf / ≥ 95 a11y on `/`
++- [ ] 9.5 — `React.memo` on the 7 chart components
++
++### Out of scope (recorded)
++
++- Analytics sink (Sentry/Datadog) — separate initiative.
++- Storybook setup — nice-to-have after Phase 9.
++- Replacing TanStack Query — no.
++
++### Locked architecture rules
++
++- **Server state:** TanStack Query only. No API payloads in Context or `useState`.
++- **UI state (global):** `GlobalFiltersContext` (extended in Phase 3).
++- **UI state (local):** `useState` for transient UI only (open/closed, hover, drilldown).
++- Charts render props; they never fetch or compute CPC/conversion/ticket/BRL.
++- All formulas live in `lib/metrics.ts` + `transforms/executiveMetrics.ts`.
++- All derivations (topN, percentile, sort, threshold) live in `selectors/`.
++- All loading/empty/error UI lives in `ChartShell`.
++
++### Verification (per phase)
++
++1. `cd agecob-lens && npm run lint && npm run test && npm run build` — green, zero new warnings.
++2. Manual smoke on the 4 redesigned pages with `VITE_USE_MOCKS=false` against a live backend.
++3. Visual diff before/after committed to `docs/screenshots/phase-N/`.
++4. Phases 2 + 3 specifically: kill backend → error UI renders; pass empty rows → empty UI renders.
++
++End-of-Phase-9 acceptance:
++- No `useMemo` in pages contains sort/filter logic — only composition/formatting.
++- No `.catch(() => {})` silent swallows.
++- No chart imports `services/api.ts`.
++- `Index.tsx` data-logic ≤ 60 lines.
++- Lighthouse ≥ 85 perf / ≥ 95 a11y on `/`.
++
++---
++
++## Historical record — Ondas A/B/C (completed)
++
++The original wave-based plan is kept below as historical record. Completed items remain `[x]`. Open items in the old Onda D/E/Fase 5 sections are now tracked in Phases 1–9 above; **do not pick up new items from those sections.**
+ 
+ ---
+ 
+diff --git a/agecob-lens/src/pages/Index.tsx b/agecob-lens/src/pages/Index.tsx
+index 9f5d9a6..430604b 100644
+--- a/agecob-lens/src/pages/Index.tsx
++++ b/agecob-lens/src/pages/Index.tsx
+@@ -20,24 +20,31 @@ import ExecutiveKpiStrip from "@/components/executive/ExecutiveKpiStrip";
+ import ExecutiveInsightCard from "@/components/executive/ExecutiveInsightCard";
+ import ExecutiveRankingTable from "@/components/executive/ExecutiveRankingTable";
+ import ApiDebugBanner from "@/components/executive/ApiDebugBanner";
+-import BuValueChart, { type BuValueDatum } from "@/components/executive/BuValueChart";
++import BuValueChart from "@/components/executive/BuValueChart";
+ import RitmoDiaCard from "@/components/executive/RitmoDiaCard";
+-import BuEfficiencyChart, { type BuEfficiencyDatum } from "@/components/executive/BuEfficiencyChart";
++import BuEfficiencyChart from "@/components/executive/BuEfficiencyChart";
+ import SectionHeader from "@/components/executive/SectionHeader";
+ import HomeBarChart from "@/components/executive/HomeBarChart";
+ import {
+   aggregateTotals,
+-  buFromSource,
+   calcConversao,
+   calcCpc,
+   calcTicketMedio,
+   fmtBRL,
+-  shortAgentName,
+ } from "@/lib/metrics";
+ import { generateDailyReadout } from "@/lib/insightEngine";
+ import { todayStr, firstOfMonthStr, lastOfMonthStr } from "@/lib/dates";
++import {
++  selectBuEfficiencyData,
++  selectBuValueData,
++  selectTopAgentesPorPrimeiraParcela,
++  selectTopByValor,
++  selectTopPortfolioPorExcecoes,
++  selectTopPortfolioPorRejeitados,
++  selectTopPortfolioPorValor,
++} from "@/selectors/homeSelectors";
+ 
+-import type { ExecutiveKpi, RankingRow } from "@/types/executive";
++import type { ExecutiveKpi } from "@/types/executive";
+ function countBusinessDays(fromIso: string, toIso: string): number {
+   const start = new Date(`${fromIso}T00:00:00`);
+   const end = new Date(`${toIso}T00:00:00`);
+@@ -152,44 +159,9 @@ export default function Index() {
+ 
+   const readout = useMemo(() => generateDailyReadout(rows, projecaoMes), [rows, projecaoMes]);
+ 
+-  const topByValor: RankingRow[] = useMemo(() => {
+-    return [...rows]
+-      .filter((r) => Number(r.valor_acordos || 0) > 0)
+-      .sort((a, b) => Number(b.valor_acordos || 0) - Number(a.valor_acordos || 0))
+-      .slice(0, 10)
+-      .map((row, idx) => ({
+-        rank: idx + 1,
+-        label: shortAgentName(row.NOME),
+-        primaryValue: Number(row.valor_acordos || 0),
+-        primaryUnit: "BRL" as const,
+-        secondaryValue: Number(row.qtd_acordos || 0),
+-        secondaryUnit: "count" as const,
+-      }));
+-  }, [rows]);
+-
+-  const buData = useMemo(() => {
+-    const map = new Map<"AUTOS" | "CONSUMER", typeof rows>();
+-    rows.forEach((row) => {
+-      const bu = buFromSource(row.source);
+-      const arr = map.get(bu) ?? [];
+-      arr.push(row);
+-      map.set(bu, arr);
+-    });
+-    const order: ("AUTOS" | "CONSUMER")[] = ["AUTOS", "CONSUMER"];
+-    const valueData: BuValueDatum[] = order
+-      .filter((bu) => map.has(bu))
+-      .map((bu) => {
+-        const t = aggregateTotals(map.get(bu) ?? []);
+-        return { name: bu, valor_acordos: t.valor_acordos, valor_primeira_parcela: t.valor_primeira_parcela };
+-      });
+-    const effData: BuEfficiencyDatum[] = order
+-      .filter((bu) => map.has(bu))
+-      .map((bu) => {
+-        const t = aggregateTotals(map.get(bu) ?? []);
+-        return { name: bu, cpc: calcCpc(t), conversao: calcConversao(t) };
+-      });
+-    return { valueData, effData };
+-  }, [rows]);
++  const topByValor = useMemo(() => selectTopByValor(rows), [rows]);
++  const buValueData = useMemo(() => selectBuValueData(rows), [rows]);
++  const buEffData = useMemo(() => selectBuEfficiencyData(rows), [rows]);
+ 
+   const cpcAvg = useMemo(() => calcCpc(totals), [totals]);
+   const convAvg = useMemo(() => calcConversao(totals), [totals]);
+@@ -216,39 +188,22 @@ export default function Index() {
+     ],
+   });
+ 
+-  const top10PrimeiraParcela = useMemo(() => {
+-    const rows = qPpAgente.data?.data ?? [];
+-    return [...rows]
+-      .sort((a, b) => Number(b.valor_primeira_parcela || 0) - Number(a.valor_primeira_parcela || 0))
+-      .slice(0, 10)
+-      .map((r) => ({ label: shortAgentName(r.agente), value: Number(r.valor_primeira_parcela || 0) }));
+-  }, [qPpAgente.data]);
+-
+-  const primeiraParcelaPorPortfolio = useMemo(() => {
+-    const rows = qAcdPort.data?.data ?? [];
+-    return [...rows]
+-      .sort((a, b) => Number(b.valor_acordos || 0) - Number(a.valor_acordos || 0))
+-      .slice(0, 10)
+-      .map((r) => ({ label: r.portfolio_name, value: Number(r.valor_acordos || 0) }));
+-  }, [qAcdPort.data]);
+-
+-  const excecoesPorPortfolio = useMemo(() => {
+-    const rows = qExcPort.data?.data ?? [];
+-    return [...rows]
+-      .filter((r) => Number(r.qtd_excecoes || 0) > 0)
+-      .sort((a, b) => Number(b.qtd_excecoes || 0) - Number(a.qtd_excecoes || 0))
+-      .slice(0, 10)
+-      .map((r) => ({ label: r.portfolio_name, value: Number(r.qtd_excecoes || 0) }));
+-  }, [qExcPort.data]);
+-
+-  const rejeitadosPorPortfolio = useMemo(() => {
+-    const rows = qRejPort.data?.data ?? [];
+-    return [...rows]
+-      .filter((r) => Number(r.qtd_rejeitados || 0) > 0)
+-      .sort((a, b) => Number(b.qtd_rejeitados || 0) - Number(a.qtd_rejeitados || 0))
+-      .slice(0, 10)
+-      .map((r) => ({ label: r.portfolio_name, value: Number(r.qtd_rejeitados || 0) }));
+-  }, [qRejPort.data]);
++  const top10PrimeiraParcela = useMemo(
++    () => selectTopAgentesPorPrimeiraParcela(qPpAgente.data?.data ?? []),
++    [qPpAgente.data],
++  );
++  const primeiraParcelaPorPortfolio = useMemo(
++    () => selectTopPortfolioPorValor(qAcdPort.data?.data ?? []),
++    [qAcdPort.data],
++  );
++  const excecoesPorPortfolio = useMemo(
++    () => selectTopPortfolioPorExcecoes(qExcPort.data?.data ?? []),
++    [qExcPort.data],
++  );
++  const rejeitadosPorPortfolio = useMemo(
++    () => selectTopPortfolioPorRejeitados(qRejPort.data?.data ?? []),
++    [qRejPort.data],
++  );
+ 
+   const filterChips = [
+     { label: "Categoria", value: category },
+@@ -301,8 +256,8 @@ export default function Index() {
+               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                 <BuValueChart
+                   title="Valor por Unidade de Negócio"
+-                  data={buData.valueData}
+-                  empty={buData.valueData.length === 0}
++                  data={buValueData}
++                  empty={buValueData.length === 0}
+                   loading={loading}
+                 />
+                 <HomeBarChart
+@@ -325,10 +280,10 @@ export default function Index() {
+               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                 <BuEfficiencyChart
+                   title="CPC % e Conversão % por Unidade de Negócio"
+-                  data={buData.effData}
++                  data={buEffData}
+                   cpcAverage={cpcAvg}
+                   conversaoAverage={convAvg}
+-                  empty={buData.effData.length === 0}
++                  empty={buEffData.length === 0}
+                   loading={loading}
+                 />
+                 <HomeBarChart
+diff --git a/agecob-lens/src/selectors/homeSelectors.test.ts b/agecob-lens/src/selectors/homeSelectors.test.ts
+new file mode 100644
+index 0000000..6aae174
+--- /dev/null
++++ b/agecob-lens/src/selectors/homeSelectors.test.ts
+@@ -0,0 +1,148 @@
++import { describe, expect, it } from "vitest";
++import {
++  selectBuEfficiencyData,
++  selectBuValueData,
++  selectTopAgentesPorPrimeiraParcela,
++  selectTopByValor,
++  selectTopPortfolioPorExcecoes,
++  selectTopPortfolioPorRejeitados,
++  selectTopPortfolioPorValor,
++} from "./homeSelectors";
++import type { ProdutividadeRowWithSource } from "@/hooks/useProdutividadeData";
++
++function row(overrides: Partial<ProdutividadeRowWithSource> & { NOME: string; source: ProdutividadeRowWithSource["source"] }): ProdutividadeRowWithSource {
++  return {
++    CHAVE: overrides.NOME,
++    NOME: overrides.NOME,
++    qtd_acionamentos: 0,
++    qtd_contatos: 0,
++    cpc_percentual: 0,
++    qtd_acordos: 0,
++    acordos_percentual: 0,
++    valor_acordos: 0,
++    acordo_medio: 0,
++    parcelamento_medio: 0,
++    desconto_medio_percentual: 0,
++    valor_primeira_parcela: 0,
++    qtd_excecoes: 0,
++    valor_excecoes: 0,
++    valor_primeira_parcela_excecoes: 0,
++    ...overrides,
++  };
++}
++
++describe("selectTopByValor", () => {
++  it("filters zero-value rows, sorts desc, slices to n, and maps to RankingRow", () => {
++    const rows = [
++      row({ NOME: "Alice Silva", source: "COBwebRCBAUTOS", valor_acordos: 1000, qtd_acordos: 2 }),
++      row({ NOME: "Bob Costa", source: "COBwebRCBAUTOS", valor_acordos: 5000, qtd_acordos: 4 }),
++      row({ NOME: "Carlos Dias", source: "COBwebRCBCONSUMER", valor_acordos: 0, qtd_acordos: 0 }),
++      row({ NOME: "Diana Eus", source: "COBwebRCBCONSUMER", valor_acordos: 250, qtd_acordos: 1 }),
++    ];
++    const top = selectTopByValor(rows, 10);
++    expect(top).toHaveLength(3);
++    expect(top[0].rank).toBe(1);
++    expect(top[0].label).toBe("Bob C.");
++    expect(top[0].primaryValue).toBe(5000);
++    expect(top[0].primaryUnit).toBe("BRL");
++    expect(top[0].secondaryValue).toBe(4);
++    expect(top[0].secondaryUnit).toBe("count");
++    expect(top.map((r) => r.label)).toEqual(["Bob C.", "Alice S.", "Diana E."]);
++  });
++
++  it("respects the slice limit", () => {
++    const rows = Array.from({ length: 15 }, (_, i) =>
++      row({ NOME: `Agent ${i}`, source: "COBwebRCBAUTOS", valor_acordos: (15 - i) * 100, qtd_acordos: 1 }),
++    );
++    const top = selectTopByValor(rows, 5);
++    expect(top).toHaveLength(5);
++    expect(top[0].primaryValue).toBe(1500);
++    expect(top[4].primaryValue).toBe(1100);
++  });
++
++  it("returns an empty array when all rows are zero", () => {
++    expect(selectTopByValor([row({ NOME: "X", source: "COBwebRCBAUTOS" })])).toEqual([]);
++  });
++});
++
++describe("selectBuValueData / selectBuEfficiencyData", () => {
++  const rows: ProdutividadeRowWithSource[] = [
++    row({ NOME: "A", source: "COBwebRCBAUTOS", valor_acordos: 1000, valor_primeira_parcela: 100, qtd_acionamentos: 10, qtd_contatos: 4, qtd_acordos: 2 }),
++    row({ NOME: "B", source: "COBwebRCBAUTOS", valor_acordos: 2000, valor_primeira_parcela: 200, qtd_acionamentos: 20, qtd_contatos: 8, qtd_acordos: 4 }),
++    row({ NOME: "C", source: "COBwebRCBCONSUMER", valor_acordos: 5000, valor_primeira_parcela: 500, qtd_acionamentos: 50, qtd_contatos: 25, qtd_acordos: 10 }),
++  ];
++
++  it("groups by BU with AUTOS before CONSUMER", () => {
++    const value = selectBuValueData(rows);
++    expect(value.map((d) => d.name)).toEqual(["AUTOS", "CONSUMER"]);
++    expect(value[0]).toMatchObject({ name: "AUTOS", valor_acordos: 3000, valor_primeira_parcela: 300 });
++    expect(value[1]).toMatchObject({ name: "CONSUMER", valor_acordos: 5000, valor_primeira_parcela: 500 });
++  });
++
++  it("computes CPC and Conversão per BU", () => {
++    const eff = selectBuEfficiencyData(rows);
++    expect(eff[0].name).toBe("AUTOS");
++    expect(eff[0].cpc).toBeCloseTo(40, 5); // 12/30 * 100
++    expect(eff[0].conversao).toBeCloseTo(20, 5); // 6/30 * 100
++    expect(eff[1].name).toBe("CONSUMER");
++    expect(eff[1].cpc).toBeCloseTo(50, 5);
++    expect(eff[1].conversao).toBeCloseTo(20, 5);
++  });
++
++  it("omits BUs with no rows", () => {
++    const onlyAutos = rows.filter((r) => r.source === "COBwebRCBAUTOS");
++    expect(selectBuValueData(onlyAutos).map((d) => d.name)).toEqual(["AUTOS"]);
++  });
++});
++
++describe("selectTopAgentesPorPrimeiraParcela", () => {
++  it("sorts desc by valor and shortens agent name", () => {
++    const out = selectTopAgentesPorPrimeiraParcela(
++      [
++        { agente: "Joao Silva", qtd_acordos_primeira_parcela: 2, valor_primeira_parcela: 300 },
++        { agente: "Maria Souza", qtd_acordos_primeira_parcela: 5, valor_primeira_parcela: 900 },
++      ],
++      10,
++    );
++    expect(out[0].label).toBe("Maria S.");
++    expect(out[0].value).toBe(900);
++    expect(out[1].value).toBe(300);
++  });
++});
++
++describe("portfolio selectors", () => {
++  it("selectTopPortfolioPorValor sorts desc by valor_acordos", () => {
++    const out = selectTopPortfolioPorValor(
++      [
++        { portfolio_name: "P1", qtd_acordos: 1, valor_acordos: 100 },
++        { portfolio_name: "P2", qtd_acordos: 2, valor_acordos: 500 },
++      ],
++      10,
++    );
++    expect(out.map((r) => r.label)).toEqual(["P2", "P1"]);
++  });
++
++  it("selectTopPortfolioPorExcecoes filters zero qtd and sorts desc", () => {
++    const out = selectTopPortfolioPorExcecoes(
++      [
++        { portfolio_name: "X", qtd_excecoes: 0, valor_excecoes: 0 },
++        { portfolio_name: "Y", qtd_excecoes: 5, valor_excecoes: 100 },
++        { portfolio_name: "Z", qtd_excecoes: 3, valor_excecoes: 50 },
++      ],
++      10,
++    );
++    expect(out.map((r) => r.label)).toEqual(["Y", "Z"]);
++  });
++
++  it("selectTopPortfolioPorRejeitados filters zero qtd and sorts desc", () => {
++    const out = selectTopPortfolioPorRejeitados(
++      [
++        { portfolio_name: "X", qtd_rejeitados: 0, valor_rejeitados: 0 },
++        { portfolio_name: "Y", qtd_rejeitados: 7, valor_rejeitados: 200 },
++      ],
++      10,
++    );
++    expect(out).toHaveLength(1);
++    expect(out[0]).toEqual({ label: "Y", value: 7 });
++  });
++});
+diff --git a/agecob-lens/src/selectors/homeSelectors.ts b/agecob-lens/src/selectors/homeSelectors.ts
+new file mode 100644
+index 0000000..abf4d70
+--- /dev/null
++++ b/agecob-lens/src/selectors/homeSelectors.ts
+@@ -0,0 +1,93 @@
++import type { ProdutividadeRowWithSource } from "@/hooks/useProdutividadeData";
++import type {
++  AcordosPorPortfolioRow,
++  ExcecoesPorPortfolioRow,
++  PrimeiraParcelaPorAgenteRow,
++  RejeitadosPorPortfolioRow,
++} from "@/services/api";
++import type { BuValueDatum } from "@/components/executive/BuValueChart";
++import type { BuEfficiencyDatum } from "@/components/executive/BuEfficiencyChart";
++import { aggregateTotals, buFromSource, calcConversao, calcCpc, shortAgentName } from "@/lib/metrics";
++import type { RankingRow } from "@/types/executive";
++
++export interface BarDatum {
++  label: string;
++  value: number;
++}
++
++const BU_ORDER: ("AUTOS" | "CONSUMER")[] = ["AUTOS", "CONSUMER"];
++
++export function selectTopByValor(rows: ProdutividadeRowWithSource[], n = 10): RankingRow[] {
++  return [...rows]
++    .filter((r) => Number(r.valor_acordos || 0) > 0)
++    .sort((a, b) => Number(b.valor_acordos || 0) - Number(a.valor_acordos || 0))
++    .slice(0, n)
++    .map((row, idx) => ({
++      rank: idx + 1,
++      label: shortAgentName(row.NOME),
++      primaryValue: Number(row.valor_acordos || 0),
++      primaryUnit: "BRL" as const,
++      secondaryValue: Number(row.qtd_acordos || 0),
++      secondaryUnit: "count" as const,
++    }));
++}
++
++function groupByBu(rows: ProdutividadeRowWithSource[]): Map<"AUTOS" | "CONSUMER", ProdutividadeRowWithSource[]> {
++  const map = new Map<"AUTOS" | "CONSUMER", ProdutividadeRowWithSource[]>();
++  rows.forEach((row) => {
++    const bu = buFromSource(row.source);
++    const arr = map.get(bu) ?? [];
++    arr.push(row);
++    map.set(bu, arr);
++  });
++  return map;
++}
++
++export function selectBuValueData(rows: ProdutividadeRowWithSource[]): BuValueDatum[] {
++  const map = groupByBu(rows);
++  return BU_ORDER.filter((bu) => map.has(bu)).map((bu) => {
++    const t = aggregateTotals(map.get(bu) ?? []);
++    return { name: bu, valor_acordos: t.valor_acordos, valor_primeira_parcela: t.valor_primeira_parcela };
++  });
++}
++
++export function selectBuEfficiencyData(rows: ProdutividadeRowWithSource[]): BuEfficiencyDatum[] {
++  const map = groupByBu(rows);
++  return BU_ORDER.filter((bu) => map.has(bu)).map((bu) => {
++    const t = aggregateTotals(map.get(bu) ?? []);
++    return { name: bu, cpc: calcCpc(t), conversao: calcConversao(t) };
++  });
++}
++
++export function selectTopAgentesPorPrimeiraParcela(
++  rows: PrimeiraParcelaPorAgenteRow[],
++  n = 10,
++): BarDatum[] {
++  return [...rows]
++    .sort((a, b) => Number(b.valor_primeira_parcela || 0) - Number(a.valor_primeira_parcela || 0))
++    .slice(0, n)
++    .map((r) => ({ label: shortAgentName(r.agente), value: Number(r.valor_primeira_parcela || 0) }));
++}
++
++export function selectTopPortfolioPorValor(rows: AcordosPorPortfolioRow[], n = 10): BarDatum[] {
++  return [...rows]
++    .sort((a, b) => Number(b.valor_acordos || 0) - Number(a.valor_acordos || 0))
++    .slice(0, n)
++    .map((r) => ({ label: r.portfolio_name, value: Number(r.valor_acordos || 0) }));
++}
++
++export function selectTopPortfolioPorExcecoes(rows: ExcecoesPorPortfolioRow[], n = 10): BarDatum[] {
++  return [...rows]
++    .filter((r) => Number(r.qtd_excecoes || 0) > 0)
++    .sort((a, b) => Number(b.qtd_excecoes || 0) - Number(a.qtd_excecoes || 0))
++    .slice(0, n)
++    .map((r) => ({ label: r.portfolio_name, value: Number(r.qtd_excecoes || 0) }));
++}
++
++export function selectTopPortfolioPorRejeitados(rows: RejeitadosPorPortfolioRow[], n = 10): BarDatum[] {
++  return [...rows]
++    .filter((r) => Number(r.qtd_rejeitados || 0) > 0)
++    .sort((a, b) => Number(b.qtd_rejeitados || 0) - Number(a.qtd_rejeitados || 0))
++    .slice(0, n)
++    .map((r) => ({ label: r.portfolio_name, value: Number(r.qtd_rejeitados || 0) }));
++}
+diff --git a/agecob-lens/src/selectors/index.ts b/agecob-lens/src/selectors/index.ts
+new file mode 100644
+index 0000000..f03036a
+--- /dev/null
++++ b/agecob-lens/src/selectors/index.ts
+@@ -0,0 +1 @@
++export * from "./homeSelectors";
