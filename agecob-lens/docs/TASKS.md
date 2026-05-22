@@ -1,7 +1,182 @@
-# AgDash Redesign — Pipeline de Execução
+# AgDash Redesign — Execution Pipeline
 
-> **Regra de ouro:** execute as ondas em ordem. Dentro de cada onda, de cima para baixo.
-> Marque `[x]` apenas ao concluir e testar. Não pule itens.
+> **Golden rule:** execute phases in order. Within a phase, top to bottom.
+> Mark `[x]` only when completed and tested. Do not skip items.
+
+---
+
+## Current State Audit (2026-05-22)
+
+Ondas A/B/C are ✅ complete (terminology, formatting, base components, page redesign). The work below replaces the previous Onda D/E/Fase 5 framing with an architectural roadmap (Phases 1–9) that builds the missing structural layers (Selectors, ChartShell, RouteErrorBoundary, extended filters, ViewModels) without destabilizing the working pages.
+
+Source of truth for the redesign rules (metric dictionary, anti-patterns, acceptance criteria) remains `agecob-lens/docs/CLAUDE.md`.
+
+| Layer | Status | Notes |
+|---|---|---|
+| API (`src/services/api.ts`) | ✅ | 35+ fetchers, inflight dedup, multi-candidate failover. No runtime validation. |
+| TanStack Query (`App.tsx`) | ✅ | staleTime 60s, gcTime 5m, retry 1, focus off. No `invalidateQueries` — refresh uses a `CustomEvent`. |
+| Adapters | 🟡 | `useProdutividadeData.ts` is canonical (used by all 3 redesigned pages). `useExecutiveData.ts` is parallel and **not adopted**. Phase 5 consolidates. |
+| Metrics (`src/lib/metrics.ts` + `src/transforms/executiveMetrics.ts`) | ✅ | Formulas centralized. No list helpers (topN/percentile/threshold) — these become selectors in Phase 1. |
+| Domain (`src/types/executive.ts`) | 🟡 | Sparse. No per-page ViewModel types. |
+| Selectors | ❌ | **Missing.** `[...].filter().sort().slice(0,10).map()` duplicated 4× across pages. |
+| ViewModels | ❌ | Pages compose KPIs/rankings inline (Index alone has 10 `useMemo`). |
+| Charts (executive/*) | ✅ | Pure presentational. Do not touch. |
+| **ChartShell** | ❌ | **Missing.** 7 charts/tables re-implement the same `Skeleton + "Sem dados"` block. |
+| Pages | 🟡 | 150–270 LOC of `useMemo` data derivation; `selectedDatabase` derived 4× from `category`. |
+| Global Filter Context | 🟡 | Has only `category`, `dateFrom`, `dateTo`. Needs `assessoria`, derived `selectedDatabase`, `minAcionamentos`. |
+| Rogue local state | ❌ | `primeiraParcela*` held in `useState + useEffect + fetch` (Index, Analise, Detalhamento) instead of `useQuery`. |
+| Error Boundary | ❌ | `.catch(() => {})` confirmed in `App.tsx:74`, `Index.tsx:88, 100`, `AnaliseProdutividade.tsx:56`. |
+| Simulated series | 🟡 | 4 series in `mocks/executiveData.ts` (`mockCpcAnomaliaBanda`, `mockCpcConvDualAxis`, `mockAgentDailySeries`, `mockAbOverlay`) marked `isSimulated: true` with `warnOnce` shim. Gated; remove in Phase 7. |
+| Feature flag | ❌ | Redesign is live; no rollback toggle. |
+
+**Coverage:** Ondas A/B/C ✅; Onda D 🟡 ~80%; Onda E 🟡 ~40% (uniform skeleton, enter-stagger, 1366×768 validation, contrast, keyboard nav open); Fase 5 (integration test, flag, rollout) ❌.
+
+---
+
+## Architectural Roadmap (Phases 1–9)
+
+Each phase ships small, sequentially, and is verifiable. Within a phase, items can interleave.
+
+### Phase 1 — Selectors layer (highest leverage)
+
+Goal: kill duplicated `useMemo` derivations across the 4 pages.
+
+Create `src/selectors/` with pure functions (no React). One file per page + a barrel.
+
+| File | Exports |
+|---|---|
+| `homeSelectors.ts` | `selectTopByValor(rows, n=10)`, `selectBuValueData(rows)`, `selectBuEfficiencyData(rows)`, `selectTopByField(rows, field, n, secondaryField?)` |
+| `analiseSelectors.ts` | `selectTopByCpc(rows, n=10, minAcionamentos=10)`, `selectBuOptions(rows)`, `filterByBu(rows, bu)` |
+| `detalhamentoSelectors.ts` | `selectAgentNames(rows)`, `selectBuRows(rows, bu)`, `selectAgentPercentile(rows, agentLabel, buRows)`, `selectTeamRanking(buRows, n=10)` |
+| `comparacaoSelectors.ts` | `selectRadarDimensions(rowsA, rowsB, buRows)`, `selectComparacaoTotals(rows, agente)` |
+| `index.ts` | barrel |
+
+Migrate **one page at a time**, replacing inline `useMemo` blocks 1:1. Visual diff must be identical; rendered ranking values byte-equal. Add `*.test.ts` per selector reusing row fixtures from `lib/metrics.test.ts`.
+
+- [ ] 1.1 — Create `src/selectors/homeSelectors.ts` + tests
+- [ ] 1.2 — Migrate `Index.tsx` to selectors
+- [ ] 1.3 — Create `src/selectors/analiseSelectors.ts` + tests
+- [ ] 1.4 — Migrate `AnaliseProdutividade.tsx` to selectors
+- [ ] 1.5 — Create `src/selectors/detalhamentoSelectors.ts` + tests
+- [ ] 1.6 — Migrate `DetalhamentoAgentes.tsx` to selectors
+- [ ] 1.7 — Create `src/selectors/comparacaoSelectors.ts` + tests
+- [ ] 1.8 — Migrate `ComparacaoAgentes.tsx` / `AgentComparisonDashboard` to selectors
+
+### Phase 2 — ChartShell wrapper
+
+Goal: collapse 7 copies of "skeleton / empty text / chart" into one component.
+
+Create `src/components/executive/ChartShell.tsx`:
+
+```ts
+interface ChartShellProps {
+  title?: string;
+  loading?: boolean;
+  empty?: boolean;
+  error?: string | null;
+  emptyMessage?: string;     // default "Sem dados para o período."
+  toolbar?: ReactNode;
+  height?: number;            // for skeleton sizing
+  children: ReactNode;
+}
+```
+
+Wraps the existing `Card + CardHeader + Skeleton` pattern. Charts remain pure render of `data`.
+
+- [ ] 2.1 — Implement `ChartShell.tsx`
+- [ ] 2.2 — Refactor `BuValueChart`, `BuEfficiencyChart`, `HomeBarChart`, `GroupedVolumeChart`, `HorizontalRankingChart`, `AgentRegressionScatter`, `ExecutiveRankingTable` to use it
+
+### Phase 3 — Filters & state cleanup
+
+Goal: stop computing `selectedDatabase` in pages; stop holding fetch results in `useState`.
+
+- [ ] 3.1 — Extend `GlobalFiltersContext.tsx` with `assessoria` (default `"Todas"`), derived `selectedDatabase`, `minAcionamentos` (default `10`)
+- [ ] 3.2 — Remove the `selectedDatabase` ternary from `Index.tsx`, `AnaliseProdutividade.tsx`, `DetalhamentoAgentes.tsx`, `ComparacaoAgentes.tsx` (consume from context)
+- [ ] 3.3 — Migrate `primeiraParcelaDia`/`primeiraParcelaMes`/`primeiraParcelaPorAgente` from `useState + useEffect + fetch` to `useQuery` (3 pages)
+- [ ] 3.4 — Add `src/components/RouteErrorBoundary.tsx`; wrap each `<Route>` in `App.tsx`
+- [ ] 3.5 — Remove all `.catch(() => {})` swallows (3 pages + App.tsx)
+
+### Phase 4 — Runtime validation at API boundary *(deferred)*
+
+Deferred per user. `zod` is already in `package.json:67`, so re-entry cost is low. Re-evaluate if a silent NaN incident reaches production. Phase numbering preserved.
+
+### Phase 5 — Consolidate adapter + ViewModel contracts
+
+Goal: one adapter, one explicit ViewModel per page.
+
+- [ ] 5.1 — Pick `useProdutividadeData` as canonical; delete `useExecutiveData.ts`
+- [ ] 5.2 — Move the 4 simulated-series getters into `src/hooks/useSimulatedSeries.ts` keyed by `(route, agente?, agenteB?)`
+- [ ] 5.3 — Define `src/types/viewModels.ts` (`HomeViewModel`, `AnaliseViewModel`, `DetalhamentoViewModel`, `ComparacaoViewModel`)
+- [ ] 5.4 — Add `src/hooks/use{Home,Analise,Detalhamento,Comparacao}ViewModel.ts` composing `useProdutividadeData` + selectors + Phase 3 queries
+- [ ] 5.5 — Refactor pages to consume only the ViewModel (Index data-logic block ≤ 60 lines)
+
+### Phase 6 — Onda E polish
+
+- [ ] 6.1 — Verify ChartShell yields uniform skeletons across all charts
+- [ ] 6.2 — Enter-stagger on `ExecutiveKpiStrip` (Tailwind `animate-in` + `delay-[Nms]`, 100ms between cards; suppress on filter re-render)
+- [ ] 6.3 — Responsive validation at 1366×768, 1920×1080, 2560×1440 (commit screenshots under `docs/screenshots/phase-6/`)
+- [ ] 6.4 — A11y: focusable rows on `ExecutiveRankingTable`, axis labels on Recharts, contrast audit
+
+### Phase 7 — Remove simulated series
+
+Gated on backend exposing time-series endpoints (`/dashboard/serie/*`).
+
+- [ ] 7.1 — Replace `mockCpcAnomaliaBanda` with a real `useQuery`
+- [ ] 7.2 — Replace `mockCpcConvDualAxis` with a real `useQuery`
+- [ ] 7.3 — Replace `mockAgentDailySeries` with a real `useQuery`
+- [ ] 7.4 — Replace `mockAbOverlay` with a real `useQuery`
+- [ ] 7.5 — Delete `src/mocks/executiveData.ts`, `useSimulatedSeries.ts`; remove `VITE_USE_MOCKS` from `vite-env.d.ts`
+
+### Phase 8 — Feature flag + rollout
+
+- [ ] 8.1 — Implement `?v2=1` / `VITE_SHOW_EXECUTIVE_V2`
+- [ ] 8.2 — Merge to `main` with flag off
+- [ ] 8.3 — Ramp 25 → 50 → 100% monitoring `trackEvent`
+- [ ] 8.4 — Remove legacy code paths 7 days after 100% stable
+
+### Phase 9 — Hardening
+
+- [ ] 9.1 — Selector tests (one file per selector module)
+- [ ] 9.2 — ChartShell tests (loading / empty / error / data)
+- [ ] 9.3 — Snapshot tests on `ExecutiveKpiStrip` + `ExecutiveRankingTable`
+- [ ] 9.4 — Lighthouse pass: ≥ 85 perf / ≥ 95 a11y on `/`
+- [ ] 9.5 — `React.memo` on the 7 chart components
+
+### Out of scope (recorded)
+
+- Analytics sink (Sentry/Datadog) — separate initiative.
+- Storybook setup — nice-to-have after Phase 9.
+- Replacing TanStack Query — no.
+
+### Locked architecture rules
+
+- **Server state:** TanStack Query only. No API payloads in Context or `useState`.
+- **UI state (global):** `GlobalFiltersContext` (extended in Phase 3).
+- **UI state (local):** `useState` for transient UI only (open/closed, hover, drilldown).
+- Charts render props; they never fetch or compute CPC/conversion/ticket/BRL.
+- All formulas live in `lib/metrics.ts` + `transforms/executiveMetrics.ts`.
+- All derivations (topN, percentile, sort, threshold) live in `selectors/`.
+- All loading/empty/error UI lives in `ChartShell`.
+
+### Verification (per phase)
+
+1. `cd agecob-lens && npm run lint && npm run test && npm run build` — green, zero new warnings.
+2. Manual smoke on the 4 redesigned pages with `VITE_USE_MOCKS=false` against a live backend.
+3. Visual diff before/after committed to `docs/screenshots/phase-N/`.
+4. Phases 2 + 3 specifically: kill backend → error UI renders; pass empty rows → empty UI renders.
+
+End-of-Phase-9 acceptance:
+- No `useMemo` in pages contains sort/filter logic — only composition/formatting.
+- No `.catch(() => {})` silent swallows.
+- No chart imports `services/api.ts`.
+- `Index.tsx` data-logic ≤ 60 lines.
+- Lighthouse ≥ 85 perf / ≥ 95 a11y on `/`.
+
+---
+
+## Historical record — Ondas A/B/C (completed)
+
+The original wave-based plan is kept below as historical record. Completed items remain `[x]`. Open items in the old Onda D/E/Fase 5 sections are now tracked in Phases 1–9 above; **do not pick up new items from those sections.**
 
 ---
 

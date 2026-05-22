@@ -20,24 +20,31 @@ import ExecutiveKpiStrip from "@/components/executive/ExecutiveKpiStrip";
 import ExecutiveInsightCard from "@/components/executive/ExecutiveInsightCard";
 import ExecutiveRankingTable from "@/components/executive/ExecutiveRankingTable";
 import ApiDebugBanner from "@/components/executive/ApiDebugBanner";
-import BuValueChart, { type BuValueDatum } from "@/components/executive/BuValueChart";
+import BuValueChart from "@/components/executive/BuValueChart";
 import RitmoDiaCard from "@/components/executive/RitmoDiaCard";
-import BuEfficiencyChart, { type BuEfficiencyDatum } from "@/components/executive/BuEfficiencyChart";
+import BuEfficiencyChart from "@/components/executive/BuEfficiencyChart";
 import SectionHeader from "@/components/executive/SectionHeader";
 import HomeBarChart from "@/components/executive/HomeBarChart";
 import {
   aggregateTotals,
-  buFromSource,
   calcConversao,
   calcCpc,
   calcTicketMedio,
   fmtBRL,
-  shortAgentName,
 } from "@/lib/metrics";
 import { generateDailyReadout } from "@/lib/insightEngine";
 import { todayStr, firstOfMonthStr, lastOfMonthStr } from "@/lib/dates";
+import {
+  selectBuEfficiencyData,
+  selectBuValueData,
+  selectTopAgentesPorPrimeiraParcela,
+  selectTopByValor,
+  selectTopPortfolioPorExcecoes,
+  selectTopPortfolioPorRejeitados,
+  selectTopPortfolioPorValor,
+} from "@/selectors/homeSelectors";
 
-import type { ExecutiveKpi, RankingRow } from "@/types/executive";
+import type { ExecutiveKpi } from "@/types/executive";
 function countBusinessDays(fromIso: string, toIso: string): number {
   const start = new Date(`${fromIso}T00:00:00`);
   const end = new Date(`${toIso}T00:00:00`);
@@ -152,44 +159,9 @@ export default function Index() {
 
   const readout = useMemo(() => generateDailyReadout(rows, projecaoMes), [rows, projecaoMes]);
 
-  const topByValor: RankingRow[] = useMemo(() => {
-    return [...rows]
-      .filter((r) => Number(r.valor_acordos || 0) > 0)
-      .sort((a, b) => Number(b.valor_acordos || 0) - Number(a.valor_acordos || 0))
-      .slice(0, 10)
-      .map((row, idx) => ({
-        rank: idx + 1,
-        label: shortAgentName(row.NOME),
-        primaryValue: Number(row.valor_acordos || 0),
-        primaryUnit: "BRL" as const,
-        secondaryValue: Number(row.qtd_acordos || 0),
-        secondaryUnit: "count" as const,
-      }));
-  }, [rows]);
-
-  const buData = useMemo(() => {
-    const map = new Map<"AUTOS" | "CONSUMER", typeof rows>();
-    rows.forEach((row) => {
-      const bu = buFromSource(row.source);
-      const arr = map.get(bu) ?? [];
-      arr.push(row);
-      map.set(bu, arr);
-    });
-    const order: ("AUTOS" | "CONSUMER")[] = ["AUTOS", "CONSUMER"];
-    const valueData: BuValueDatum[] = order
-      .filter((bu) => map.has(bu))
-      .map((bu) => {
-        const t = aggregateTotals(map.get(bu) ?? []);
-        return { name: bu, valor_acordos: t.valor_acordos, valor_primeira_parcela: t.valor_primeira_parcela };
-      });
-    const effData: BuEfficiencyDatum[] = order
-      .filter((bu) => map.has(bu))
-      .map((bu) => {
-        const t = aggregateTotals(map.get(bu) ?? []);
-        return { name: bu, cpc: calcCpc(t), conversao: calcConversao(t) };
-      });
-    return { valueData, effData };
-  }, [rows]);
+  const topByValor = useMemo(() => selectTopByValor(rows), [rows]);
+  const buValueData = useMemo(() => selectBuValueData(rows), [rows]);
+  const buEffData = useMemo(() => selectBuEfficiencyData(rows), [rows]);
 
   const cpcAvg = useMemo(() => calcCpc(totals), [totals]);
   const convAvg = useMemo(() => calcConversao(totals), [totals]);
@@ -216,39 +188,22 @@ export default function Index() {
     ],
   });
 
-  const top10PrimeiraParcela = useMemo(() => {
-    const rows = qPpAgente.data?.data ?? [];
-    return [...rows]
-      .sort((a, b) => Number(b.valor_primeira_parcela || 0) - Number(a.valor_primeira_parcela || 0))
-      .slice(0, 10)
-      .map((r) => ({ label: shortAgentName(r.agente), value: Number(r.valor_primeira_parcela || 0) }));
-  }, [qPpAgente.data]);
-
-  const primeiraParcelaPorPortfolio = useMemo(() => {
-    const rows = qAcdPort.data?.data ?? [];
-    return [...rows]
-      .sort((a, b) => Number(b.valor_acordos || 0) - Number(a.valor_acordos || 0))
-      .slice(0, 10)
-      .map((r) => ({ label: r.portfolio_name, value: Number(r.valor_acordos || 0) }));
-  }, [qAcdPort.data]);
-
-  const excecoesPorPortfolio = useMemo(() => {
-    const rows = qExcPort.data?.data ?? [];
-    return [...rows]
-      .filter((r) => Number(r.qtd_excecoes || 0) > 0)
-      .sort((a, b) => Number(b.qtd_excecoes || 0) - Number(a.qtd_excecoes || 0))
-      .slice(0, 10)
-      .map((r) => ({ label: r.portfolio_name, value: Number(r.qtd_excecoes || 0) }));
-  }, [qExcPort.data]);
-
-  const rejeitadosPorPortfolio = useMemo(() => {
-    const rows = qRejPort.data?.data ?? [];
-    return [...rows]
-      .filter((r) => Number(r.qtd_rejeitados || 0) > 0)
-      .sort((a, b) => Number(b.qtd_rejeitados || 0) - Number(a.qtd_rejeitados || 0))
-      .slice(0, 10)
-      .map((r) => ({ label: r.portfolio_name, value: Number(r.qtd_rejeitados || 0) }));
-  }, [qRejPort.data]);
+  const top10PrimeiraParcela = useMemo(
+    () => selectTopAgentesPorPrimeiraParcela(qPpAgente.data?.data ?? []),
+    [qPpAgente.data],
+  );
+  const primeiraParcelaPorPortfolio = useMemo(
+    () => selectTopPortfolioPorValor(qAcdPort.data?.data ?? []),
+    [qAcdPort.data],
+  );
+  const excecoesPorPortfolio = useMemo(
+    () => selectTopPortfolioPorExcecoes(qExcPort.data?.data ?? []),
+    [qExcPort.data],
+  );
+  const rejeitadosPorPortfolio = useMemo(
+    () => selectTopPortfolioPorRejeitados(qRejPort.data?.data ?? []),
+    [qRejPort.data],
+  );
 
   const filterChips = [
     { label: "Categoria", value: category },
@@ -301,8 +256,8 @@ export default function Index() {
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <BuValueChart
                   title="Valor por Unidade de Negócio"
-                  data={buData.valueData}
-                  empty={buData.valueData.length === 0}
+                  data={buValueData}
+                  empty={buValueData.length === 0}
                   loading={loading}
                 />
                 <HomeBarChart
@@ -325,10 +280,10 @@ export default function Index() {
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <BuEfficiencyChart
                   title="CPC % e Conversão % por Unidade de Negócio"
-                  data={buData.effData}
+                  data={buEffData}
                   cpcAverage={cpcAvg}
                   conversaoAverage={convAvg}
-                  empty={buData.effData.length === 0}
+                  empty={buEffData.length === 0}
                   loading={loading}
                 />
                 <HomeBarChart
