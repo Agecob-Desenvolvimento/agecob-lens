@@ -28,7 +28,13 @@ import {
   fmtBRL,
   shortAgentName,
 } from "@/lib/metrics";
-import type { ExecutiveKpi, InsightEngineOutput, RankingRow } from "@/types/executive";
+import {
+  selectAgentNames,
+  selectAgentPercentile,
+  selectBuRows,
+  selectTeamRanking,
+} from "@/selectors";
+import type { ExecutiveKpi, InsightEngineOutput } from "@/types/executive";
 
 const DetalhamentoChartsPanel = lazy(() => import("@/components/charts/DetalhamentoChartsPanel"));
 
@@ -98,12 +104,7 @@ export default function DetalhamentoAgentes() {
     };
   }, [selectedDatabase, dateFrom, dateTo]);
 
-  const agentNames = useMemo(
-    () =>
-      Array.from(new Set(rows.map((row) => String(row.NOME || "").trim()).filter((name) => name.length > 0)))
-        .sort((a, b) => a.localeCompare(b, "pt-BR")),
-    [rows],
-  );
+  const agentNames = useMemo(() => selectAgentNames(rows), [rows]);
 
   const visibleAgents = useMemo(() => {
     const q = agentFilter.trim().toLowerCase();
@@ -156,45 +157,25 @@ export default function DetalhamentoAgentes() {
     return row ? buFromSource(row.source) : null;
   }, [rows, selectedAgent]);
 
-  const buRows = useMemo(() => {
-    if (!selectedAgentBu) return [];
-    return rows.filter((r) => buFromSource(r.source) === selectedAgentBu);
-  }, [rows, selectedAgentBu]);
+  const buRows = useMemo(
+    () => selectBuRows(rows, selectedAgentBu),
+    [rows, selectedAgentBu],
+  );
 
-  const teamRanking: RankingRow[] = useMemo(() => {
-    if (selectedAgent === "Todos") return [];
-    return [...buRows]
-      .filter((r) => Number(r.valor_acordos || 0) > 0)
-      .sort((a, b) => Number(b.valor_acordos || 0) - Number(a.valor_acordos || 0))
-      .slice(0, 10)
-      .map((row, idx) => ({
-        rank: idx + 1,
-        label: shortAgentName(row.NOME),
-        primaryValue: Number(row.valor_acordos || 0),
-        primaryUnit: "BRL" as const,
-        secondaryValue: Number(row.qtd_acordos || 0),
-        secondaryUnit: "count" as const,
-      }));
-  }, [buRows, selectedAgent]);
+  const teamRanking = useMemo(
+    () => (selectedAgent === "Todos" ? [] : selectTeamRanking(buRows)),
+    [buRows, selectedAgent],
+  );
 
   const selectedShortLabel = useMemo(
     () => (selectedAgent === "Todos" ? undefined : shortAgentName(selectedAgent)),
     [selectedAgent],
   );
 
-  const percentiles = useMemo(() => {
-    if (selectedAgent === "Todos" || buRows.length === 0) return null;
-    const sortedByValor = [...buRows].sort((a, b) => Number(b.valor_acordos || 0) - Number(a.valor_acordos || 0));
-    const valorRank = sortedByValor.findIndex((r) => String(r.NOME || "").trim() === selectedAgent);
-    const buWithAcionamentos = buRows.filter((r) => Number(r.qtd_acionamentos || 0) >= 10);
-    const sortedByCpc = [...buWithAcionamentos]
-      .map((r) => ({ nome: String(r.NOME || "").trim(), cpc: calcCpc({ qtd_contatos: Number(r.qtd_contatos || 0), qtd_acionamentos: Number(r.qtd_acionamentos || 0) }) }))
-      .sort((a, b) => b.cpc - a.cpc);
-    const cpcRank = sortedByCpc.findIndex((r) => r.nome === selectedAgent);
-    const valorPct = valorRank >= 0 ? Math.round(((valorRank + 1) / sortedByValor.length) * 100) : null;
-    const cpcPct = cpcRank >= 0 ? Math.round(((cpcRank + 1) / sortedByCpc.length) * 100) : null;
-    return { valorPct, cpcPct, totalBU: buRows.length };
-  }, [buRows, selectedAgent]);
+  const percentiles = useMemo(
+    () => selectAgentPercentile(rows, selectedAgent, buRows),
+    [rows, buRows, selectedAgent],
+  );
 
   const insight: InsightEngineOutput = useMemo(() => {
     if (selectedAgent === "Todos" || buRows.length === 0) {
