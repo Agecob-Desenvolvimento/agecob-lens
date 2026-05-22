@@ -37,6 +37,19 @@
     --warning: 38 92% 52%;
     --warning-foreground: 0 0% 0%;
 
+    /* Semantic executive tokens (Specs §0.6.1) */
+    --success: 142 76% 36%;
+    --success-soft: 151 81% 96%;
+    --success-border: 152 76% 80%;
+    --success-fg: 160 84% 22%;
+    --danger: 347 89% 60%;
+    --danger-soft: 355 100% 97%;
+    --danger-border: 354 96% 89%;
+    --danger-fg: 345 83% 41%;
+    --warning-soft: 48 100% 96%;
+    --warning-border: 48 96% 76%;
+    --warning-fg: 26 90% 37%;
+
     --chart-1: 221 83% 53%;
     --chart-2: 188 95% 35%;
     --chart-3: 262 83% 58%;

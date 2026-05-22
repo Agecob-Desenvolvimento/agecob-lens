@@ -16,7 +16,9 @@ import {
   fmtBRL,
   fmtNum,
   fmtPct,
+  shortAgentName,
 } from "@/lib/metrics";
+import AgentRegressionScatter, { type RegressionDatum } from "@/components/executive/AgentRegressionScatter";
 
 interface DetalhamentoChartsPanelProps {
   rows: ProdutividadeRowWithSource[];
@@ -97,8 +99,25 @@ export default function DetalhamentoChartsPanel({
     { name: "Valor Acordos", value: totals.valor_acordos },
   ];
 
+  const scatterData: RegressionDatum[] = rows
+    .filter((r) => Number(r.qtd_acionamentos || 0) > 0 && Number(r.valor_acordos || 0) > 0)
+    .map((r) => ({
+      agente: shortAgentName(r.NOME),
+      x: Number(r.qtd_acionamentos || 0),
+      y: Number(r.valor_acordos || 0),
+    }));
+  const scatterHighlight = selectedAgent === "Todos" ? undefined : shortAgentName(selectedAgent);
+
   return (
     <div className="space-y-4">
+      <AgentRegressionScatter
+        title="Acionamentos × Valor de Acordos — placeholder de regressão"
+        data={scatterData}
+        xLabel="Acionamentos"
+        yLabel="Valor de Acordos"
+        highlightAgent={scatterHighlight}
+        empty={scatterData.length === 0}
+      />
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card>
           <CardHeader className="pb-2 pt-3 px-4">

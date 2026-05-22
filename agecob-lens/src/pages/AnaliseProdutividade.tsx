@@ -12,8 +12,9 @@ import { useProdutividadeData } from "@/hooks/useProdutividadeData";
 import { fetchPrimeiraParcelaDia, type DatabaseOption } from "@/services/api";
 import ExecutiveHeader from "@/components/executive/ExecutiveHeader";
 import ExecutiveKpiStrip from "@/components/executive/ExecutiveKpiStrip";
-import ExecutiveInsightCard from "@/components/executive/ExecutiveInsightCard";
+import ExecutiveRankingTable from "@/components/executive/ExecutiveRankingTable";
 import ApiDebugBanner from "@/components/executive/ApiDebugBanner";
+import SectionHeader from "@/components/executive/SectionHeader";
 import {
   aggregateTotals,
   calcConcentracao,
@@ -21,9 +22,9 @@ import {
   calcCpc,
   calcExcecoesPctValor,
   calcTicketMedio,
+  shortAgentName,
 } from "@/lib/metrics";
-import { generateDailyReadout } from "@/lib/insightEngine";
-import type { ExecutiveKpi } from "@/types/executive";
+import type { ExecutiveKpi, RankingRow } from "@/types/executive";
 
 const AnaliseChartsPanel = lazy(() => import("@/components/charts/AnaliseChartsPanel"));
 
@@ -92,7 +93,29 @@ export default function AnaliseProdutividade() {
     ];
   }, [filteredRows, totals, teamBU, primeiraParcelaDia]);
 
-  const readout = useMemo(() => generateDailyReadout(filteredRows), [filteredRows]);
+  const MIN_ACIONAMENTOS_THRESHOLD = 10;
+  const topByCpc: RankingRow[] = useMemo(() => {
+    return filteredRows
+      .filter((r) => Number(r.qtd_acionamentos || 0) >= MIN_ACIONAMENTOS_THRESHOLD)
+      .map((row) => {
+        const acionamentos = Number(row.qtd_acionamentos || 0);
+        const contatos = Number(row.qtd_contatos || 0);
+        const acordos = Number(row.qtd_acordos || 0);
+        const cpc = acionamentos > 0 ? (contatos * 100) / acionamentos : 0;
+        const conversao = acionamentos > 0 ? (acordos * 100) / acionamentos : 0;
+        return { agente: row.NOME, cpc, conversao };
+      })
+      .sort((a, b) => b.cpc - a.cpc)
+      .slice(0, 10)
+      .map((r, idx) => ({
+        rank: idx + 1,
+        label: shortAgentName(r.agente),
+        primaryValue: r.cpc,
+        primaryUnit: "%" as const,
+        secondaryValue: r.conversao,
+        secondaryUnit: "%" as const,
+      }));
+  }, [filteredRows]);
 
   const filterChips = [
     { label: "Categoria", value: category },
@@ -144,23 +167,43 @@ export default function AnaliseProdutividade() {
               onRetry={guardedRefresh}
             />
 
-            {/* Daily Readout */}
-            <ExecutiveInsightCard data={readout} loading={loading} title="Sinais do dia" />
-
             {/* KPIs */}
             <ExecutiveKpiStrip kpis={kpis} loading={loading} />
 
-            {/* Charts Panel */}
-            <LazyVisibleSection
-              id="analise-charts"
-              scope="/analise-produtividade"
-              priority={ROUTE_LOAD_PRIORITY["/analise-produtividade"].charts}
-              fallback={<Skeleton className="h-64 w-full" />}
-            >
-              <Suspense fallback={<Skeleton className="h-64 w-full" />}>
-                <AnaliseChartsPanel rows={filteredRows} db={selectedDatabase} dateFrom={dateFrom} dateTo={dateTo} />
-              </Suspense>
-            </LazyVisibleSection>
+            {/* Eficiência por Agente */}
+            <section className="space-y-4">
+              <SectionHeader
+                title="Eficiência por Agente"
+                unit="%"
+                description="Ranking de CPC (contatos/acionamentos) — quanto maior, melhor a qualidade do contato."
+              />
+              <ExecutiveRankingTable
+                title="Top 10 Agentes por CPC"
+                rows={topByCpc}
+                primaryColumnLabel="CPC %"
+                secondaryColumnLabel="Conversão %"
+                loading={loading}
+                empty={topByCpc.length === 0}
+              />
+            </section>
+
+            {/* Portfólio & Risco */}
+            <section className="space-y-4">
+              <SectionHeader
+                title="Portfólio & Risco"
+                description="Acordos, exceções e rejeitados agrupados por portfólio (CAMPO010)."
+              />
+              <LazyVisibleSection
+                id="analise-charts"
+                scope="/analise-produtividade"
+                priority={ROUTE_LOAD_PRIORITY["/analise-produtividade"].charts}
+                fallback={<Skeleton className="h-64 w-full" />}
+              >
+                <Suspense fallback={<Skeleton className="h-64 w-full" />}>
+                  <AnaliseChartsPanel rows={filteredRows} db={selectedDatabase} dateFrom={dateFrom} dateTo={dateTo} />
+                </Suspense>
+              </LazyVisibleSection>
+            </section>
           </div>
         </div>
       </div>

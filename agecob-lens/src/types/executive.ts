@@ -2,6 +2,13 @@ export type MetricUnit = "BRL" | "%" | "count";
 
 export type InsightSeverity = "positive" | "warning" | "critical";
 
+export interface KpiDelta {
+  value: number;
+  direction: "up" | "down" | "flat";
+  baselineLabel: string;
+  inverted?: boolean;
+}
+
 export interface ExecutiveKpi {
   label: string;
   value: number;
@@ -10,6 +17,7 @@ export interface ExecutiveKpi {
   priority: "primary" | "secondary";
   trend?: "up" | "down" | "stable";
   hint?: string;
+  delta?: KpiDelta;
 }
 
 export interface InsightSlot {

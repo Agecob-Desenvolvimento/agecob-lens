@@ -116,6 +116,46 @@ export function calcHealthScore(t: MetricTotals): number {
   return Math.round(score);
 }
 
+const brlFull = new Intl.NumberFormat("pt-BR", {
+  style: "currency",
+  currency: "BRL",
+});
+
+const brlCompact = new Intl.NumberFormat("pt-BR", {
+  style: "currency",
+  currency: "BRL",
+  notation: "compact",
+  maximumFractionDigits: 2,
+});
+
+/**
+ * Anti-truncamento BRL. Threshold compacto: R$ 100k.
+ *   formatBRLCompact(1611575.51)         → "R$ 1,61 mi"
+ *   formatBRLCompact(1611575.51, "full") → "R$ 1.611.575,51"
+ *   formatBRLCompact(0)                  → "R$ 0,00"
+ *   formatBRLCompact(null)               → "—"
+ */
+export function formatBRLCompact(
+  value: number | null | undefined,
+  mode: "auto" | "full" | "compact" = "auto",
+): string {
+  if (value == null || Number.isNaN(value)) return "—";
+  if (mode === "full") return brlFull.format(value);
+  if (mode === "compact") return brlCompact.format(value);
+  return Math.abs(value) >= 100_000 ? brlCompact.format(value) : brlFull.format(value);
+}
+
+/**
+ * Delta com seta + magnitude inteira. Espera fração (0.124 = 12,4%).
+ *   formatDelta(0.124, "up")  → "↑ 12%"
+ *   formatDelta(0.041, "down") → "↓ 4%"
+ *   formatDelta(0.003, "flat") → "→ 0%"
+ */
+export function formatDelta(value: number, direction: "up" | "down" | "flat"): string {
+  const arrow = direction === "up" ? "↑" : direction === "down" ? "↓" : "→";
+  return `${arrow} ${Math.round(Math.abs(value) * 100)}%`;
+}
+
 export function fmtBRL(v: number, options?: { compact?: boolean }): string {
   const opts: Intl.NumberFormatOptions = {
     style: "currency",

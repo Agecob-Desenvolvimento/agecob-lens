@@ -33,10 +33,10 @@ const SEVERITY_TILE: Record<InsightSeverity | "action", {
   badgeBg: string;
   label: string;
 }> = {
-  critical: { icon: AlertCircle,   bg: "bg-rose-50",    ring: "ring-rose-200",    border: "border-rose-500",    iconColor: "text-rose-600",    headlineColor: "text-rose-700",    badgeBg: "bg-rose-600 text-white",    label: "CRÍTICO"  },
-  warning:  { icon: AlertTriangle, bg: "bg-amber-50",   ring: "ring-amber-200",   border: "border-amber-500",   iconColor: "text-amber-600",   headlineColor: "text-amber-700",   badgeBg: "bg-amber-500 text-white",   label: "ATENÇÃO"  },
-  positive: { icon: CheckCircle2,  bg: "bg-emerald-50", ring: "ring-emerald-200", border: "border-emerald-500", iconColor: "text-emerald-600", headlineColor: "text-emerald-700", badgeBg: "bg-emerald-600 text-white", label: "POSITIVO" },
-  action:   { icon: Lightbulb,     bg: "bg-sky-50",     ring: "ring-sky-200",     border: "border-sky-500",     iconColor: "text-sky-600",     headlineColor: "text-sky-700",     badgeBg: "bg-sky-600 text-white",     label: "AÇÃO"     },
+  critical: { icon: AlertCircle,   bg: "bg-danger-soft",  ring: "ring-danger-border",  border: "border-danger",   iconColor: "text-danger-fg",  headlineColor: "text-danger-fg",  badgeBg: "bg-danger text-white",    label: "CRÍTICO"  },
+  warning:  { icon: AlertTriangle, bg: "bg-warning-soft", ring: "ring-warning-border", border: "border-warning",  iconColor: "text-warning-fg", headlineColor: "text-warning-fg", badgeBg: "bg-warning text-white",   label: "ATENÇÃO"  },
+  positive: { icon: CheckCircle2,  bg: "bg-success-soft", ring: "ring-success-border", border: "border-success",  iconColor: "text-success-fg", headlineColor: "text-success-fg", badgeBg: "bg-success text-white",   label: "POSITIVO" },
+  action:   { icon: Lightbulb,     bg: "bg-sky-50",       ring: "ring-sky-200",        border: "border-sky-500",  iconColor: "text-sky-600",    headlineColor: "text-sky-700",    badgeBg: "bg-sky-600 text-white",   label: "AÇÃO"     },
 };
 
 export function ExecutiveInsightCard({ data, loading, title = "Resumo do dia", embedded }: ExecutiveInsightCardProps) {
@@ -59,21 +59,8 @@ export function ExecutiveInsightCard({ data, loading, title = "Resumo do dia", e
   }
 
   if (data.empty) {
-    return (
-      <Wrapper embedded={embedded}>
-        <CardHeader className="pb-3 pt-4 px-4">
-          <CardTitle className="text-lg font-semibold flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-primary" />
-            {title}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="px-4 pb-4">
-          <p className="text-sm text-muted-foreground">
-            Sem sinais operacionais detectados.
-          </p>
-        </CardContent>
-      </Wrapper>
-    );
+    // Estado neutro: omitir o bloco inteiro (CLAUDE.md anti-pattern).
+    return null;
   }
 
   const slots: RenderSlot[] = [

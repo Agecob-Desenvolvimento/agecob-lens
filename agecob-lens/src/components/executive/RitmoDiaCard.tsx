@@ -112,7 +112,7 @@ export default function RitmoDiaCard({ db, embedded }: { db: DatabaseOption; emb
               <div
                 key={b.hora}
                 className={`flex flex-col items-center rounded-md border p-1 ${
-                  isCurrent ? "border-emerald-500 bg-emerald-50" : "border-border"
+                  isCurrent ? "border-success bg-success-soft" : "border-border"
                 }`}
                 title={`Hora ${b.hora}h — esperado ${b.esperado} · real ${realText} · acumulado ${acumText} · delta ${deltaText || "—"}`}
               >

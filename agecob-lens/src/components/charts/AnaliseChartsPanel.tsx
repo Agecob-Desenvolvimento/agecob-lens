@@ -6,7 +6,6 @@ import {
   fetchExcecoesPorAgente,
   fetchExcecoesPorPortfolio,
   fetchExcecoesSemPortfolio,
-  fetchPrimeiraParcelaPorAgente,
   fetchRejeitadosPorPortfolio,
 } from "@/services/api";
 import { type ProdutividadeRowWithSource } from "@/hooks/useProdutividadeData";
@@ -16,7 +15,6 @@ import {
   calcCpc,
   calcConversao,
   fmtBRL,
-  shortAgentName,
 } from "@/lib/metrics";
 import SectionHeader from "@/components/executive/SectionHeader";
 import HorizontalRankingChart from "@/components/executive/HorizontalRankingChart";
@@ -33,23 +31,21 @@ interface AnaliseChartsPanelProps {
 const COLOR_AUTOS = "hsl(142, 71%, 38%)";
 const COLOR_CONSUMER = "hsl(142, 65%, 65%)";
 const COLOR_PORTFOLIO = "hsl(142, 71%, 38%)";
-const COLOR_FIRST_INSTALLMENT = "hsl(142, 65%, 55%)";
 const COLOR_EXCEPTION = "hsl(0, 75%, 55%)";
 const COLOR_REJECTED = "hsl(25, 85%, 50%)";
 
 export default function AnaliseChartsPanel({ rows, db, dateFrom, dateTo }: AnaliseChartsPanelProps) {
-  const [qExcPort, qExcAg, qAcdPort, qPpAg, qRejPort, qExcNull] = useQueries({
+  const [qExcPort, qExcAg, qAcdPort, qRejPort, qExcNull] = useQueries({
     queries: [
       { queryKey: ["excecoes-por-portfolio", db, dateFrom, dateTo] as const, queryFn: () => fetchExcecoesPorPortfolio(db, dateFrom, dateTo) },
       { queryKey: ["excecoes-por-agente", db, dateFrom, dateTo] as const, queryFn: () => fetchExcecoesPorAgente(db, dateFrom, dateTo) },
       { queryKey: ["acordos-por-portfolio", db, dateFrom, dateTo] as const, queryFn: () => fetchAcordosPorPortfolio(db, dateFrom, dateTo) },
-      { queryKey: ["primeira-parcela-por-agente", db, dateFrom, dateTo] as const, queryFn: () => fetchPrimeiraParcelaPorAgente(db, undefined, dateFrom, dateTo) },
       { queryKey: ["rejeitados-por-portfolio", db, dateFrom, dateTo] as const, queryFn: () => fetchRejeitadosPorPortfolio(db, dateFrom, dateTo) },
       { queryKey: ["excecoes-sem-portfolio", db, dateFrom, dateTo] as const, queryFn: () => fetchExcecoesSemPortfolio(db, dateFrom, dateTo) },
     ],
   });
 
-  const errs = [qExcPort, qExcAg, qAcdPort, qPpAg, qRejPort, qExcNull]
+  const errs = [qExcPort, qExcAg, qAcdPort, qRejPort, qExcNull]
     .filter((q) => q.isError)
     .map((q) => (q.error as Error)?.message ?? "Falha")
     .join(" | ");
@@ -88,16 +84,6 @@ export default function AnaliseChartsPanel({ rows, db, dateFrom, dateTo }: Anali
       secondaryUnit: "count" as const,
     }))
     .sort((a, b) => b.value - a.value);
-
-  // A2: top 10 agents by first installment — secondary = qtd_acordos
-  const ppAgenteData = (qPpAg.data?.data ?? [])
-    .slice(0, 10)
-    .map((r) => ({
-      name: shortAgentName(r.agente),
-      value: Number(r.valor_primeira_parcela || 0),
-      secondaryValue: Number(r.qtd_acordos_primeira_parcela || 0),
-      secondaryUnit: "count" as const,
-    }));
 
   // C1: exceptions by portfolio — primary = valor_excecoes; secondary = qtd
   const excPortfolioData = (qExcPort.data?.data ?? [])
@@ -147,23 +133,6 @@ export default function AnaliseChartsPanel({ rows, db, dateFrom, dateTo }: Anali
           <span>Falha parcial em endpoints: {errs}</span>
         </div>
       ) : null}
-
-      <section className="space-y-3">
-        <SectionHeader
-          title="Financeiro"
-          description="Entrada de caixa (1ª parcela) por agente."
-          unit="BRL"
-        />
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <HorizontalRankingChart
-            title="Top 10 Agentes por 1ª Parcela"
-            data={ppAgenteData}
-            unit="BRL"
-            defaultColor={COLOR_FIRST_INSTALLMENT}
-            empty={ppAgenteData.length === 0}
-          />
-        </div>
-      </section>
 
       <section className="space-y-3">
         <SectionHeader

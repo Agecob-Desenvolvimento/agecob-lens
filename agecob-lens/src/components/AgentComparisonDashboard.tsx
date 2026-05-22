@@ -1,36 +1,33 @@
-import { useEffect, useState, useMemo } from "react";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@/components/ui/table";
+import { useEffect, useMemo, useState } from "react";
+import {
+  PolarAngleAxis,
+  PolarGrid,
+  PolarRadiusAxis,
+  Radar,
+  RadarChart,
+  ResponsiveContainer,
+  Tooltip,
+} from "recharts";
+import { AlertTriangle } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { type DatabaseOption } from "@/services/api";
 import { useProdutividadeData } from "@/hooks/useProdutividadeData";
-import { AlertTriangle, Maximize2, Minimize2 } from "lucide-react";
+import ExecutiveKpiStrip from "@/components/executive/ExecutiveKpiStrip";
+import ExecutiveInsightCard from "@/components/executive/ExecutiveInsightCard";
+import ExecutiveRankingTable from "@/components/executive/ExecutiveRankingTable";
+import SectionHeader from "@/components/executive/SectionHeader";
 import {
   aggregateTotals,
   buFromSource,
-  calcConcentracao,
   calcConversao,
   calcCpc,
-  calcExcecoesPctQtd,
   calcTicketMedio,
   fmtBRL,
-  fmtNum,
-  fmtPct,
+  shortAgentName,
 } from "@/lib/metrics";
-import ExecutiveKpiStrip from "@/components/executive/ExecutiveKpiStrip";
-import EffortResultScatter, { type EffortResultDatum } from "@/components/executive/EffortResultScatter";
-import SectionHeader from "@/components/executive/SectionHeader";
-import type { ExecutiveKpi } from "@/types/executive";
-
-const TABLE_COLUMNS = [
-  { key: "agente", label: "Agente" },
-  { key: "qtd_acionamentos", label: "Acionamentos" },
-  { key: "cpc_percentual", label: "CPC %" },
-  { key: "qtd_acordos", label: "Acordos" },
-  { key: "taxa_conversao", label: "Conversão %" },
-  { key: "valor_acordos", label: "Valor Acordos" },
-];
+import type { ExecutiveKpi, InsightEngineOutput, RankingRow } from "@/types/executive";
 
 interface AgentComparisonDashboardProps {
   db: DatabaseOption;
@@ -38,134 +35,139 @@ interface AgentComparisonDashboardProps {
   dateTo?: string;
 }
 
+const COLOR_A = "hsl(43, 95%, 50%)";
+const COLOR_B = "hsl(199, 89%, 48%)";
+
+type AgentRow = ReturnType<typeof useProdutividadeData>["rows"][number];
+
+function kpisFor(row: AgentRow | null): ExecutiveKpi[] {
+  if (!row) return [];
+  const t = aggregateTotals([row]);
+  return [
+    { label: "Valor Acordos", value: t.valor_acordos, unit: "BRL", priority: "primary", formula: "Σ valor_acordos" },
+    { label: "Qtd Acordos", value: t.qtd_acordos, unit: "count", priority: "primary", formula: "Σ qtd_acordos" },
+    { label: "CPC %", value: calcCpc(t), unit: "%", priority: "primary", formula: "qtd_contatos / qtd_acionamentos" },
+    { label: "Conversão %", value: calcConversao(t), unit: "%", priority: "primary", formula: "qtd_acordos / qtd_acionamentos" },
+  ];
+}
+
+interface RadarPoint {
+  dim: string;
+  agentA: number;
+  agentB: number;
+  rawA: number;
+  rawB: number;
+  unit: "BRL" | "%" | "count";
+}
+
+function buildRadar(rowA: AgentRow | null, rowB: AgentRow | null, teamRows: AgentRow[]): RadarPoint[] {
+  if (!rowA || !rowB) return [];
+  const teamMax = (fn: (r: AgentRow) => number) => Math.max(1, ...teamRows.map(fn));
+  const ta = aggregateTotals([rowA]);
+  const tb = aggregateTotals([rowB]);
+  const maxValor = teamMax((r) => Number(r.valor_acordos || 0));
+  const maxQtd = teamMax((r) => Number(r.qtd_acordos || 0));
+  const maxCpc = Math.max(1, ...teamRows.map((r) => calcCpc(aggregateTotals([r]))));
+  const maxConv = Math.max(1, ...teamRows.map((r) => calcConversao(aggregateTotals([r]))));
+  const maxTicket = Math.max(1, ...teamRows.map((r) => calcTicketMedio(aggregateTotals([r]))));
+  const norm = (v: number, m: number) => Math.round((v / m) * 100);
+  return [
+    { dim: "Valor", agentA: norm(ta.valor_acordos, maxValor), agentB: norm(tb.valor_acordos, maxValor), rawA: ta.valor_acordos, rawB: tb.valor_acordos, unit: "BRL" },
+    { dim: "Qtd", agentA: norm(ta.qtd_acordos, maxQtd), agentB: norm(tb.qtd_acordos, maxQtd), rawA: ta.qtd_acordos, rawB: tb.qtd_acordos, unit: "count" },
+    { dim: "CPC", agentA: norm(calcCpc(ta), maxCpc), agentB: norm(calcCpc(tb), maxCpc), rawA: calcCpc(ta), rawB: calcCpc(tb), unit: "%" },
+    { dim: "Conversão", agentA: norm(calcConversao(ta), maxConv), agentB: norm(calcConversao(tb), maxConv), rawA: calcConversao(ta), rawB: calcConversao(tb), unit: "%" },
+    { dim: "Ticket", agentA: norm(calcTicketMedio(ta), maxTicket), agentB: norm(calcTicketMedio(tb), maxTicket), rawA: calcTicketMedio(ta), rawB: calcTicketMedio(tb), unit: "BRL" },
+  ];
+}
+
+function buildVerdict(rowA: AgentRow | null, rowB: AgentRow | null, labelA: string, labelB: string): InsightEngineOutput {
+  if (!rowA || !rowB) return { insight1: null, insight2: null, action: null, empty: true };
+  const ta = aggregateTotals([rowA]);
+  const tb = aggregateTotals([rowB]);
+  const cpcA = calcCpc(ta);
+  const cpcB = calcCpc(tb);
+  const convA = calcConversao(ta);
+  const convB = calcConversao(tb);
+  const valorDelta = ta.valor_acordos - tb.valor_acordos;
+  const efA = (cpcA + convA) / 2;
+  const efB = (cpcB + convB) / 2;
+  const efDelta = efA - efB;
+  const valorEmpate = Math.abs(valorDelta) < 100;
+  const efEmpate = Math.abs(efDelta) < 1;
+  if (valorEmpate && efEmpate) return { insight1: null, insight2: null, action: null, empty: true };
+  const winnerValor = valorDelta >= 0 ? labelA : labelB;
+  const winnerEf = efDelta >= 0 ? labelA : labelB;
+  const text = winnerValor === winnerEf
+    ? `${winnerValor} supera tanto em valor quanto em eficiência (CPC+Conversão).`
+    : `${winnerValor} supera em valor; ${winnerEf} supera em eficiência (CPC+Conversão).`;
+  return {
+    insight1: { text, severity: "positive", headline: "Veredito" },
+    insight2: null,
+    action: null,
+    empty: false,
+  };
+}
+
 export default function AgentComparisonDashboard({ db, dateFrom, dateTo }: AgentComparisonDashboardProps) {
   const { rows, loading, error, warnings } = useProdutividadeData(db, { dateFrom, dateTo });
-  const [isTableFullscreen, setIsTableFullscreen] = useState(false);
-  const [sortKey, setSortKey] = useState<string>("valor_acordos");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [agentA, setAgentA] = useState<string>("");
+  const [agentB, setAgentB] = useState<string>("");
 
-  useEffect(() => {
-    if (!isTableFullscreen) return;
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setIsTableFullscreen(false);
-    };
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    window.addEventListener("keydown", handleKey);
-    return () => {
-      document.body.style.overflow = prevOverflow;
-      window.removeEventListener("keydown", handleKey);
-    };
-  }, [isTableFullscreen]);
-
-  const totals = useMemo(() => aggregateTotals(rows), [rows]);
-
-  const tableData = useMemo(() => {
-    return rows.map((row) => {
-      const conv = row.qtd_acionamentos > 0 ? (row.qtd_acordos * 100) / row.qtd_acionamentos : 0;
-      return {
-        agente: row.NOME,
-        qtd_acionamentos: row.qtd_acionamentos,
-        cpc_percentual: row.cpc_percentual,
-        qtd_acordos: row.qtd_acordos,
-        taxa_conversao: conv,
-        valor_acordos: row.valor_acordos,
-      };
-    });
-  }, [rows]);
-
-  const sortedTable = useMemo(() => {
-    const arr = [...tableData];
-    arr.sort((a, b) => {
-      const av = a[sortKey as keyof typeof a];
-      const bv = b[sortKey as keyof typeof b];
-      if (typeof av === "number" && typeof bv === "number") {
-        return sortDir === "asc" ? av - bv : bv - av;
-      }
-      return sortDir === "asc"
-        ? String(av).localeCompare(String(bv), "pt-BR")
-        : String(bv).localeCompare(String(av), "pt-BR");
-    });
-    return arr;
-  }, [tableData, sortKey, sortDir]);
-
-  const scatterData: EffortResultDatum[] = useMemo(
+  const agentNames = useMemo(
     () =>
-      rows
-        .filter((r) => r.qtd_acionamentos > 0 || r.valor_acordos > 0)
-        .map((r) => ({
-          agente: r.NOME,
-          qtd_acionamentos: r.qtd_acionamentos,
-          valor_acordos: r.valor_acordos,
-          bu: buFromSource(r.source),
-        })),
+      Array.from(new Set(rows.map((r) => String(r.NOME || "").trim()).filter(Boolean)))
+        .sort((a, b) => a.localeCompare(b, "pt-BR")),
     [rows],
   );
 
-  const kpis = useMemo<ExecutiveKpi[]>(() => {
-    if (!rows.length) return [];
-    const valores = rows.map((r) => Number(r.valor_acordos || 0)).filter((v) => v > 0);
-    const sortedVals = [...valores].sort((a, b) => a - b);
-    const median = sortedVals.length === 0 ? 0 : sortedVals.length % 2 === 0
-      ? (sortedVals[sortedVals.length / 2 - 1] + sortedVals[sortedVals.length / 2]) / 2
-      : sortedVals[Math.floor(sortedVals.length / 2)];
-    const best = sortedVals[sortedVals.length - 1] ?? 0;
-    const worst = sortedVals[0] ?? 0;
-    const mean = valores.length ? valores.reduce((a, v) => a + v, 0) / valores.length : 0;
-    const variance = valores.length ? valores.reduce((a, v) => a + (v - mean) ** 2, 0) / valores.length : 0;
-    const std = Math.sqrt(variance);
-    return [
-      { label: "Melhor", value: best, unit: "BRL", priority: "primary", formula: "max(valor_acordos)" },
-      { label: "Mediana", value: median, unit: "BRL", priority: "primary", formula: "median(valor_acordos)" },
-      { label: "Pior (>0)", value: worst, unit: "BRL", priority: "primary", formula: "min(valor_acordos > 0)" },
-      { label: "Dispersão", value: std, unit: "BRL", priority: "primary", formula: "stddev(valor_acordos)" },
-      { label: "Concentração Top 3", value: calcConcentracao(rows, 3), unit: "%", priority: "secondary", formula: "Σ Top3 / Σ total" },
-      { label: "Conversão", value: calcConversao(totals), unit: "%", priority: "secondary", formula: "qtd_acordos / qtd_acionamentos" },
-      { label: "CPC", value: calcCpc(totals), unit: "%", priority: "secondary", formula: "qtd_contatos / qtd_acionamentos" },
-      { label: "Ticket médio", value: calcTicketMedio(totals), unit: "BRL", priority: "secondary", formula: "valor_acordos / qtd_acordos" },
-      { label: "Exceções (% qtd)", value: calcExcecoesPctQtd(totals), unit: "%", priority: "secondary", formula: "qtd_excecoes / qtd_acordos" },
-    ];
-  }, [rows, totals]);
+  useEffect(() => {
+    if (rows.length === 0) return;
+    const topByValor = [...rows]
+      .filter((r) => Number(r.valor_acordos || 0) > 0)
+      .sort((a, b) => Number(b.valor_acordos || 0) - Number(a.valor_acordos || 0));
+    if (!agentA && topByValor[0]) setAgentA(String(topByValor[0].NOME || "").trim());
+    if (!agentB && topByValor[1]) setAgentB(String(topByValor[1].NOME || "").trim());
+  }, [rows, agentA, agentB]);
 
-  // Top 3 opportunities/risks: opportunities = high effort, low result; risks = high exception rate
-  const opportunitiesAndRisks = useMemo(() => {
-    const opportunities = [...rows]
-      .filter((r) => r.qtd_acionamentos > 0)
-      .map((r) => ({
-        nome: r.NOME,
-        acionamentos: r.qtd_acionamentos,
-        valor: r.valor_acordos,
-        ratio: r.valor_acordos / r.qtd_acionamentos,
-      }))
-      .sort((a, b) => a.ratio - b.ratio)
-      .slice(0, 3);
-    const risks = [...rows]
-      .filter((r) => r.qtd_acordos > 0 && r.qtd_excecoes > 0)
-      .map((r) => ({
-        nome: r.NOME,
-        taxa: (r.qtd_excecoes * 100) / r.qtd_acordos,
-        qtd: r.qtd_excecoes,
-      }))
-      .sort((a, b) => b.taxa - a.taxa)
-      .slice(0, 3);
-    return { opportunities, risks };
-  }, [rows]);
+  const rowA = useMemo(() => rows.find((r) => String(r.NOME || "").trim() === agentA) ?? null, [rows, agentA]);
+  const rowB = useMemo(() => rows.find((r) => String(r.NOME || "").trim() === agentB) ?? null, [rows, agentB]);
 
-  const handleSort = (key: string) => {
-    if (sortKey === key) {
-      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-    } else {
-      setSortKey(key);
-      setSortDir("desc");
-    }
-  };
+  const buA = rowA ? buFromSource(rowA.source) : null;
+  const buB = rowB ? buFromSource(rowB.source) : null;
+  const teamRows = useMemo(() => {
+    if (!buA && !buB) return rows;
+    return rows.filter((r) => {
+      const bu = buFromSource(r.source);
+      return bu === buA || bu === buB;
+    });
+  }, [rows, buA, buB]);
+
+  const labelA = rowA ? shortAgentName(rowA.NOME) : "Agente A";
+  const labelB = rowB ? shortAgentName(rowB.NOME) : "Agente B";
+
+  const radarData = useMemo(() => buildRadar(rowA, rowB, teamRows), [rowA, rowB, teamRows]);
+  const verdict = useMemo(() => buildVerdict(rowA, rowB, labelA, labelB), [rowA, rowB, labelA, labelB]);
+
+  const ranking: RankingRow[] = useMemo(() => {
+    return [...teamRows]
+      .filter((r) => Number(r.valor_acordos || 0) > 0)
+      .sort((a, b) => Number(b.valor_acordos || 0) - Number(a.valor_acordos || 0))
+      .slice(0, 10)
+      .map((r, idx) => ({
+        rank: idx + 1,
+        label: shortAgentName(r.NOME),
+        primaryValue: Number(r.valor_acordos || 0),
+        primaryUnit: "BRL" as const,
+        secondaryValue: Number(r.qtd_acordos || 0),
+        secondaryUnit: "count" as const,
+      }));
+  }, [teamRows]);
 
   if (loading) {
     return (
       <div className="space-y-4">
         <Skeleton className="h-32 w-full" />
         <Skeleton className="h-80 w-full" />
-        <Skeleton className="h-48 w-full" />
       </div>
     );
   }
@@ -173,11 +175,9 @@ export default function AgentComparisonDashboard({ db, dateFrom, dateTo }: Agent
   if (error) {
     return (
       <Card className="border-destructive/50">
-        <CardContent className="py-6">
-          <div className="flex items-center gap-2 text-destructive">
-            <AlertTriangle className="h-5 w-5" />
-            <span>Erro ao carregar dados: {error}</span>
-          </div>
+        <CardContent className="py-6 flex items-center gap-2 text-destructive">
+          <AlertTriangle className="h-5 w-5" />
+          <span>Erro ao carregar dados: {error}</span>
         </CardContent>
       </Card>
     );
@@ -186,9 +186,7 @@ export default function AgentComparisonDashboard({ db, dateFrom, dateTo }: Agent
   if (!rows.length) {
     return (
       <Card>
-        <CardContent className="py-6">
-          <p className="text-muted-foreground">Nenhum dado disponível.</p>
-        </CardContent>
+        <CardContent className="py-6 text-muted-foreground">Nenhum dado disponível.</CardContent>
       </Card>
     );
   }
@@ -203,113 +201,83 @@ export default function AgentComparisonDashboard({ db, dateFrom, dateTo }: Agent
         </Card>
       )}
 
-      <SectionHeader title="Síntese comparativa" description="Resumo de performance entre agentes (best, mediana, pior, dispersão)." />
-      <ExecutiveKpiStrip kpis={kpis} />
+      <ExecutiveInsightCard data={verdict} title={`${labelA} × ${labelB}`} />
 
-      <SectionHeader title="Esforço × Resultado" description="Cada ponto é um agente. Linhas tracejadas = mediana. Quadrante superior-esquerdo = estrelas; superior-direito = alto-volume." />
-      <EffortResultScatter title="Acionamentos × Valor de Acordos" data={scatterData} />
-
-      <SectionHeader title="Detalhamento por agente" description="Ordene clicando nas colunas." />
-      <Card className={isTableFullscreen ? "fixed inset-0 z-50 rounded-none border-0 flex flex-col bg-background" : ""}>
-        <CardHeader className="pb-2 flex flex-row items-center justify-between">
-          <CardTitle className="text-base font-semibold">Tabela comparativa</CardTitle>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            onClick={() => setIsTableFullscreen((v) => !v)}
-            title={isTableFullscreen ? "Sair da tela cheia (Esc)" : "Expandir"}
-          >
-            {isTableFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-          </Button>
-        </CardHeader>
-        <CardContent className={isTableFullscreen ? "flex-1 overflow-hidden" : ""}>
-          <div className={isTableFullscreen ? "overflow-auto h-full" : "overflow-auto max-h-96"}>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  {TABLE_COLUMNS.map((col) => (
-                    <TableHead
-                      key={col.key}
-                      className="text-xs font-semibold whitespace-nowrap cursor-pointer select-none"
-                      onClick={() => handleSort(col.key)}
-                    >
-                      {col.label}
-                      {sortKey === col.key ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
-                    </TableHead>
-                  ))}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {sortedTable.map((row, i) => (
-                  <TableRow key={`${row.agente}-${i}`}>
-                    {TABLE_COLUMNS.map((col) => {
-                      const val = row[col.key as keyof typeof row];
-                      let displayValue: string = "—";
-                      if (col.key === "valor_acordos" && typeof val === "number") displayValue = fmtBRL(val);
-                      else if ((col.key === "cpc_percentual" || col.key === "taxa_conversao") && typeof val === "number") displayValue = fmtPct(val);
-                      else if (typeof val === "number") displayValue = fmtNum(val);
-                      else if (val != null) displayValue = String(val);
-                      const isNumeric = col.key !== "agente";
-                      return (
-                        <TableCell
-                          key={col.key}
-                          className={`text-sm ${isNumeric ? "tabular-nums whitespace-nowrap text-right" : "max-w-[220px] truncate"}`}
-                          title={displayValue}
-                        >
-                          {displayValue}
-                        </TableCell>
-                      );
-                    })}
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
-
-      <SectionHeader title="Quem priorizar hoje" description="Top 3 oportunidades (mais esforço por menos resultado) e Top 3 riscos (maior taxa de exceções)." />
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <SectionHeader title="Comparação 1:1" description="Selecione dois agentes; KPIs visuais sem delta." />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card>
           <CardHeader className="pb-2 pt-3 px-4">
-            <CardTitle className="text-base font-semibold">Top 3 Oportunidades</CardTitle>
+            <CardTitle className="text-sm uppercase tracking-wide text-amber-700 font-semibold">Agente A</CardTitle>
+            <Select value={agentA} onValueChange={setAgentA}>
+              <SelectTrigger><SelectValue placeholder="Selecionar agente" /></SelectTrigger>
+              <SelectContent>
+                {agentNames.map((n) => <SelectItem key={n} value={n}>{n}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </CardHeader>
-          <CardContent className="px-4 pb-3 space-y-2">
-            {opportunitiesAndRisks.opportunities.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Sem dados suficientes.</p>
-            ) : (
-              opportunitiesAndRisks.opportunities.map((o, i) => (
-                <div key={`opp-${i}`} className="flex items-center justify-between text-sm">
-                  <span className="truncate">{i + 1}. {o.nome}</span>
-                  <span className="text-muted-foreground tabular-nums shrink-0">
-                    {fmtNum(o.acionamentos)} acc · {fmtBRL(o.valor)}
-                  </span>
-                </div>
-              ))
-            )}
+          <CardContent className="px-4 pb-4">
+            <ExecutiveKpiStrip kpis={kpisFor(rowA)} />
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2 pt-3 px-4">
-            <CardTitle className="text-base font-semibold">Top 3 Riscos (taxa de exceções)</CardTitle>
+            <CardTitle className="text-sm uppercase tracking-wide text-sky-700 font-semibold">Agente B</CardTitle>
+            <Select value={agentB} onValueChange={setAgentB}>
+              <SelectTrigger><SelectValue placeholder="Selecionar agente" /></SelectTrigger>
+              <SelectContent>
+                {agentNames.map((n) => <SelectItem key={n} value={n}>{n}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </CardHeader>
-          <CardContent className="px-4 pb-3 space-y-2">
-            {opportunitiesAndRisks.risks.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Sem exceções relevantes.</p>
-            ) : (
-              opportunitiesAndRisks.risks.map((r, i) => (
-                <div key={`risk-${i}`} className="flex items-center justify-between text-sm">
-                  <span className="truncate">{i + 1}. {r.nome}</span>
-                  <span className="text-amber-600 tabular-nums shrink-0">
-                    {fmtPct(r.taxa)} ({fmtNum(r.qtd)})
-                  </span>
-                </div>
-              ))
-            )}
+          <CardContent className="px-4 pb-4">
+            <ExecutiveKpiStrip kpis={kpisFor(rowB)} />
           </CardContent>
         </Card>
       </div>
+
+      <SectionHeader title="Perfil multidimensional" description="5 dimensões normalizadas pelo máximo da equipe (BU dos selecionados). 100 = melhor da equipe." />
+      <Card>
+        <CardContent className="px-4 pb-4 pt-4">
+          {radarData.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Selecione dois agentes para ver o radar.</p>
+          ) : (
+            <ResponsiveContainer width="100%" height={360}>
+              <RadarChart data={radarData} outerRadius="80%">
+                <PolarGrid stroke="hsl(var(--border))" />
+                <PolarAngleAxis dataKey="dim" tick={{ fontSize: 12, fontWeight: 600 }} />
+                <PolarRadiusAxis angle={90} domain={[0, 100]} tick={{ fontSize: 10 }} />
+                <Radar name={labelA} dataKey="agentA" stroke={COLOR_A} fill={COLOR_A} fillOpacity={0.35} />
+                <Radar name={labelB} dataKey="agentB" stroke={COLOR_B} fill={COLOR_B} fillOpacity={0.35} />
+                <Tooltip
+                  content={({ active, payload }) => {
+                    if (!active || !payload?.length) return null;
+                    const p = payload[0]?.payload as RadarPoint | undefined;
+                    if (!p) return null;
+                    const fmt = (v: number, u: RadarPoint["unit"]) =>
+                      u === "BRL" ? fmtBRL(v) : u === "%" ? `${v.toFixed(1)}%` : v.toFixed(0);
+                    return (
+                      <div className="rounded-md border bg-background p-2 text-xs space-y-1 shadow-md">
+                        <p className="font-semibold">{p.dim}</p>
+                        <p style={{ color: COLOR_A }}>{labelA}: <span className="tabular-nums font-semibold">{fmt(p.rawA, p.unit)}</span></p>
+                        <p style={{ color: COLOR_B }}>{labelB}: <span className="tabular-nums font-semibold">{fmt(p.rawB, p.unit)}</span></p>
+                      </div>
+                    );
+                  }}
+                />
+              </RadarChart>
+            </ResponsiveContainer>
+          )}
+        </CardContent>
+      </Card>
+
+      <ExecutiveRankingTable
+        title="Top 10 da equipe comum (BU dos selecionados)"
+        rows={ranking}
+        primaryColumnLabel="Valor Acordos"
+        secondaryColumnLabel="Qtd Acordos"
+        empty={ranking.length === 0}
+        highlightLabels={[labelA, labelB]}
+      />
     </div>
   );
 }

@@ -2,9 +2,10 @@ import { AlertTriangle, ArrowDownRight, ArrowRight, ArrowUpRight } from "lucide-
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { fmtByUnit } from "@/lib/metrics";
+import { fmtByUnit, formatBRLCompact } from "@/lib/metrics";
 import type { ExecutiveKpi } from "@/types/executive";
 import { cn } from "@/lib/utils";
+import { KpiDeltaBadge } from "./KpiDeltaBadge";
 
 interface ExecutiveKpiStripProps {
   kpis: ExecutiveKpi[];
@@ -55,21 +56,13 @@ export function ExecutiveKpiStrip({ kpis, loading, error }: ExecutiveKpiStripPro
 
   return (
     <TooltipProvider delayDuration={200}>
-      <div className="space-y-3">
-        {primary.length > 0 && (
-          <div className={cn("grid gap-3 grid-cols-2", `md:grid-cols-${Math.min(primary.length, 6)}`)}>
-            {primary.map((k) => (
-              <KpiCard key={k.label} kpi={k} highlight />
-            ))}
-          </div>
-        )}
-        {secondary.length > 0 && (
-          <div className={cn("grid gap-3 grid-cols-2 md:grid-cols-3", secondary.length >= 4 ? "xl:grid-cols-6" : `xl:grid-cols-${secondary.length}`)}>
-            {secondary.map((k) => (
-              <KpiCard key={k.label} kpi={k} />
-            ))}
-          </div>
-        )}
+      <div className="grid gap-3 grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
+        {primary.map((k) => (
+          <KpiCard key={k.label} kpi={k} highlight />
+        ))}
+        {secondary.map((k) => (
+          <KpiCard key={k.label} kpi={k} />
+        ))}
       </div>
     </TooltipProvider>
   );
@@ -77,20 +70,21 @@ export function ExecutiveKpiStrip({ kpis, loading, error }: ExecutiveKpiStripPro
 
 function KpiCard({ kpi, highlight }: { kpi: ExecutiveKpi; highlight?: boolean }) {
   const TrendIcon = kpi.trend ? TREND_ICON[kpi.trend] : null;
+  const unitLabel = kpi.unit === "BRL" ? "BRL" : kpi.unit === "%" ? "%" : "";
   return (
     <Card
       className={cn(
-        "min-w-0 transition-shadow",
-        highlight ? "border-primary/40 shadow-sm" : "",
+        "min-w-0 rounded-lg border-border bg-card",
+        highlight ? "col-span-2 p-5" : "col-span-1 p-4",
       )}
     >
-      <CardHeader className="pb-1 pt-3 px-3">
+      <CardHeader className="p-0 mb-0 flex flex-row items-center justify-between space-y-0">
         <Tooltip>
           <TooltipTrigger asChild>
             <CardTitle
               className={cn(
-                "text-xs font-semibold uppercase tracking-wide leading-tight truncate cursor-default",
-                highlight ? "text-black dark:text-white" : "text-muted-foreground",
+                "font-semibold uppercase tracking-[0.12em] leading-tight truncate cursor-default",
+                highlight ? "text-[11px] text-muted-foreground" : "text-[10px] text-muted-foreground",
               )}
             >
               {kpi.label}
@@ -102,25 +96,42 @@ function KpiCard({ kpi, highlight }: { kpi: ExecutiveKpi; highlight?: boolean })
             {!kpi.formula && !kpi.hint ? <p>{kpi.label}</p> : null}
           </TooltipContent>
         </Tooltip>
+        {unitLabel && (
+          <span className="text-[11px] font-medium text-muted-foreground/70 shrink-0">
+            {unitLabel}
+          </span>
+        )}
       </CardHeader>
-      <CardContent className="px-3 pb-3 flex items-end justify-between gap-2">
-        <span
-          className={cn(
-            "block font-bold tabular-nums truncate",
-            highlight ? "text-2xl md:text-3xl text-foreground" : "text-xl text-foreground",
-          )}
-        >
-          {fmtByUnit(kpi.value, kpi.unit)}
-        </span>
-        {TrendIcon && (
-          <TrendIcon
+      <CardContent className="p-0 space-y-2">
+        <div className={cn("flex items-end justify-between gap-2", highlight ? "mt-3" : "mt-2") }>
+          <span
             className={cn(
-              "h-4 w-4 shrink-0",
-              kpi.trend === "up" && "text-emerald-500",
-              kpi.trend === "down" && "text-rose-500",
-              kpi.trend === "stable" && "text-muted-foreground",
+              "block font-bold tabular-nums leading-none tracking-tight text-foreground",
+              highlight ? "text-3xl md:text-4xl" : "text-xl md:text-2xl font-semibold",
             )}
+          >
+            {kpi.unit === "BRL" ? formatBRLCompact(kpi.value) : fmtByUnit(kpi.value, kpi.unit)}
+          </span>
+          {TrendIcon && !kpi.delta && (
+            <TrendIcon
+              className={cn(
+                "h-4 w-4 shrink-0",
+                kpi.trend === "up" && "text-success",
+                kpi.trend === "down" && "text-danger",
+                kpi.trend === "stable" && "text-muted-foreground",
+              )}
+            />
+          )}
+        </div>
+        {kpi.delta ? (
+          <KpiDeltaBadge
+            value={kpi.delta.value}
+            direction={kpi.delta.direction}
+            baselineLabel={kpi.delta.baselineLabel}
+            inverted={kpi.delta.inverted}
           />
+        ) : (
+          <span className="block text-xs text-muted-foreground/60">—</span>
         )}
       </CardContent>
     </Card>

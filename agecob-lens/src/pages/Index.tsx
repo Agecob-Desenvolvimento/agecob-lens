@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useQueries } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { AppSidebar } from "@/components/AppSidebar";
 import { useGlobalFilters } from "@/contexts/GlobalFiltersContext";
@@ -8,6 +9,10 @@ import { useProdutividadeData } from "@/hooks/useProdutividadeData";
 import {
   type DatabaseOption,
   fetchPrimeiraParcelaDia,
+  fetchPrimeiraParcelaPorAgente,
+  fetchAcordosPorPortfolio,
+  fetchExcecoesPorPortfolio,
+  fetchRejeitadosPorPortfolio,
 } from "@/services/api";
 import { trackEvent } from "@/services/analytics";
 import ExecutiveHeader from "@/components/executive/ExecutiveHeader";
@@ -18,6 +23,8 @@ import ApiDebugBanner from "@/components/executive/ApiDebugBanner";
 import BuValueChart, { type BuValueDatum } from "@/components/executive/BuValueChart";
 import RitmoDiaCard from "@/components/executive/RitmoDiaCard";
 import BuEfficiencyChart, { type BuEfficiencyDatum } from "@/components/executive/BuEfficiencyChart";
+import SectionHeader from "@/components/executive/SectionHeader";
+import HomeBarChart from "@/components/executive/HomeBarChart";
 import {
   aggregateTotals,
   buFromSource,
@@ -136,14 +143,10 @@ export default function Index() {
         formula: "Σ primeira_parcela_do_dia",
         hint: "Entrada de caixa já garantida no dia.",
       },
-      { label: "CPC %", value: cpc, unit: "%", priority: "primary", formula: "qtd_contatos / qtd_acionamentos", hint: "Contatos efetivos por acionamento." },
-      { label: "Conversão %", value: conv, unit: "%", priority: "primary", formula: "qtd_acordos / qtd_acionamentos", hint: "Acordos fechados por acionamento." },
-      { label: "Qtd Acordos", value: totals.qtd_acordos, unit: "count", priority: "secondary", formula: "Σ qtd_acordos" },
-      { label: "Qtd Acionamentos", value: totals.qtd_acionamentos, unit: "count", priority: "secondary", formula: "Σ qtd_acionamentos" },
+      { label: "CPC %", value: cpc, unit: "%", priority: "secondary", formula: "qtd_contatos / qtd_acionamentos", hint: "Contatos efetivos por acionamento." },
+      { label: "Conversão %", value: conv, unit: "%", priority: "secondary", formula: "qtd_acordos / qtd_acionamentos", hint: "Acordos fechados por acionamento." },
       { label: "Ticket Médio", value: ticket, unit: "BRL", priority: "secondary", formula: "valor_acordos / qtd_acordos" },
-      { label: "Exceções (valor)", value: totals.valor_excecoes, unit: "BRL", priority: "secondary", formula: "Σ valor_excecoes" },
-      { label: "1ª Parcela em Exceções", value: totals.valor_primeira_parcela_excecoes, unit: "BRL", priority: "secondary", formula: "Σ p1 onde status ∈ exceção" },
-      { label: "Acordos em Exceções", value: totals.qtd_excecoes, unit: "count", priority: "secondary", formula: "Σ qtd_excecoes" },
+      { label: "Qtd Acordos", value: totals.qtd_acordos, unit: "count", priority: "secondary", formula: "Σ qtd_acordos" },
     ];
   }, [rows, totals, primeiraParcelaDia]);
 
@@ -191,6 +194,62 @@ export default function Index() {
   const cpcAvg = useMemo(() => calcCpc(totals), [totals]);
   const convAvg = useMemo(() => calcConversao(totals), [totals]);
 
+  // ── Sections data (Financeiro, Eficiência, Risco) ──────────────────
+  const [qPpAgente, qAcdPort, qExcPort, qRejPort] = useQueries({
+    queries: [
+      {
+        queryKey: ["home", "primeira-parcela-por-agente", selectedDatabase, dateFrom, dateTo] as const,
+        queryFn: () => fetchPrimeiraParcelaPorAgente(selectedDatabase, undefined, dateFrom, dateTo),
+      },
+      {
+        queryKey: ["home", "acordos-por-portfolio", selectedDatabase, dateFrom, dateTo] as const,
+        queryFn: () => fetchAcordosPorPortfolio(selectedDatabase, dateFrom, dateTo),
+      },
+      {
+        queryKey: ["home", "excecoes-por-portfolio", selectedDatabase, dateFrom, dateTo] as const,
+        queryFn: () => fetchExcecoesPorPortfolio(selectedDatabase, dateFrom, dateTo),
+      },
+      {
+        queryKey: ["home", "rejeitados-por-portfolio", selectedDatabase, dateFrom, dateTo] as const,
+        queryFn: () => fetchRejeitadosPorPortfolio(selectedDatabase, dateFrom, dateTo),
+      },
+    ],
+  });
+
+  const top10PrimeiraParcela = useMemo(() => {
+    const rows = qPpAgente.data?.data ?? [];
+    return [...rows]
+      .sort((a, b) => Number(b.valor_primeira_parcela || 0) - Number(a.valor_primeira_parcela || 0))
+      .slice(0, 10)
+      .map((r) => ({ label: shortAgentName(r.agente), value: Number(r.valor_primeira_parcela || 0) }));
+  }, [qPpAgente.data]);
+
+  const primeiraParcelaPorPortfolio = useMemo(() => {
+    const rows = qAcdPort.data?.data ?? [];
+    return [...rows]
+      .sort((a, b) => Number(b.valor_acordos || 0) - Number(a.valor_acordos || 0))
+      .slice(0, 10)
+      .map((r) => ({ label: r.portfolio_name, value: Number(r.valor_acordos || 0) }));
+  }, [qAcdPort.data]);
+
+  const excecoesPorPortfolio = useMemo(() => {
+    const rows = qExcPort.data?.data ?? [];
+    return [...rows]
+      .filter((r) => Number(r.qtd_excecoes || 0) > 0)
+      .sort((a, b) => Number(b.qtd_excecoes || 0) - Number(a.qtd_excecoes || 0))
+      .slice(0, 10)
+      .map((r) => ({ label: r.portfolio_name, value: Number(r.qtd_excecoes || 0) }));
+  }, [qExcPort.data]);
+
+  const rejeitadosPorPortfolio = useMemo(() => {
+    const rows = qRejPort.data?.data ?? [];
+    return [...rows]
+      .filter((r) => Number(r.qtd_rejeitados || 0) > 0)
+      .sort((a, b) => Number(b.qtd_rejeitados || 0) - Number(a.qtd_rejeitados || 0))
+      .slice(0, 10)
+      .map((r) => ({ label: r.portfolio_name, value: Number(r.qtd_rejeitados || 0) }));
+  }, [qRejPort.data]);
+
   const filterChips = [
     { label: "Categoria", value: category },
   ];
@@ -209,7 +268,8 @@ export default function Index() {
             filters={filterChips}
           />
 
-          <div className="flex-1 bg-background p-6 space-y-6 overflow-auto">
+          <div className="flex-1 bg-background overflow-auto">
+            <div className="mx-auto max-w-[1280px] w-full p-6 space-y-6">
             {/* API debug banner — aparece quando há falha de conexão */}
             <ApiDebugBanner
               error={loadError}
@@ -217,33 +277,93 @@ export default function Index() {
               onRetry={guardedRefresh}
             />
 
-            {/* Resumo do Dia + Ritmo do Dia (merged) */}
-            <Card>
-              <ExecutiveInsightCard data={readout} loading={loading} embedded />
-              <div className="border-t" />
-              <RitmoDiaCard db={selectedDatabase} embedded />
-            </Card>
+            {/* Resumo do Dia + Ritmo do Dia (merged). Hero omitido em neutro: render RitmoDia standalone. */}
+            {!loading && readout.empty ? (
+              <RitmoDiaCard db={selectedDatabase} />
+            ) : (
+              <Card>
+                <ExecutiveInsightCard data={readout} loading={loading} embedded />
+                <div className="border-t" />
+                <RitmoDiaCard db={selectedDatabase} embedded />
+              </Card>
+            )}
 
             {/* KPIs */}
             <ExecutiveKpiStrip kpis={kpis} loading={loading} />
 
-            {/* BU comparisons */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <BuValueChart
-                title="Valor por Unidade de Negócio"
-                data={buData.valueData}
-                empty={buData.valueData.length === 0}
-                loading={loading}
+            {/* Financeiro */}
+            <section className="space-y-4">
+              <SectionHeader
+                title="Financeiro"
+                unit="BRL"
+                description="Resultados em valor de acordos e entrada de caixa (1ª parcela)."
               />
-              <BuEfficiencyChart
-                title="CPC % e Conversão % por Unidade de Negócio"
-                data={buData.effData}
-                cpcAverage={cpcAvg}
-                conversaoAverage={convAvg}
-                empty={buData.effData.length === 0}
-                loading={loading}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <BuValueChart
+                  title="Valor por Unidade de Negócio"
+                  data={buData.valueData}
+                  empty={buData.valueData.length === 0}
+                  loading={loading}
+                />
+                <HomeBarChart
+                  title="Top 10 Agentes por 1ª Parcela"
+                  data={top10PrimeiraParcela}
+                  color="hsl(152 60% 45%)"
+                  formatValue={(v) => fmtBRL(v, { compact: true })}
+                  loading={qPpAgente.isLoading}
+                />
+              </div>
+            </section>
+
+            {/* Eficiência */}
+            <section className="space-y-4">
+              <SectionHeader
+                title="Eficiência"
+                unit="%"
+                description="Esforço (acionamentos/contatos) e taxas (CPC/Conversão) por unidade de negócio."
               />
-            </div>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <BuEfficiencyChart
+                  title="CPC % e Conversão % por Unidade de Negócio"
+                  data={buData.effData}
+                  cpcAverage={cpcAvg}
+                  conversaoAverage={convAvg}
+                  empty={buData.effData.length === 0}
+                  loading={loading}
+                />
+                <HomeBarChart
+                  title="Valor de Acordos por Portfólio"
+                  data={primeiraParcelaPorPortfolio}
+                  color="hsl(217 91% 60%)"
+                  formatValue={(v) => fmtBRL(v, { compact: true })}
+                  loading={qAcdPort.isLoading}
+                />
+              </div>
+            </section>
+
+            {/* Risco / Qualidade */}
+            <section className="space-y-4">
+              <SectionHeader
+                title="Risco / Qualidade"
+                description="Exceções e rejeitados por portfólio."
+              />
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <HomeBarChart
+                  title="Exceções por Portfólio (Qtd)"
+                  data={excecoesPorPortfolio}
+                  color="hsl(347 77% 50%)"
+                  formatValue={(v) => String(v)}
+                  loading={qExcPort.isLoading}
+                />
+                <HomeBarChart
+                  title="Rejeitados por Portfólio (Qtd)"
+                  data={rejeitadosPorPortfolio}
+                  color="hsl(24 95% 53%)"
+                  formatValue={(v) => String(v)}
+                  loading={qRejPort.isLoading}
+                />
+              </div>
+            </section>
 
             {/* Top agentes (single consolidated ranking) */}
             <ExecutiveRankingTable
@@ -254,6 +374,7 @@ export default function Index() {
               loading={loading}
               empty={topByValor.length === 0}
             />
+            </div>
           </div>
         </div>
       </div>

@@ -45,9 +45,12 @@ export function ExecutiveHeader({
           </button>
         ) : null}
       </div>
-      <h1 className="text-base font-semibold text-foreground tracking-tight truncate flex-1 min-w-0">
-        {title}
-        <span className="ml-2 text-[10px] font-mono font-normal text-muted-foreground align-middle" title="Versão do dashboard (git short SHA)">
+      <h1 className="text-base font-semibold text-foreground tracking-tight truncate flex-1 min-w-0 flex items-center gap-2">
+        <span className="truncate">{title}</span>
+        <span
+          className="text-[11px] font-mono font-normal text-muted-foreground bg-muted px-2 py-[2px] rounded shrink-0"
+          title="Versão do dashboard (git short SHA)"
+        >
           v{__COMMIT_SHA__}
         </span>
       </h1>

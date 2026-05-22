@@ -13,15 +13,22 @@ import { type DatabaseOption, fetchPrimeiraParcelaDia, fetchPrimeiraParcelaPorAg
 import { trackEvent } from "@/services/analytics";
 import ExecutiveHeader from "@/components/executive/ExecutiveHeader";
 import ExecutiveKpiStrip from "@/components/executive/ExecutiveKpiStrip";
+import ExecutiveInsightCard from "@/components/executive/ExecutiveInsightCard";
+import ExecutiveRankingTable from "@/components/executive/ExecutiveRankingTable";
 import ApiDebugBanner from "@/components/executive/ApiDebugBanner";
+import BlockHeader from "@/components/executive/BlockHeader";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   aggregateTotals,
+  buFromSource,
   calcConversao,
   calcCpc,
   calcExcecoesPctValor,
   calcTicketMedio,
+  fmtBRL,
+  shortAgentName,
 } from "@/lib/metrics";
-import type { ExecutiveKpi } from "@/types/executive";
+import type { ExecutiveKpi, InsightEngineOutput, RankingRow } from "@/types/executive";
 
 const DetalhamentoChartsPanel = lazy(() => import("@/components/charts/DetalhamentoChartsPanel"));
 
@@ -143,6 +150,83 @@ export default function DetalhamentoAgentes() {
     ];
   }, [totals, selectedAgent, primeiraParcelaSelecionada]);
 
+  const selectedAgentBu = useMemo(() => {
+    if (selectedAgent === "Todos") return null;
+    const row = rows.find((r) => String(r.NOME || "").trim() === selectedAgent);
+    return row ? buFromSource(row.source) : null;
+  }, [rows, selectedAgent]);
+
+  const buRows = useMemo(() => {
+    if (!selectedAgentBu) return [];
+    return rows.filter((r) => buFromSource(r.source) === selectedAgentBu);
+  }, [rows, selectedAgentBu]);
+
+  const teamRanking: RankingRow[] = useMemo(() => {
+    if (selectedAgent === "Todos") return [];
+    return [...buRows]
+      .filter((r) => Number(r.valor_acordos || 0) > 0)
+      .sort((a, b) => Number(b.valor_acordos || 0) - Number(a.valor_acordos || 0))
+      .slice(0, 10)
+      .map((row, idx) => ({
+        rank: idx + 1,
+        label: shortAgentName(row.NOME),
+        primaryValue: Number(row.valor_acordos || 0),
+        primaryUnit: "BRL" as const,
+        secondaryValue: Number(row.qtd_acordos || 0),
+        secondaryUnit: "count" as const,
+      }));
+  }, [buRows, selectedAgent]);
+
+  const selectedShortLabel = useMemo(
+    () => (selectedAgent === "Todos" ? undefined : shortAgentName(selectedAgent)),
+    [selectedAgent],
+  );
+
+  const percentiles = useMemo(() => {
+    if (selectedAgent === "Todos" || buRows.length === 0) return null;
+    const sortedByValor = [...buRows].sort((a, b) => Number(b.valor_acordos || 0) - Number(a.valor_acordos || 0));
+    const valorRank = sortedByValor.findIndex((r) => String(r.NOME || "").trim() === selectedAgent);
+    const buWithAcionamentos = buRows.filter((r) => Number(r.qtd_acionamentos || 0) >= 10);
+    const sortedByCpc = [...buWithAcionamentos]
+      .map((r) => ({ nome: String(r.NOME || "").trim(), cpc: calcCpc({ qtd_contatos: Number(r.qtd_contatos || 0), qtd_acionamentos: Number(r.qtd_acionamentos || 0) }) }))
+      .sort((a, b) => b.cpc - a.cpc);
+    const cpcRank = sortedByCpc.findIndex((r) => r.nome === selectedAgent);
+    const valorPct = valorRank >= 0 ? Math.round(((valorRank + 1) / sortedByValor.length) * 100) : null;
+    const cpcPct = cpcRank >= 0 ? Math.round(((cpcRank + 1) / sortedByCpc.length) * 100) : null;
+    return { valorPct, cpcPct, totalBU: buRows.length };
+  }, [buRows, selectedAgent]);
+
+  const insight: InsightEngineOutput = useMemo(() => {
+    if (selectedAgent === "Todos" || buRows.length === 0) {
+      return { insight1: null, insight2: null, action: null, empty: true };
+    }
+    const agentRows = rows.filter((r) => String(r.NOME || "").trim() === selectedAgent);
+    const agentTotals = aggregateTotals(agentRows);
+    const buTotals = aggregateTotals(buRows);
+    const agentTicket = calcTicketMedio(agentTotals);
+    const buTicket = calcTicketMedio(buTotals);
+    if (buTicket <= 0 || agentTicket <= 0) {
+      return { insight1: null, insight2: null, action: null, empty: true };
+    }
+    const deltaPct = ((agentTicket - buTicket) / buTicket) * 100;
+    const absPct = Math.abs(deltaPct);
+    if (absPct < 10) {
+      return { insight1: null, insight2: null, action: null, empty: true };
+    }
+    const direction = deltaPct >= 0 ? "acima" : "abaixo";
+    const severity = deltaPct >= 0 ? "positive" : "critical";
+    return {
+      insight1: {
+        text: `Ticket médio ${fmtBRL(agentTicket)} vs. ${fmtBRL(buTicket)} (média ${selectedAgentBu}).`,
+        severity,
+        headline: `${absPct.toFixed(0)}% ${direction} da média`,
+      },
+      insight2: null,
+      action: null,
+      empty: false,
+    };
+  }, [rows, buRows, selectedAgent, selectedAgentBu]);
+
   const handleAgentChange = (agent: string) => {
     trackEvent("filter_changed", { page: "/detalhamento-agentes", filter_name: "agente", value: agent === "Todos" ? "todos" : "selecionado" });
     setSelectedAgent(agent);
@@ -218,24 +302,94 @@ export default function DetalhamentoAgentes() {
               {/* KPIs moved to top */}
               <ExecutiveKpiStrip kpis={kpis} loading={loading} />
 
-              {/* Charts */}
-              <LazyVisibleSection
-                id="detalhamento-charts"
-                scope="/detalhamento-agentes"
-                priority={ROUTE_LOAD_PRIORITY["/detalhamento-agentes"].charts}
-                fallback={<Skeleton className="h-64 w-full" />}
-              >
-                <Suspense fallback={<Skeleton className="h-64 w-full" />}>
-                  <DetalhamentoChartsPanel
-                    rows={rows}
-                    selectedAgent={selectedAgent}
-                    db={selectedDatabase}
-                    primeiraParcelaSelecionada={primeiraParcelaSelecionada}
-                    dateFrom={dateFrom}
-                    dateTo={dateTo}
+              {/* Bloco 1 — Diagnóstico Individual */}
+              <section>
+                <BlockHeader
+                  number="1"
+                  title="Diagnóstico Individual"
+                  description="Entender o desempenho do agente — comparativo vs equipe e posição no ranking."
+                />
+                <div className="space-y-4">
+                  <ExecutiveInsightCard
+                    data={insight}
+                    loading={loading}
+                    title={`Comparação · ${selectedShortLabel ?? ""}`}
                   />
-                </Suspense>
-              </LazyVisibleSection>
+                  {percentiles && (percentiles.valorPct != null || percentiles.cpcPct != null) ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {percentiles.valorPct != null ? (
+                        <Card>
+                          <CardContent className="px-4 py-3">
+                            <p className="text-xs uppercase tracking-wide text-muted-foreground font-semibold">
+                              Posição em Valor de Acordos
+                            </p>
+                            <p className="text-2xl font-bold tabular-nums">
+                              Top {percentiles.valorPct}%
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              dentre {percentiles.totalBU} agentes da BU {selectedAgentBu}
+                            </p>
+                          </CardContent>
+                        </Card>
+                      ) : null}
+                      {percentiles.cpcPct != null ? (
+                        <Card>
+                          <CardContent className="px-4 py-3">
+                            <p className="text-xs uppercase tracking-wide text-muted-foreground font-semibold">
+                              Posição em CPC
+                            </p>
+                            <p className="text-2xl font-bold tabular-nums">
+                              Top {percentiles.cpcPct}%
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              contatos por acionamento — BU {selectedAgentBu}
+                            </p>
+                          </CardContent>
+                        </Card>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
+              </section>
+
+              {/* Bloco 2 — Contexto Comparativo */}
+              <section>
+                <BlockHeader
+                  number="2"
+                  title="Contexto Comparativo"
+                  description="Onde cada agente está no time — padrões visuais e validação estatística."
+                />
+                <div className="space-y-4">
+                  {selectedAgent !== "Todos" ? (
+                    <ExecutiveRankingTable
+                      title={`Top 10 BU ${selectedAgentBu ?? ""} por Valor de Acordos`}
+                      rows={teamRanking}
+                      primaryColumnLabel="Valor Acordos"
+                      secondaryColumnLabel="Qtd Acordos"
+                      loading={loading}
+                      empty={teamRanking.length === 0}
+                      highlightLabel={selectedShortLabel}
+                    />
+                  ) : null}
+                  <LazyVisibleSection
+                    id="detalhamento-charts"
+                    scope="/detalhamento-agentes"
+                    priority={ROUTE_LOAD_PRIORITY["/detalhamento-agentes"].charts}
+                    fallback={<Skeleton className="h-64 w-full" />}
+                  >
+                    <Suspense fallback={<Skeleton className="h-64 w-full" />}>
+                      <DetalhamentoChartsPanel
+                        rows={rows}
+                        selectedAgent={selectedAgent}
+                        db={selectedDatabase}
+                        primeiraParcelaSelecionada={primeiraParcelaSelecionada}
+                        dateFrom={dateFrom}
+                        dateTo={dateTo}
+                      />
+                    </Suspense>
+                  </LazyVisibleSection>
+                </div>
+              </section>
             </main>
           </div>
         </div>

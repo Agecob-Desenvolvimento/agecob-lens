@@ -1,5 +1,4 @@
 import { lazy, Suspense, useState } from "react";
-import FilterBar from "@/components/FilterBar";
 import { type DatabaseOption } from "@/services/api";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
@@ -20,7 +19,6 @@ export default function ComparacaoAgentes() {
       : category === "CONSUMER"
         ? "COBwebRCBCONSUMER"
         : "todos";
-  const [carteira, setCarteira] = useState("Geral");
   const [refreshTick, setRefreshTick] = useState(0);
   const { guardedRefresh, refreshing, remainingMs } = useRefreshGuard(async () => {
     const startedAt = performance.now();
@@ -33,11 +31,6 @@ export default function ComparacaoAgentes() {
       trackEvent("refresh_error", { page: "/comparacao-agentes", duration_ms: Math.round(performance.now() - startedAt) });
     }
   });
-
-  const handleCarteiraChange = (nextCarteira: string) => {
-    trackEvent("filter_changed", { page: "/comparacao-agentes", filter_name: "carteira", value: nextCarteira });
-    setCarteira(nextCarteira);
-  };
 
   const filterChips = [
     { label: "Categoria", value: category },
@@ -59,11 +52,6 @@ export default function ComparacaoAgentes() {
           />
 
           <div className="max-w-7xl mx-auto px-4 py-6 space-y-6 w-full">
-            <FilterBar
-              carteira={carteira}
-              onCarteiraChange={handleCarteiraChange}
-            />
-
             <LazyVisibleSection
               id="comparacao-dashboard"
               scope="/comparacao-agentes"

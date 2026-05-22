@@ -18,13 +18,19 @@ import PeriodoFilter from "@/components/PeriodoFilter";
 import { useGlobalFilters } from "@/contexts/GlobalFiltersContext";
 
 const navItems = [
-  { title: "Produtividade Escritórios", url: "/", icon: TrendingUp, enabled: true },
-  { title: "Comparação Agentes", url: "/comparacao-agentes", icon: Users, enabled: true },
-  { title: "Detalhamento Agentes", url: "/detalhamento-agentes", icon: UserCheck, enabled: true },
-  { title: "Análise de Produtividade", url: "/analise-produtividade", icon: BarChart3, enabled: true },
-  { title: "Análise profunda", url: "/analise-profunda", icon: BarChart3, enabled: true },
-  { title: "Efetividade de Boletos", url: "/efetividade-boletos", icon: CheckCircle2, enabled: true },
+  { title: "Produtividade Escritórios", url: "/", icon: TrendingUp, enabled: true, level: 1 },
+  { title: "Análise de Produtividade", url: "/analise-produtividade", icon: BarChart3, enabled: true, level: 2 },
+  { title: "Análise profunda", url: "/analise-profunda", icon: BarChart3, enabled: true, level: 2 },
+  { title: "Efetividade de Boletos", url: "/efetividade-boletos", icon: CheckCircle2, enabled: true, level: 2 },
+  { title: "Detalhamento Agentes", url: "/detalhamento-agentes", icon: UserCheck, enabled: true, level: 3 },
+  { title: "Comparação Agentes", url: "/comparacao-agentes", icon: Users, enabled: true, level: 3 },
 ];
+
+const LEVEL_LABELS: Record<number, string> = {
+  1: "Síntese",
+  2: "Análise",
+  3: "Detalhe",
+};
 
 export function AppSidebar() {
   const location = useLocation();
@@ -60,32 +66,43 @@ export function AppSidebar() {
           <SidebarGroupLabel className="sr-only">Navegação</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {navItems.map((item) => {
+              {navItems.map((item, idx) => {
                 const active = location.pathname === item.url;
+                const prevLevel = idx > 0 ? navItems[idx - 1].level : 0;
+                const showLevelLabel = item.level !== prevLevel;
                 return (
-                  <SidebarMenuItem key={item.title}>
-                    {item.enabled ? (
-                      <SidebarMenuButton asChild isActive={active}>
-                        <NavLink
-                          to={item.url}
-                          end
-                          className="text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors"
-                          activeClassName="!bg-primary/10 !text-primary font-medium"
+                  <div key={item.title}>
+                    {showLevelLabel && (
+                      <div
+                        className="px-3 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-sidebar-foreground/50"
+                      >
+                        {LEVEL_LABELS[item.level]}
+                      </div>
+                    )}
+                    <SidebarMenuItem>
+                      {item.enabled ? (
+                        <SidebarMenuButton asChild isActive={active}>
+                          <NavLink
+                            to={item.url}
+                            end
+                            className="text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors"
+                            activeClassName="!bg-primary/10 !text-primary font-medium"
+                          >
+                            <item.icon className="h-4 w-4" />
+                            <span>{item.title}</span>
+                          </NavLink>
+                        </SidebarMenuButton>
+                      ) : (
+                        <SidebarMenuButton
+                          disabled
+                          className="cursor-not-allowed text-sidebar-foreground/35 opacity-70"
                         >
                           <item.icon className="h-4 w-4" />
                           <span>{item.title}</span>
-                        </NavLink>
-                      </SidebarMenuButton>
-                    ) : (
-                      <SidebarMenuButton
-                        disabled
-                        className="cursor-not-allowed text-sidebar-foreground/35 opacity-70"
-                      >
-                        <item.icon className="h-4 w-4" />
-                        <span>{item.title}</span>
-                      </SidebarMenuButton>
-                    )}
-                  </SidebarMenuItem>
+                        </SidebarMenuButton>
+                      )}
+                    </SidebarMenuItem>
+                  </div>
                 );
               })}
             </SidebarMenu>
