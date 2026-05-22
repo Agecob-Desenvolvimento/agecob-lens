@@ -59,8 +59,8 @@ Migrate **one page at a time**, replacing inline `useMemo` blocks 1:1. Visual di
 - [x] 1.4 — Migrate `AnaliseProdutividade.tsx` to selectors
 - [x] 1.5 — Create `src/selectors/detalhamentoSelectors.ts` + tests
 - [x] 1.6 — Migrate `DetalhamentoAgentes.tsx` to selectors
-- [ ] 1.7 — Create `src/selectors/comparacaoSelectors.ts` + tests
-- [ ] 1.8 — Migrate `ComparacaoAgentes.tsx` / `AgentComparisonDashboard` to selectors
+- [x] 1.7 — Create `src/selectors/comparacaoSelectors.ts` + tests
+- [x] 1.8 — Migrate `ComparacaoAgentes.tsx` / `AgentComparisonDashboard` to selectors
 
 ### Phase 2 — ChartShell wrapper
 

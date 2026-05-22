@@ -27,7 +27,15 @@ import {
   fmtBRL,
   shortAgentName,
 } from "@/lib/metrics";
-import type { ExecutiveKpi, InsightEngineOutput, RankingRow } from "@/types/executive";
+import {
+  selectAgentNames,
+  selectAgentRow,
+  selectRadarDimensions,
+  selectTeamRanking,
+  selectTopByValorAgentName,
+  type RadarDimension,
+} from "@/selectors";
+import type { ExecutiveKpi, InsightEngineOutput } from "@/types/executive";
 
 interface AgentComparisonDashboardProps {
   db: DatabaseOption;
@@ -48,35 +56,6 @@ function kpisFor(row: AgentRow | null): ExecutiveKpi[] {
     { label: "Qtd Acordos", value: t.qtd_acordos, unit: "count", priority: "primary", formula: "Σ qtd_acordos" },
     { label: "CPC %", value: calcCpc(t), unit: "%", priority: "primary", formula: "qtd_contatos / qtd_acionamentos" },
     { label: "Conversão %", value: calcConversao(t), unit: "%", priority: "primary", formula: "qtd_acordos / qtd_acionamentos" },
-  ];
-}
-
-interface RadarPoint {
-  dim: string;
-  agentA: number;
-  agentB: number;
-  rawA: number;
-  rawB: number;
-  unit: "BRL" | "%" | "count";
-}
-
-function buildRadar(rowA: AgentRow | null, rowB: AgentRow | null, teamRows: AgentRow[]): RadarPoint[] {
-  if (!rowA || !rowB) return [];
-  const teamMax = (fn: (r: AgentRow) => number) => Math.max(1, ...teamRows.map(fn));
-  const ta = aggregateTotals([rowA]);
-  const tb = aggregateTotals([rowB]);
-  const maxValor = teamMax((r) => Number(r.valor_acordos || 0));
-  const maxQtd = teamMax((r) => Number(r.qtd_acordos || 0));
-  const maxCpc = Math.max(1, ...teamRows.map((r) => calcCpc(aggregateTotals([r]))));
-  const maxConv = Math.max(1, ...teamRows.map((r) => calcConversao(aggregateTotals([r]))));
-  const maxTicket = Math.max(1, ...teamRows.map((r) => calcTicketMedio(aggregateTotals([r]))));
-  const norm = (v: number, m: number) => Math.round((v / m) * 100);
-  return [
-    { dim: "Valor", agentA: norm(ta.valor_acordos, maxValor), agentB: norm(tb.valor_acordos, maxValor), rawA: ta.valor_acordos, rawB: tb.valor_acordos, unit: "BRL" },
-    { dim: "Qtd", agentA: norm(ta.qtd_acordos, maxQtd), agentB: norm(tb.qtd_acordos, maxQtd), rawA: ta.qtd_acordos, rawB: tb.qtd_acordos, unit: "count" },
-    { dim: "CPC", agentA: norm(calcCpc(ta), maxCpc), agentB: norm(calcCpc(tb), maxCpc), rawA: calcCpc(ta), rawB: calcCpc(tb), unit: "%" },
-    { dim: "Conversão", agentA: norm(calcConversao(ta), maxConv), agentB: norm(calcConversao(tb), maxConv), rawA: calcConversao(ta), rawB: calcConversao(tb), unit: "%" },
-    { dim: "Ticket", agentA: norm(calcTicketMedio(ta), maxTicket), agentB: norm(calcTicketMedio(tb), maxTicket), rawA: calcTicketMedio(ta), rawB: calcTicketMedio(tb), unit: "BRL" },
   ];
 }
 
@@ -113,24 +92,22 @@ export default function AgentComparisonDashboard({ db, dateFrom, dateTo }: Agent
   const [agentA, setAgentA] = useState<string>("");
   const [agentB, setAgentB] = useState<string>("");
 
-  const agentNames = useMemo(
-    () =>
-      Array.from(new Set(rows.map((r) => String(r.NOME || "").trim()).filter(Boolean)))
-        .sort((a, b) => a.localeCompare(b, "pt-BR")),
-    [rows],
-  );
+  const agentNames = useMemo(() => selectAgentNames(rows), [rows]);
 
   useEffect(() => {
     if (rows.length === 0) return;
-    const topByValor = [...rows]
-      .filter((r) => Number(r.valor_acordos || 0) > 0)
-      .sort((a, b) => Number(b.valor_acordos || 0) - Number(a.valor_acordos || 0));
-    if (!agentA && topByValor[0]) setAgentA(String(topByValor[0].NOME || "").trim());
-    if (!agentB && topByValor[1]) setAgentB(String(topByValor[1].NOME || "").trim());
+    if (!agentA) {
+      const top0 = selectTopByValorAgentName(rows, 0);
+      if (top0) setAgentA(top0);
+    }
+    if (!agentB) {
+      const top1 = selectTopByValorAgentName(rows, 1);
+      if (top1) setAgentB(top1);
+    }
   }, [rows, agentA, agentB]);
 
-  const rowA = useMemo(() => rows.find((r) => String(r.NOME || "").trim() === agentA) ?? null, [rows, agentA]);
-  const rowB = useMemo(() => rows.find((r) => String(r.NOME || "").trim() === agentB) ?? null, [rows, agentB]);
+  const rowA = useMemo(() => selectAgentRow(rows, agentA), [rows, agentA]);
+  const rowB = useMemo(() => selectAgentRow(rows, agentB), [rows, agentB]);
 
   const buA = rowA ? buFromSource(rowA.source) : null;
   const buB = rowB ? buFromSource(rowB.source) : null;
@@ -145,23 +122,13 @@ export default function AgentComparisonDashboard({ db, dateFrom, dateTo }: Agent
   const labelA = rowA ? shortAgentName(rowA.NOME) : "Agente A";
   const labelB = rowB ? shortAgentName(rowB.NOME) : "Agente B";
 
-  const radarData = useMemo(() => buildRadar(rowA, rowB, teamRows), [rowA, rowB, teamRows]);
+  const radarData = useMemo(
+    () => selectRadarDimensions(rowA ? [rowA] : [], rowB ? [rowB] : [], teamRows),
+    [rowA, rowB, teamRows],
+  );
   const verdict = useMemo(() => buildVerdict(rowA, rowB, labelA, labelB), [rowA, rowB, labelA, labelB]);
 
-  const ranking: RankingRow[] = useMemo(() => {
-    return [...teamRows]
-      .filter((r) => Number(r.valor_acordos || 0) > 0)
-      .sort((a, b) => Number(b.valor_acordos || 0) - Number(a.valor_acordos || 0))
-      .slice(0, 10)
-      .map((r, idx) => ({
-        rank: idx + 1,
-        label: shortAgentName(r.NOME),
-        primaryValue: Number(r.valor_acordos || 0),
-        primaryUnit: "BRL" as const,
-        secondaryValue: Number(r.qtd_acordos || 0),
-        secondaryUnit: "count" as const,
-      }));
-  }, [teamRows]);
+  const ranking = useMemo(() => selectTeamRanking(teamRows), [teamRows]);
 
   if (loading) {
     return (
@@ -251,9 +218,9 @@ export default function AgentComparisonDashboard({ db, dateFrom, dateTo }: Agent
                 <Tooltip
                   content={({ active, payload }) => {
                     if (!active || !payload?.length) return null;
-                    const p = payload[0]?.payload as RadarPoint | undefined;
+                    const p = payload[0]?.payload as RadarDimension | undefined;
                     if (!p) return null;
-                    const fmt = (v: number, u: RadarPoint["unit"]) =>
+                    const fmt = (v: number, u: RadarDimension["unit"]) =>
                       u === "BRL" ? fmtBRL(v) : u === "%" ? `${v.toFixed(1)}%` : v.toFixed(0);
                     return (
                       <div className="rounded-md border bg-background p-2 text-xs space-y-1 shadow-md">
