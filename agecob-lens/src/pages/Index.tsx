@@ -17,6 +17,7 @@ import ExecutiveRankingTable from "@/components/executive/ExecutiveRankingTable"
 import ApiDebugBanner from "@/components/executive/ApiDebugBanner";
 import BuValueChart, { type BuValueDatum } from "@/components/executive/BuValueChart";
 import RitmoDiaCard from "@/components/executive/RitmoDiaCard";
+import RejeitadosCard from "@/components/executive/RejeitadosCard";
 import BuEfficiencyChart, { type BuEfficiencyDatum } from "@/components/executive/BuEfficiencyChart";
 import {
   aggregateTotals,
@@ -226,6 +227,9 @@ export default function Index() {
 
             {/* KPIs */}
             <ExecutiveKpiStrip kpis={kpis} loading={loading} />
+
+            {/* Rejeitados (clicável, expande abaixo dos KPIs) */}
+            <RejeitadosCard db={selectedDatabase} dateFrom={dateFrom} dateTo={dateTo} />
 
             {/* BU comparisons */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

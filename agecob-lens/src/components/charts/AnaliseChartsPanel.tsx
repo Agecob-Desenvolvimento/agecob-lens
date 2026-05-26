@@ -7,6 +7,7 @@ import {
   fetchExcecoesPorPortfolio,
   fetchExcecoesSemPortfolio,
   fetchPrimeiraParcelaPorAgente,
+  fetchRejeitadosPorAgente,
   fetchRejeitadosPorPortfolio,
 } from "@/services/api";
 import { type ProdutividadeRowWithSource } from "@/hooks/useProdutividadeData";
@@ -38,7 +39,7 @@ const COLOR_EXCEPTION = "hsl(0, 75%, 55%)";
 const COLOR_REJECTED = "hsl(25, 85%, 50%)";
 
 export default function AnaliseChartsPanel({ rows, db, dateFrom, dateTo }: AnaliseChartsPanelProps) {
-  const [qExcPort, qExcAg, qAcdPort, qPpAg, qRejPort, qExcNull] = useQueries({
+  const [qExcPort, qExcAg, qAcdPort, qPpAg, qRejPort, qExcNull, qRejAg] = useQueries({
     queries: [
       { queryKey: ["excecoes-por-portfolio", db, dateFrom, dateTo] as const, queryFn: () => fetchExcecoesPorPortfolio(db, dateFrom, dateTo) },
       { queryKey: ["excecoes-por-agente", db, dateFrom, dateTo] as const, queryFn: () => fetchExcecoesPorAgente(db, dateFrom, dateTo) },
@@ -46,10 +47,11 @@ export default function AnaliseChartsPanel({ rows, db, dateFrom, dateTo }: Anali
       { queryKey: ["primeira-parcela-por-agente", db, dateFrom, dateTo] as const, queryFn: () => fetchPrimeiraParcelaPorAgente(db, undefined, dateFrom, dateTo) },
       { queryKey: ["rejeitados-por-portfolio", db, dateFrom, dateTo] as const, queryFn: () => fetchRejeitadosPorPortfolio(db, dateFrom, dateTo) },
       { queryKey: ["excecoes-sem-portfolio", db, dateFrom, dateTo] as const, queryFn: () => fetchExcecoesSemPortfolio(db, dateFrom, dateTo) },
+      { queryKey: ["rejeitados-por-agente", db, dateFrom, dateTo] as const, queryFn: () => fetchRejeitadosPorAgente(db, dateFrom, dateTo) },
     ],
   });
 
-  const errs = [qExcPort, qExcAg, qAcdPort, qPpAg, qRejPort, qExcNull]
+  const errs = [qExcPort, qExcAg, qAcdPort, qPpAg, qRejPort, qExcNull, qRejAg]
     .filter((q) => q.isError)
     .map((q) => (q.error as Error)?.message ?? "Falha")
     .join(" | ");
@@ -89,15 +91,36 @@ export default function AnaliseChartsPanel({ rows, db, dateFrom, dateTo }: Anali
     }))
     .sort((a, b) => b.value - a.value);
 
-  // A2: top 10 agents by first installment — secondary = qtd_acordos
+  // A2: all agents by first installment — secondary = qtd_acordos
   const ppAgenteData = (qPpAg.data?.data ?? [])
-    .slice(0, 10)
     .map((r) => ({
       name: shortAgentName(r.agente),
       value: Number(r.valor_primeira_parcela || 0),
       secondaryValue: Number(r.qtd_acordos_primeira_parcela || 0),
       secondaryUnit: "count" as const,
     }));
+
+  // Exceções por agente (valor) — secondary = qtd_excecoes
+  const excAgenteValorData = (qExcAg.data?.data ?? [])
+    .filter((r) => Number(r.valor_excecoes || 0) > 0)
+    .map((r) => ({
+      name: shortAgentName(r.agente),
+      value: Number(r.valor_excecoes || 0),
+      secondaryValue: Number(r.qtd_excecoes || 0),
+      secondaryUnit: "count" as const,
+    }))
+    .sort((a, b) => b.value - a.value);
+
+  // Rejeitados por agente (valor 1ª parcela) — secondary = qtd_rejeitados
+  const rejAgenteValorData = (qRejAg.data?.data ?? [])
+    .filter((r) => Number(r.valor_primeira_parcela_rejeitados || 0) > 0)
+    .map((r) => ({
+      name: shortAgentName(r.agente),
+      value: Number(r.valor_primeira_parcela_rejeitados || 0),
+      secondaryValue: Number(r.qtd_rejeitados || 0),
+      secondaryUnit: "count" as const,
+    }))
+    .sort((a, b) => b.value - a.value);
 
   // C1: exceptions by portfolio — primary = valor_excecoes; secondary = qtd
   const excPortfolioData = (qExcPort.data?.data ?? [])
@@ -156,11 +179,35 @@ export default function AnaliseChartsPanel({ rows, db, dateFrom, dateTo }: Anali
         />
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <HorizontalRankingChart
-            title="Top 10 Agentes por 1ª Parcela"
+            title="Agentes por 1ª Parcela"
             data={ppAgenteData}
             unit="BRL"
             defaultColor={COLOR_FIRST_INSTALLMENT}
             empty={ppAgenteData.length === 0}
+          />
+        </div>
+      </section>
+
+      <section className="space-y-3">
+        <SectionHeader
+          title="Exceções e Rejeitados por Agente"
+          description="Valor por agente; passe o mouse para ver a quantidade de acordos."
+          unit="BRL"
+        />
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <HorizontalRankingChart
+            title="Exceções por Agente (Valor)"
+            data={excAgenteValorData}
+            unit="BRL"
+            defaultColor={COLOR_EXCEPTION}
+            empty={excAgenteValorData.length === 0}
+          />
+          <HorizontalRankingChart
+            title="Rejeitados por Agente (Valor)"
+            data={rejAgenteValorData}
+            unit="BRL"
+            defaultColor={COLOR_REJECTED}
+            empty={rejAgenteValorData.length === 0}
           />
         </div>
       </section>

@@ -9,7 +9,7 @@ import { ROUTE_LOAD_PRIORITY } from "@/config/loadPriorities";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useProdutividadeData } from "@/hooks/useProdutividadeData";
 import { useRefreshGuard } from "@/hooks/useRefreshGuard";
-import { type DatabaseOption, fetchPrimeiraParcelaDia, fetchPrimeiraParcelaPorAgente } from "@/services/api";
+import { type DatabaseOption, fetchPrimeiraParcelaDia, fetchPrimeiraParcelaPorAgente, fetchRejeitadosPorAgente } from "@/services/api";
 import { trackEvent } from "@/services/analytics";
 import ExecutiveHeader from "@/components/executive/ExecutiveHeader";
 import ExecutiveKpiStrip from "@/components/executive/ExecutiveKpiStrip";
@@ -17,13 +17,18 @@ import ApiDebugBanner from "@/components/executive/ApiDebugBanner";
 import {
   aggregateTotals,
   calcConversao,
-  calcCpc,
-  calcExcecoesPctValor,
-  calcTicketMedio,
 } from "@/lib/metrics";
 import type { ExecutiveKpi } from "@/types/executive";
 
 const DetalhamentoChartsPanel = lazy(() => import("@/components/charts/DetalhamentoChartsPanel"));
+
+interface RejeitadosAgg {
+  qtd: number;
+  valor: number;
+  valor_primeira_parcela: number;
+}
+
+const ZERO_REJEITADOS: RejeitadosAgg = { qtd: 0, valor: 0, valor_primeira_parcela: 0 };
 
 export default function DetalhamentoAgentes() {
   const { category, dateFrom, dateTo } = useGlobalFilters();
@@ -31,6 +36,7 @@ export default function DetalhamentoAgentes() {
   const [agentFilter, setAgentFilter] = useState("");
   const [primeiraParcelaDia, setPrimeiraParcelaDia] = useState<{ total_valor: number; total_acordos: number } | null>(null);
   const [primeiraParcelaPorAgente, setPrimeiraParcelaPorAgente] = useState<Record<string, number>>({});
+  const [rejeitadosPorAgente, setRejeitadosPorAgente] = useState<Record<string, RejeitadosAgg>>({});
 
   const selectedDatabase: DatabaseOption =
     category === "AUTOS"
@@ -60,12 +66,14 @@ export default function DetalhamentoAgentes() {
 
     setPrimeiraParcelaDia(null);
     setPrimeiraParcelaPorAgente({});
+    setRejeitadosPorAgente({});
 
     Promise.all([
       fetchPrimeiraParcelaDia(selectedDatabase, undefined, dateFrom, dateTo),
       fetchPrimeiraParcelaPorAgente(selectedDatabase, undefined),
+      fetchRejeitadosPorAgente(selectedDatabase, dateFrom, dateTo),
     ])
-      .then(([diaEnv, agenteEnv]) => {
+      .then(([diaEnv, agenteEnv, rejEnv]) => {
         if (cancelled) return;
         const row = diaEnv.data[0];
         if (row) {
@@ -81,9 +89,24 @@ export default function DetalhamentoAgentes() {
           ]),
         );
         setPrimeiraParcelaPorAgente(byAgent);
+
+        const rejByAgent = Object.fromEntries(
+          (rejEnv.data ?? []).map((item) => [
+            String(item.agente || "").trim(),
+            {
+              qtd: Number(item.qtd_rejeitados) || 0,
+              valor: Number(item.valor_rejeitados) || 0,
+              valor_primeira_parcela: Number(item.valor_primeira_parcela_rejeitados) || 0,
+            } as RejeitadosAgg,
+          ]),
+        );
+        setRejeitadosPorAgente(rejByAgent);
       })
       .catch(() => {
-        if (!cancelled) setPrimeiraParcelaPorAgente({});
+        if (!cancelled) {
+          setPrimeiraParcelaPorAgente({});
+          setRejeitadosPorAgente({});
+        }
       });
 
     return () => {
@@ -118,30 +141,43 @@ export default function DetalhamentoAgentes() {
     return primeiraParcelaPorAgente[selectedAgent] ?? 0;
   }, [primeiraParcelaDia, primeiraParcelaPorAgente, selectedAgent]);
 
+  const rejeitadosSelecionado = useMemo<RejeitadosAgg>(() => {
+    if (selectedAgent === "Todos") {
+      return Object.values(rejeitadosPorAgente).reduce<RejeitadosAgg>(
+        (acc, r) => ({
+          qtd: acc.qtd + r.qtd,
+          valor: acc.valor + r.valor,
+          valor_primeira_parcela: acc.valor_primeira_parcela + r.valor_primeira_parcela,
+        }),
+        { ...ZERO_REJEITADOS },
+      );
+    }
+    return rejeitadosPorAgente[selectedAgent] ?? ZERO_REJEITADOS;
+  }, [rejeitadosPorAgente, selectedAgent]);
+
   const kpis: ExecutiveKpi[] = useMemo(() => {
-    const cpc = calcCpc(totals);
     const conv = calcConversao(totals);
-    const ticket = calcTicketMedio(totals);
-    const excPct = calcExcecoesPctValor(totals);
     return [
       { label: "Valor Acordos", value: totals.valor_acordos, unit: "BRL", priority: "primary", formula: "Σ valor_acordos" },
       {
-        label: "1ª Parcela",
+        label: "Valor 1ª Parcela Acordos",
         value: primeiraParcelaSelecionada,
         unit: "BRL",
         priority: "primary",
         formula: selectedAgent === "Todos" ? "Σ primeira_parcela_do_dia" : "Σ primeira_parcela_por_agente",
       },
       { label: "Qtd Acordos", value: totals.qtd_acordos, unit: "count", priority: "primary" },
-      { label: "Ticket Médio", value: ticket, unit: "BRL", priority: "primary", formula: "valor_acordos / qtd_acordos" },
-      { label: "CPC %", value: cpc, unit: "%", priority: "secondary", formula: "qtd_contatos / qtd_acionamentos" },
-      { label: "Conversão %", value: conv, unit: "%", priority: "secondary", formula: "qtd_acordos / qtd_acionamentos" },
-      { label: "Qtd Acionamentos", value: totals.qtd_acionamentos, unit: "count", priority: "secondary" },
-      { label: "Qtd Contatos", value: totals.qtd_contatos, unit: "count", priority: "secondary" },
-      { label: "Qtd Exceções", value: totals.qtd_excecoes, unit: "count", priority: "secondary" },
-      { label: "Exceções % (valor)", value: excPct, unit: "%", priority: "secondary", formula: "valor_excecoes / valor_acordos" },
+      { label: "Conversão %", value: conv, unit: "%", priority: "primary", formula: "qtd_acordos / qtd_acionamentos" },
+      { label: "Qtd Acionamentos", value: totals.qtd_acionamentos, unit: "count", priority: "secondary", formula: "Σ qtd_acionamentos" },
+      { label: "Qtd CPC", value: totals.qtd_contatos, unit: "count", priority: "secondary", formula: "Σ qtd_contatos" },
+      { label: "Qtd Exceções", value: totals.qtd_excecoes, unit: "count", priority: "secondary", formula: "Σ qtd_excecoes" },
+      { label: "Valor Exceções", value: totals.valor_excecoes, unit: "BRL", priority: "secondary", formula: "Σ valor_excecoes" },
+      { label: "Valor 1ª Parcela Exceções", value: totals.valor_primeira_parcela_excecoes, unit: "BRL", priority: "secondary", formula: "Σ p1 onde status ∈ exceção" },
+      { label: "Qtd Rejeitados", value: rejeitadosSelecionado.qtd, unit: "count", priority: "secondary", formula: "Σ qtd_rejeitados (status 7)" },
+      { label: "Valor Rejeitados", value: rejeitadosSelecionado.valor, unit: "BRL", priority: "secondary", formula: "Σ valor_rejeitados (status 7)" },
+      { label: "Valor 1ª Parcela Rejeitados", value: rejeitadosSelecionado.valor_primeira_parcela, unit: "BRL", priority: "secondary", formula: "Σ p1 onde status = rejeitado" },
     ];
-  }, [totals, selectedAgent, primeiraParcelaSelecionada]);
+  }, [totals, selectedAgent, primeiraParcelaSelecionada, rejeitadosSelecionado]);
 
   const handleAgentChange = (agent: string) => {
     trackEvent("filter_changed", { page: "/detalhamento-agentes", filter_name: "agente", value: agent === "Todos" ? "todos" : "selecionado" });

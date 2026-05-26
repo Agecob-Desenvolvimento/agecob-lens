@@ -252,6 +252,64 @@ def build_rejeitados_por_portfolio_query(db: str, date_from: str = None, date_to
     return wrap_todos_or_single(db, _base, agg, order_by=order, date_from=date_from, date_to_exclusive=date_to_exclusive)
 
 
+def build_rejeitados_totais_query(db: str, date_from: str = None, date_to_exclusive: str = None) -> str:
+    """
+    Card: totais de acordos rejeitados (ID_REC_STATUS = 7).
+    valor_total = todas as parcelas; valor_primeira_parcela = só PARCELA=0; qtd = acordos distintos.
+    """
+    def _base(database: str) -> str:
+        return f"""
+            SELECT
+                SUM(R.VALOR) AS valor_total,
+                SUM(CASE WHEN R.PARCELA = {settings.PRIMEIRA_PARCELA} THEN R.VALOR ELSE 0 END) AS valor_primeira_parcela,
+                COUNT(DISTINCT R.NR_RECEBIMENTO) AS qtd_rejeitados
+            FROM {database}.dbo.REC_MASTER R (NOLOCK)
+            JOIN {database}.dbo.USU_MASTER U (NOLOCK) ON R.ID_USUARIO = U.ID_USUARIO
+            WHERE R.DT_EMISSAO >= @Hoje AND R.DT_EMISSAO < @Amanha
+              AND R.ID_REC_STATUS IN {settings.STATUS_REJEITADO_SQL}
+              {settings.FILTRO_AGENTES_EXCLUIDOS_SQL}
+        """
+
+    agg = """
+        SELECT
+            SUM(sub.valor_total) AS valor_total,
+            SUM(sub.valor_primeira_parcela) AS valor_primeira_parcela,
+            SUM(sub.qtd_rejeitados) AS qtd_rejeitados
+    """
+    return wrap_todos_or_single(db, _base, agg, order_by="", date_from=date_from, date_to_exclusive=date_to_exclusive)
+
+
+def build_rejeitados_por_agente_query(db: str, date_from: str = None, date_to_exclusive: str = None) -> str:
+    """
+    Gráfico/KPI: acordos rejeitados (ID_REC_STATUS = 7) agrupados por agente.
+    valor_rejeitados = todas as parcelas; valor_primeira_parcela_rejeitados = só PARCELA=0.
+    """
+    def _base(database: str) -> str:
+        return f"""
+            SELECT
+                U.NOME AS agente,
+                COUNT(DISTINCT R.NR_RECEBIMENTO) AS qtd_rejeitados,
+                SUM(R.VALOR) AS valor_rejeitados,
+                SUM(CASE WHEN R.PARCELA = {settings.PRIMEIRA_PARCELA} THEN R.VALOR ELSE 0 END) AS valor_primeira_parcela_rejeitados
+            FROM {database}.dbo.REC_MASTER R (NOLOCK)
+            JOIN {database}.dbo.USU_MASTER U (NOLOCK) ON R.ID_USUARIO = U.ID_USUARIO
+            WHERE R.DT_EMISSAO >= @Hoje AND R.DT_EMISSAO < @Amanha
+              AND R.ID_REC_STATUS IN {settings.STATUS_REJEITADO_SQL}
+              {settings.FILTRO_AGENTES_EXCLUIDOS_SQL}
+            GROUP BY U.NOME
+        """
+
+    agg = """
+        SELECT
+            agente,
+            SUM(qtd_rejeitados) AS qtd_rejeitados,
+            SUM(valor_rejeitados) AS valor_rejeitados,
+            SUM(valor_primeira_parcela_rejeitados) AS valor_primeira_parcela_rejeitados
+    """
+    order = "GROUP BY agente ORDER BY valor_rejeitados DESC" if db == "todos" else "ORDER BY valor_rejeitados DESC"
+    return wrap_todos_or_single(db, _base, agg, order_by=order, date_from=date_from, date_to_exclusive=date_to_exclusive)
+
+
 def build_primeira_parcela_por_agente_query(db: str, assessoria_token: str = "", date_from: str = None, date_to_exclusive: str = None) -> str:
     """
     Gráfico: valor e quantidade da 1ª parcela por agente (acordos aprovados).
