@@ -22,7 +22,7 @@ const TREND_ICON = {
 export function ExecutiveKpiStrip({ kpis, loading, error }: ExecutiveKpiStripProps) {
   if (loading) {
     return (
-      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-3" role="status" aria-label="Carregando KPIs">
         {Array.from({ length: 6 }).map((_, i) => (
           <Skeleton key={i} className="h-20 w-full" />
         ))}
@@ -32,9 +32,9 @@ export function ExecutiveKpiStrip({ kpis, loading, error }: ExecutiveKpiStripPro
 
   if (error) {
     return (
-      <Card className="border-destructive/50">
+      <Card className="border-destructive/50" role="alert">
         <CardContent className="py-3 flex items-center gap-2 text-sm text-destructive">
-          <AlertTriangle className="h-4 w-4 shrink-0" />
+          <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
           <span>{error}</span>
         </CardContent>
       </Card>
@@ -43,7 +43,7 @@ export function ExecutiveKpiStrip({ kpis, loading, error }: ExecutiveKpiStripPro
 
   if (!kpis.length) {
     return (
-      <Card>
+      <Card role="status">
         <CardContent className="py-3 text-sm text-muted-foreground">
           Dados não disponíveis.
         </CardContent>
@@ -56,27 +56,28 @@ export function ExecutiveKpiStrip({ kpis, loading, error }: ExecutiveKpiStripPro
 
   return (
     <TooltipProvider delayDuration={200}>
-      <div className="grid gap-3 grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
-        {primary.map((k) => (
-          <KpiCard key={k.label} kpi={k} highlight />
+      <div className="grid gap-3 grid-cols-2 md:grid-cols-3 xl:grid-cols-6" role="region" aria-label="Indicadores">
+        {primary.map((k, i) => (
+          <KpiCard key={k.label} kpi={k} highlight staggerIdx={i} />
         ))}
-        {secondary.map((k) => (
-          <KpiCard key={k.label} kpi={k} />
+        {secondary.map((k, i) => (
+          <KpiCard key={k.label} kpi={k} staggerIdx={primary.length + i} />
         ))}
       </div>
     </TooltipProvider>
   );
 }
 
-function KpiCard({ kpi, highlight }: { kpi: ExecutiveKpi; highlight?: boolean }) {
+function KpiCard({ kpi, highlight, staggerIdx }: { kpi: ExecutiveKpi; highlight?: boolean; staggerIdx: number }) {
   const TrendIcon = kpi.trend ? TREND_ICON[kpi.trend] : null;
   const unitLabel = kpi.unit === "BRL" ? "BRL" : kpi.unit === "%" ? "%" : "";
   return (
     <Card
       className={cn(
-        "min-w-0 rounded-lg border-border bg-card",
+        "min-w-0 rounded-lg border-border bg-card animate-in fade-in slide-in-from-bottom-2 duration-300 fill-mode-both",
         highlight ? "col-span-2 p-5" : "col-span-1 p-4",
       )}
+      style={{ animationDelay: `${staggerIdx * 100}ms` }}
     >
       <CardHeader className="p-0 mb-0 flex flex-row items-center justify-between space-y-0">
         <Tooltip>
@@ -97,7 +98,7 @@ function KpiCard({ kpi, highlight }: { kpi: ExecutiveKpi; highlight?: boolean })
           </TooltipContent>
         </Tooltip>
         {unitLabel && (
-          <span className="text-[11px] font-medium text-muted-foreground/70 shrink-0">
+          <span className="text-[11px] font-medium text-muted-foreground/70 shrink-0" aria-label={`Unidade: ${unitLabel}`}>
             {unitLabel}
           </span>
         )}
@@ -109,6 +110,7 @@ function KpiCard({ kpi, highlight }: { kpi: ExecutiveKpi; highlight?: boolean })
               "block font-bold tabular-nums leading-none tracking-tight text-foreground",
               highlight ? "text-3xl md:text-4xl" : "text-xl md:text-2xl font-semibold",
             )}
+            aria-label={`${kpi.label}: ${kpi.unit === "BRL" ? formatBRLCompact(kpi.value) : fmtByUnit(kpi.value, kpi.unit)}`}
           >
             {kpi.unit === "BRL" ? formatBRLCompact(kpi.value) : fmtByUnit(kpi.value, kpi.unit)}
           </span>
@@ -120,6 +122,7 @@ function KpiCard({ kpi, highlight }: { kpi: ExecutiveKpi; highlight?: boolean })
                 kpi.trend === "down" && "text-danger",
                 kpi.trend === "stable" && "text-muted-foreground",
               )}
+              aria-hidden="true"
             />
           )}
         </div>

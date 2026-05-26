@@ -381,6 +381,51 @@ export async function fetchRejeitadosPorPortfolio(
   return request<ApiEnvelope<RejeitadosPorPortfolioRow>>(`/dashboard/rejeitados-por-portfolio/${db}${suffix}`);
 }
 
+export async function fetchExcecoesDetalhe(
+  db: DatabaseOption,
+  portfolio: string,
+  dateFrom?: string,
+  dateTo?: string,
+): Promise<ApiEnvelope<ExcecaoSemPortfolioRow>> {
+  const query = new URLSearchParams();
+  if (dateFrom) query.set("dateFrom", dateFrom);
+  if (dateTo) query.set("dateTo", dateTo);
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<ApiEnvelope<ExcecaoSemPortfolioRow>>(
+    `/dashboard/excecoes-detalhe/${db}/${encodeURIComponent(portfolio)}${suffix}`,
+  );
+}
+
+export async function fetchRejeitadosDetalhe(
+  db: DatabaseOption,
+  portfolio: string,
+  dateFrom?: string,
+  dateTo?: string,
+): Promise<ApiEnvelope<ExcecaoSemPortfolioRow>> {
+  const query = new URLSearchParams();
+  if (dateFrom) query.set("dateFrom", dateFrom);
+  if (dateTo) query.set("dateTo", dateTo);
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<ApiEnvelope<ExcecaoSemPortfolioRow>>(
+    `/dashboard/rejeitados-detalhe/${db}/${encodeURIComponent(portfolio)}${suffix}`,
+  );
+}
+
+export async function fetchAcordosDetalhe(
+  db: DatabaseOption,
+  portfolio: string,
+  dateFrom?: string,
+  dateTo?: string,
+): Promise<ApiEnvelope<ExcecaoSemPortfolioRow>> {
+  const query = new URLSearchParams();
+  if (dateFrom) query.set("dateFrom", dateFrom);
+  if (dateTo) query.set("dateTo", dateTo);
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<ApiEnvelope<ExcecaoSemPortfolioRow>>(
+    `/dashboard/acordos-detalhe/${db}/${encodeURIComponent(portfolio)}${suffix}`,
+  );
+}
+
 export async function fetchPrimeiraParcelaPorAgente(
   db: DatabaseOption,
   assessoria?: string,

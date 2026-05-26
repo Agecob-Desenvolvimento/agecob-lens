@@ -84,8 +84,8 @@ export default function RitmoDiaCard({ db, embedded }: { db: DatabaseOption; emb
   return (
     <Wrapper embedded={embedded}>
       <CardHeader className="pb-2 pt-3 px-4">
-        <CardTitle className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-          Ritmo do Dia
+        <CardTitle className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+          Ritmo de Acordos do Dia · baseado em dias semelhantes
         </CardTitle>
         <CardDescription className="text-xs">
           Faixa: <span className="font-medium">{faixaLabel}</span>
@@ -93,26 +93,31 @@ export default function RitmoDiaCard({ db, embedded }: { db: DatabaseOption; emb
             <> · D+{meta.dias_desde_ultimo_batimento}</>
           )}
           {data.projecao_fechamento !== undefined && (
-            <> · Projeção fechamento: <span className="font-medium">{data.projecao_fechamento}</span></>
+            <> · Projeção: <span className="font-medium tabular-nums">{data.projecao_fechamento}</span></>
           )}
           {data.esperado_total !== undefined && (
-            <> · Esperado total: {data.esperado_total}</>
+            <> · Esperado: <span className="tabular-nums">{data.esperado_total}</span></>
           )}
         </CardDescription>
       </CardHeader>
       <CardContent className="px-4 pb-3">
-        <div className="grid grid-cols-12 gap-1 text-xs">
+        <div className="grid gap-1.5 text-[11px] tabular-nums" style={{ gridTemplateColumns: "repeat(12, minmax(68px, 1fr))" }}>
           {data.bandas.map((b) => {
             const icon = STATUS_ICON[b.status] ?? "·";
             const deltaText = b.delta == null ? "" : (b.delta > 0 ? `+${b.delta}` : `${b.delta}`);
             const realText = b.real == null ? "—" : String(b.real);
             const acumText = b.acumulado == null ? "—" : String(b.acumulado);
             const isCurrent = b.status === "em_andamento";
+            const isFuturo = b.status === "futuro";
             return (
               <div
                 key={b.hora}
-                className={`flex flex-col items-center rounded-md border p-1 ${
-                  isCurrent ? "border-success bg-success-soft" : "border-border"
+                className={`flex flex-col items-center gap-0.5 rounded-md border p-1.5 ${
+                  isCurrent
+                    ? "border-success bg-success-soft"
+                    : isFuturo
+                      ? "border-border bg-muted/40"
+                      : "border-border bg-card"
                 }`}
                 title={`Hora ${b.hora}h — esperado ${b.esperado} · real ${realText} · acumulado ${acumText} · delta ${deltaText || "—"}`}
               >
@@ -125,7 +130,7 @@ export default function RitmoDiaCard({ db, embedded }: { db: DatabaseOption; emb
             );
           })}
         </div>
-        <div className="mt-2 text-xs text-muted-foreground">
+        <div className="mt-2 text-[11px] text-muted-foreground tabular-nums">
           Acumulado atual: <span className="font-medium">{data.acumulado_atual}</span>
         </div>
       </CardContent>

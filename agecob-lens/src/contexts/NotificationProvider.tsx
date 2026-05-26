@@ -19,13 +19,7 @@ const SEVERITY_RANK: Record<InsightSeverity, number> = {
 };
 
 export function NotificationProvider({ children }: { children: ReactNode }) {
-  const { category } = useGlobalFilters();
-  const db: DatabaseOption =
-    category === "AUTOS"
-      ? "COBwebRCBAUTOS"
-      : category === "CONSUMER"
-        ? "COBwebRCBCONSUMER"
-        : "todos";
+  const { selectedDatabase: db } = useGlobalFilters();
 
   useEffect(() => {
     const ask = () => { requestNotificationPermission(); };

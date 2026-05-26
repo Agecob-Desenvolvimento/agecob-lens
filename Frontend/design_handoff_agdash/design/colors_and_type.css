@@ -1,0 +1,256 @@
+/* ============================================================
+   AGECOB Design System — Colors & Type
+   ============================================================
+   Sober, institutional, formal. Brazilian collections agency.
+   Monochromatic page + a single corporate-blue accent band.
+   ============================================================ */
+
+:root {
+  /* ---------- BRAND COLORS ---------- */
+  /* Pulled from the AGECOB logo gradient (pale teal → deep blue) */
+  --agecob-blue-900: #2a3f7a;   /* deepest tail of logo gradient */
+  --agecob-blue-800: #3b5aa6;   /* primary corporate blue */
+  --agecob-blue-700: #4860a8;   /* sampled directly from logo */
+  --agecob-blue-600: #6090c0;   /* mid logo blue */
+  --agecob-blue-500: #7890c0;
+  --agecob-blue-400: #a8c0d8;
+  --agecob-blue-300: #a8d8f0;   /* pale logo aqua */
+  --agecob-blue-200: #c0d8f0;
+  --agecob-blue-100: #d8f0f0;   /* lightest aqua */
+  --agecob-blue-50:  #eef4fa;   /* softest tint */
+
+  /* Single corporate accent — the slogan band uses this */
+  --accent: var(--agecob-blue-800);
+  --accent-hover: var(--agecob-blue-900);
+  --accent-soft: var(--agecob-blue-50);
+
+  /* ---------- NEUTRALS ---------- */
+  /* No pure black / pure white — softer, paper-like institutional tone */
+  --paper:    #fbfbfa;          /* page background, off-white */
+  --surface:  #ffffff;          /* cards / inset surfaces */
+  --ink:      #1f2530;          /* primary text — dark slate, not black */
+  --ink-soft: #2f3744;          /* body */
+  --muted:    #5b6473;          /* secondary text, captions */
+  --muted-2:  #8a92a0;          /* legal / footer text, more apagado */
+  --hairline: #e3e5ea;          /* dividers, borders */
+  --hairline-strong: #c8ccd4;
+
+  /* ---------- SEMANTIC ---------- */
+  --bg:        var(--paper);
+  --fg:        var(--ink);
+  --fg-1:      var(--ink);
+  --fg-2:      var(--ink-soft);
+  --fg-3:      var(--muted);
+  --fg-4:      var(--muted-2);
+  --border:    var(--hairline);
+  --border-strong: var(--hairline-strong);
+
+  /* status — kept understated, formal */
+  --success: #2f7d4f;
+  --warning: #b07a18;
+  --danger:  #a8332b;
+  --info:    var(--agecob-blue-700);
+
+  /* ---------- TYPOGRAPHY ---------- */
+  /* System sans-serif feel, with Inter as a clean stand-in.
+     The original site uses Arial/system; we substitute Inter
+     for a slightly more refined institutional feel.        */
+  --font-sans: "Inter", "Helvetica Neue", Arial, "Segoe UI", system-ui, sans-serif;
+  --font-display: "Inter", Arial, sans-serif; /* same family, heavier weights */
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  /* type scale — institutional, generous */
+  --fs-xs:   12px;
+  --fs-sm:   14px;
+  --fs-base: 16px;
+  --fs-md:   18px;
+  --fs-lg:   22px;
+  --fs-xl:   28px;
+  --fs-2xl:  36px;
+  --fs-3xl:  48px;
+  --fs-4xl:  64px;   /* AGECOB wordmark size */
+  --fs-5xl:  88px;
+
+  --lh-tight:  1.1;
+  --lh-snug:   1.25;
+  --lh-normal: 1.5;
+  --lh-relaxed: 1.65;
+
+  --tracking-tight:  -0.01em;
+  --tracking-normal: 0;
+  --tracking-wide:   0.04em;
+  --tracking-wider:  0.18em;   /* SLOGAN ALL-CAPS */
+
+  --fw-regular: 400;
+  --fw-medium:  500;
+  --fw-semibold: 600;
+  --fw-bold:    700;
+  --fw-black:   800;
+
+  /* ---------- SPACING ---------- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+  --space-9: 96px;
+  --space-10: 128px;
+
+  /* ---------- RADII ---------- */
+  /* Minimal — institutional documents have crisp edges */
+  --radius-none: 0;
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 6px;
+  --radius-pill: 999px;
+
+  /* ---------- SHADOW ---------- */
+  /* Almost none — the brand reads as flat / printed */
+  --shadow-none: none;
+  --shadow-xs: 0 1px 0 rgba(31, 37, 48, 0.04);
+  --shadow-sm: 0 1px 2px rgba(31, 37, 48, 0.06), 0 0 0 1px rgba(31,37,48,0.04);
+  --shadow-md: 0 2px 6px rgba(31, 37, 48, 0.08);
+  --shadow-band: 0 6px 24px rgba(59, 90, 166, 0.18); /* under the slogan band on hover */
+
+  /* ---------- LAYOUT ---------- */
+  --container-narrow: 720px;
+  --container:        960px;
+  --container-wide:   1200px;
+
+  /* ============================================================
+     DARK FINTECH THEME (landing page)
+     ============================================================ */
+  --night-950: #060912;       /* deepest backdrop */
+  --night-900: #0a1020;       /* primary dark blue-black */
+  --night-850: #0e1730;       /* slightly lifted */
+  --night-800: #122046;       /* card base */
+  --petrol-700: #15355c;      /* petroleum highlight */
+  --steel-600: #2a3a55;       /* slate / chumbo */
+  --steel-500: #4a5878;
+  --steel-400: #7886a3;       /* secondary text on dark */
+  --steel-300: #b8c1d6;       /* primary text on dark */
+  --steel-200: #e6ebf5;
+
+  --gold-500: #d4af5a;        /* primary fintech accent */
+  --gold-400: #e8c878;
+  --gold-300: #f3dca0;
+  --cyan-400: #5cd0e8;        /* secondary accent */
+  --cyan-300: #9be5f2;
+
+  --glass-bg: rgba(18, 32, 70, 0.55);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-border-strong: rgba(212, 175, 90, 0.35);
+  --glass-highlight: rgba(255, 255, 255, 0.04);
+
+  --shadow-glow-gold: 0 0 32px rgba(212, 175, 90, 0.18);
+  --shadow-glow-cyan: 0 0 32px rgba(92, 208, 232, 0.18);
+  --shadow-elev: 0 12px 40px rgba(0, 0, 0, 0.45);
+}
+
+/* ============================================================
+   SEMANTIC TYPE STYLES
+   ============================================================ */
+
+.h1, h1.agecob {
+  font-family: var(--font-display);
+  font-weight: var(--fw-black);
+  font-size: var(--fs-4xl);
+  line-height: var(--lh-tight);
+  letter-spacing: var(--tracking-tight);
+  color: var(--fg-1);
+  margin: 0;
+}
+
+.h2, h2.agecob {
+  font-family: var(--font-display);
+  font-weight: var(--fw-bold);
+  font-size: var(--fs-2xl);
+  line-height: var(--lh-snug);
+  color: var(--fg-1);
+  margin: 0;
+}
+
+.h3, h3.agecob {
+  font-family: var(--font-sans);
+  font-weight: var(--fw-semibold);
+  font-size: var(--fs-xl);
+  line-height: var(--lh-snug);
+  color: var(--fg-1);
+  margin: 0;
+}
+
+.eyebrow {
+  font-family: var(--font-sans);
+  font-weight: var(--fw-semibold);
+  font-size: var(--fs-xs);
+  letter-spacing: var(--tracking-wider);
+  text-transform: uppercase;
+  color: var(--fg-3);
+}
+
+/* The signature ALL-CAPS slogan band */
+.slogan {
+  font-family: var(--font-sans);
+  font-weight: var(--fw-bold);
+  font-size: var(--fs-md);
+  letter-spacing: var(--tracking-wider);
+  text-transform: uppercase;
+  color: #fff;
+  background: var(--accent);
+  padding: var(--space-4) var(--space-6);
+  display: inline-block;
+}
+
+.body, p.agecob {
+  font-family: var(--font-sans);
+  font-weight: var(--fw-regular);
+  font-size: var(--fs-base);
+  line-height: var(--lh-relaxed);
+  color: var(--fg-2);
+  margin: 0;
+}
+
+.body-sm {
+  font-family: var(--font-sans);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-normal);
+  color: var(--fg-3);
+}
+
+.legal {
+  font-family: var(--font-sans);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-normal);
+  color: var(--fg-4);
+  letter-spacing: 0.01em;
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+}
+
+/* The textual logotype — AGECOB as a wordmark */
+.wordmark {
+  font-family: var(--font-display);
+  font-weight: var(--fw-black);
+  font-size: var(--fs-4xl);
+  letter-spacing: 0.02em;
+  color: var(--accent);
+  line-height: 1;
+}
+.wordmark-sm { font-size: var(--fs-2xl); }
+.wordmark-lg { font-size: var(--fs-5xl); }
+
+/* "Grupo Agecob" eyebrow above the wordmark */
+.wordmark-super {
+  font-family: var(--font-sans);
+  font-weight: var(--fw-medium);
+  font-size: var(--fs-sm);
+  color: var(--fg-3);
+  letter-spacing: var(--tracking-wide);
+  text-transform: none;
+}

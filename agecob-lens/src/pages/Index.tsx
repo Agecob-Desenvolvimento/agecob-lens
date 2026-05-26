@@ -1,128 +1,31 @@
-import { useEffect, useMemo, useState } from "react";
-import { useQueries } from "@tanstack/react-query";
-import { Card } from "@/components/ui/card";
+import { useEffect } from "react";
 import { AppSidebar } from "@/components/AppSidebar";
 import { useGlobalFilters } from "@/contexts/GlobalFiltersContext";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { useRefreshGuard } from "@/hooks/useRefreshGuard";
-import { useProdutividadeData } from "@/hooks/useProdutividadeData";
-import {
-  type DatabaseOption,
-  fetchPrimeiraParcelaDia,
-  fetchPrimeiraParcelaPorAgente,
-  fetchAcordosPorPortfolio,
-  fetchExcecoesPorPortfolio,
-  fetchRejeitadosPorPortfolio,
-} from "@/services/api";
+import { useHomeViewModel } from "@/hooks/useHomeViewModel";
 import { trackEvent } from "@/services/analytics";
 import ExecutiveHeader from "@/components/executive/ExecutiveHeader";
-import ExecutiveKpiStrip from "@/components/executive/ExecutiveKpiStrip";
+import HomeKpiStrip from "@/components/executive/HomeKpiStrip";
 import ExecutiveInsightCard from "@/components/executive/ExecutiveInsightCard";
-import ExecutiveRankingTable from "@/components/executive/ExecutiveRankingTable";
 import ApiDebugBanner from "@/components/executive/ApiDebugBanner";
-import BuValueChart from "@/components/executive/BuValueChart";
 import RitmoDiaCard from "@/components/executive/RitmoDiaCard";
-import BuEfficiencyChart from "@/components/executive/BuEfficiencyChart";
 import SectionHeader from "@/components/executive/SectionHeader";
 import HomeBarChart from "@/components/executive/HomeBarChart";
-import {
-  aggregateTotals,
-  calcConversao,
-  calcCpc,
-  calcTicketMedio,
-  fmtBRL,
-} from "@/lib/metrics";
-import { generateDailyReadout } from "@/lib/insightEngine";
-import { todayStr, firstOfMonthStr, lastOfMonthStr } from "@/lib/dates";
-import {
-  selectBuEfficiencyData,
-  selectBuValueData,
-  selectTopAgentesPorPrimeiraParcela,
-  selectTopByValor,
-  selectTopPortfolioPorExcecoes,
-  selectTopPortfolioPorRejeitados,
-  selectTopPortfolioPorValor,
-} from "@/selectors/homeSelectors";
-
-import type { ExecutiveKpi } from "@/types/executive";
-function countBusinessDays(fromIso: string, toIso: string): number {
-  const start = new Date(`${fromIso}T00:00:00`);
-  const end = new Date(`${toIso}T00:00:00`);
-  let n = 0;
-  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-    const dow = d.getDay();
-    if (dow !== 0 && dow !== 6) n++;
-  }
-  return n;
-}
+import HandoffFinanceiroGroupedBar from "@/components/executive/HandoffFinanceiroGroupedBar";
+import HandoffTopAgentes1aParcela from "@/components/executive/HandoffTopAgentes1aParcela";
+import HandoffEficienciaGroupedBar from "@/components/executive/HandoffEficienciaGroupedBar";
+import HandoffPortfolio1aParcela from "@/components/executive/HandoffPortfolio1aParcela";
 
 export default function Index() {
-  const { category, dateFrom, dateTo } = useGlobalFilters();
-  const selectedDatabase: DatabaseOption =
-    category === "AUTOS"
-      ? "COBwebRCBAUTOS"
-      : category === "CONSUMER"
-        ? "COBwebRCBCONSUMER"
-        : "todos";
-  const { rows, loading, error: loadError, warnings, refresh } = useProdutividadeData(
-    selectedDatabase,
-    { dateFrom, dateTo },
-  );
-
-  const [primeiraParcelaDia, setPrimeiraParcelaDia] = useState<{ total_valor: number; total_acordos: number } | null>(null);
-  const [primeiraParcelaMes, setPrimeiraParcelaMes] = useState<number | null>(null);
-
-  const { guardedRefresh, refreshing, remainingMs } = useRefreshGuard(async () => {
-    const startedAt = performance.now();
-    trackEvent("refresh_clicked", { page: "/" });
-    try {
-      await refresh();
-      trackEvent("refresh_success", { page: "/", duration_ms: Math.round(performance.now() - startedAt) });
-      window.dispatchEvent(new CustomEvent("dashboard:refresh", { detail: { route: "/" } }));
-    } catch (err) {
-      trackEvent("refresh_error", { page: "/", duration_ms: Math.round(performance.now() - startedAt) });
-      throw err;
-    }
-  });
+  const { selectedDatabase } = useGlobalFilters();
+  const vm = useHomeViewModel();
 
   useEffect(() => {
-    setPrimeiraParcelaDia(null);
-    fetchPrimeiraParcelaDia(selectedDatabase, undefined, dateFrom, dateTo)
-      .then((env) => {
-        const row = env.data[0];
-        if (row) setPrimeiraParcelaDia({ total_valor: Number(row.total_valor) || 0, total_acordos: Number(row.total_acordos) || 0 });
-      })
-      .catch(() => {});
-  }, [selectedDatabase, dateFrom, dateTo]);
-
-  useEffect(() => {
-    setPrimeiraParcelaMes(null);
-    const monthStart = firstOfMonthStr();
-    const today = todayStr();
-    fetchPrimeiraParcelaDia(selectedDatabase, undefined, monthStart, today)
-      .then((env) => {
-        const row = env.data[0];
-        if (row) setPrimeiraParcelaMes(Number(row.total_valor) || 0);
-      })
-      .catch(() => {});
-  }, [selectedDatabase]);
-
-  const projecaoMes = useMemo(() => {
-    if (primeiraParcelaMes == null || primeiraParcelaMes <= 0) return undefined;
-    const monthStart = firstOfMonthStr();
-    const monthEnd = lastOfMonthStr();
-    const today = todayStr();
-    const diasDecorridos = countBusinessDays(monthStart, today);
-    const diasTotais = countBusinessDays(monthStart, monthEnd);
-    if (diasDecorridos <= 0) return undefined;
-    return (primeiraParcelaMes / diasDecorridos) * diasTotais;
-  }, [primeiraParcelaMes]);
-
-  const totals = useMemo(() => aggregateTotals(rows), [rows]);
-
-  useEffect(() => {
-    if (totals.valor_acordos <= 0) return;
-    const ratio = (totals.valor_primeira_parcela * 100) / totals.valor_acordos;
+    if (vm.kpiSecondary.length === 0) return;
+    const totalsExcecoes = vm.kpiSecondary.find((k) => k.label === "Exceções %");
+    if (!totalsExcecoes) return;
+    const ratio = totalsExcecoes.value;
     let severity: "critical" | "warning" | null = null;
     if (ratio > 0 && ratio < 5) severity = "critical";
     else if (ratio >= 5 && ratio < 10) severity = "warning";
@@ -130,84 +33,17 @@ export default function Index() {
     trackEvent("first_installment_ratio_alert", {
       severity,
       ratio_pct: Number(ratio.toFixed(2)),
-      valor_primeira_parcela: totals.valor_primeira_parcela,
-      valor_total_acordado: totals.valor_acordos,
       database: selectedDatabase,
     });
-  }, [totals.valor_acordos, totals.valor_primeira_parcela, selectedDatabase]);
+  }, [vm.kpiSecondary, selectedDatabase]);
 
-  const kpis: ExecutiveKpi[] = useMemo(() => {
-    const cpc = calcCpc(totals);
-    const conv = calcConversao(totals);
-    const ticket = calcTicketMedio(totals);
-    return [
-      { label: "Valor de Acordos", value: totals.valor_acordos, unit: "BRL", priority: "primary", formula: "Σ valor_acordos", hint: "Soma total do valor acordado no período." },
-      {
-        label: "1ª Parcela",
-        value: primeiraParcelaDia?.total_valor ?? totals.valor_primeira_parcela,
-        unit: "BRL",
-        priority: "primary",
-        formula: "Σ primeira_parcela_do_dia",
-        hint: "Entrada de caixa já garantida no dia.",
-      },
-      { label: "CPC %", value: cpc, unit: "%", priority: "secondary", formula: "qtd_contatos / qtd_acionamentos", hint: "Contatos efetivos por acionamento." },
-      { label: "Conversão %", value: conv, unit: "%", priority: "secondary", formula: "qtd_acordos / qtd_acionamentos", hint: "Acordos fechados por acionamento." },
-      { label: "Ticket Médio", value: ticket, unit: "BRL", priority: "secondary", formula: "valor_acordos / qtd_acordos" },
-      { label: "Qtd Acordos", value: totals.qtd_acordos, unit: "count", priority: "secondary", formula: "Σ qtd_acordos" },
-    ];
-  }, [rows, totals, primeiraParcelaDia]);
-
-  const readout = useMemo(() => generateDailyReadout(rows, projecaoMes), [rows, projecaoMes]);
-
-  const topByValor = useMemo(() => selectTopByValor(rows), [rows]);
-  const buValueData = useMemo(() => selectBuValueData(rows), [rows]);
-  const buEffData = useMemo(() => selectBuEfficiencyData(rows), [rows]);
-
-  const cpcAvg = useMemo(() => calcCpc(totals), [totals]);
-  const convAvg = useMemo(() => calcConversao(totals), [totals]);
-
-  // ── Sections data (Financeiro, Eficiência, Risco) ──────────────────
-  const [qPpAgente, qAcdPort, qExcPort, qRejPort] = useQueries({
-    queries: [
-      {
-        queryKey: ["home", "primeira-parcela-por-agente", selectedDatabase, dateFrom, dateTo] as const,
-        queryFn: () => fetchPrimeiraParcelaPorAgente(selectedDatabase, undefined, dateFrom, dateTo),
-      },
-      {
-        queryKey: ["home", "acordos-por-portfolio", selectedDatabase, dateFrom, dateTo] as const,
-        queryFn: () => fetchAcordosPorPortfolio(selectedDatabase, dateFrom, dateTo),
-      },
-      {
-        queryKey: ["home", "excecoes-por-portfolio", selectedDatabase, dateFrom, dateTo] as const,
-        queryFn: () => fetchExcecoesPorPortfolio(selectedDatabase, dateFrom, dateTo),
-      },
-      {
-        queryKey: ["home", "rejeitados-por-portfolio", selectedDatabase, dateFrom, dateTo] as const,
-        queryFn: () => fetchRejeitadosPorPortfolio(selectedDatabase, dateFrom, dateTo),
-      },
-    ],
+  const { guardedRefresh, refreshing, remainingMs } = useRefreshGuard(async () => {
+    const startedAt = performance.now();
+    trackEvent("refresh_clicked", { page: "/" });
+    await vm.refresh();
+    trackEvent("refresh_success", { page: "/", duration_ms: Math.round(performance.now() - startedAt) });
+    window.dispatchEvent(new CustomEvent("dashboard:refresh", { detail: { route: "/" } }));
   });
-
-  const top10PrimeiraParcela = useMemo(
-    () => selectTopAgentesPorPrimeiraParcela(qPpAgente.data?.data ?? []),
-    [qPpAgente.data],
-  );
-  const primeiraParcelaPorPortfolio = useMemo(
-    () => selectTopPortfolioPorValor(qAcdPort.data?.data ?? []),
-    [qAcdPort.data],
-  );
-  const excecoesPorPortfolio = useMemo(
-    () => selectTopPortfolioPorExcecoes(qExcPort.data?.data ?? []),
-    [qExcPort.data],
-  );
-  const rejeitadosPorPortfolio = useMemo(
-    () => selectTopPortfolioPorRejeitados(qRejPort.data?.data ?? []),
-    [qRejPort.data],
-  );
-
-  const filterChips = [
-    { label: "Categoria", value: category },
-  ];
 
   return (
     <SidebarProvider>
@@ -220,115 +56,41 @@ export default function Index() {
             onRefresh={guardedRefresh}
             refreshing={refreshing}
             refreshHint={remainingMs > 0 ? `Aguarde ${Math.ceil(remainingMs / 1000)}s` : "Atualizar"}
-            filters={filterChips}
           />
 
           <div className="flex-1 bg-background overflow-auto">
-            <div className="mx-auto max-w-[1280px] w-full p-6 space-y-6">
-            {/* API debug banner — aparece quando há falha de conexão */}
-            <ApiDebugBanner
-              error={loadError}
-              warnings={warnings}
-              onRetry={guardedRefresh}
-            />
+            <div className="mx-auto max-w-[1600px] w-full p-6 space-y-6">
+            <ApiDebugBanner error={vm.error} warnings={vm.warnings} onRetry={guardedRefresh} />
 
-            {/* Resumo do Dia + Ritmo do Dia (merged). Hero omitido em neutro: render RitmoDia standalone. */}
-            {!loading && readout.empty ? (
-              <RitmoDiaCard db={selectedDatabase} />
-            ) : (
-              <Card>
-                <ExecutiveInsightCard data={readout} loading={loading} embedded />
-                <div className="border-t" />
-                <RitmoDiaCard db={selectedDatabase} embedded />
-              </Card>
-            )}
+            <ExecutiveInsightCard {...vm.insight} loading={vm.loading} />
+            <RitmoDiaCard db={selectedDatabase} />
 
-            {/* KPIs */}
-            <ExecutiveKpiStrip kpis={kpis} loading={loading} />
+            <HomeKpiStrip primary={vm.kpiPrimary} secondary={vm.kpiSecondary} />
 
-            {/* Financeiro */}
             <section className="space-y-4">
-              <SectionHeader
-                title="Financeiro"
-                unit="BRL"
-                description="Resultados em valor de acordos e entrada de caixa (1ª parcela)."
-              />
+              <SectionHeader title="Financeiro" unit="BRL" description="Resultados em valor de acordos e entrada de caixa (1ª parcela)." />
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <BuValueChart
-                  title="Valor por Unidade de Negócio"
-                  data={buValueData}
-                  empty={buValueData.length === 0}
-                  loading={loading}
-                />
-                <HomeBarChart
-                  title="Top 10 Agentes por 1ª Parcela"
-                  data={top10PrimeiraParcela}
-                  color="hsl(152 60% 45%)"
-                  formatValue={(v) => fmtBRL(v, { compact: true })}
-                  loading={qPpAgente.isLoading}
-                />
+                <HandoffFinanceiroGroupedBar title="Valor por Unidade de Negócio" data={vm.financeiroData} empty={vm.financeiroData.length === 0} loading={vm.loading} />
+                <HandoffTopAgentes1aParcela title="Top 10 Agentes por 1ª Parcela" rows={vm.top10PrimeiraParcela} empty={vm.top10PrimeiraParcela.length === 0} loading={vm.loadingPpAgente} />
               </div>
             </section>
 
-            {/* Eficiência */}
             <section className="space-y-4">
-              <SectionHeader
-                title="Eficiência"
-                unit="%"
-                description="Esforço (acionamentos/contatos) e taxas (CPC/Conversão) por unidade de negócio."
-              />
+              <SectionHeader title="Eficiência" unit="%" description="Esforço (acionamentos/contatos) e taxas (CPC/Conversão) por unidade de negócio." />
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <BuEfficiencyChart
-                  title="CPC % e Conversão % por Unidade de Negócio"
-                  data={buEffData}
-                  cpcAverage={cpcAvg}
-                  conversaoAverage={convAvg}
-                  empty={buEffData.length === 0}
-                  loading={loading}
-                />
-                <HomeBarChart
-                  title="Valor de Acordos por Portfólio"
-                  data={primeiraParcelaPorPortfolio}
-                  color="hsl(217 91% 60%)"
-                  formatValue={(v) => fmtBRL(v, { compact: true })}
-                  loading={qAcdPort.isLoading}
-                />
+                <HandoffEficienciaGroupedBar title="CPC % e Conversão % por Unidade de Negócio" data={vm.eficienciaData} summary={{ cpcAvg: vm.cpcAvg, conversaoAvg: vm.convAvg }} empty={vm.eficienciaData.length === 0} loading={vm.loading} />
+                <HandoffPortfolio1aParcela title="Valor de Acordos por Portfólio" rows={vm.portfolio1aParcela} empty={vm.portfolio1aParcela.length === 0} loading={vm.loadingAcdPort} />
               </div>
             </section>
 
-            {/* Risco / Qualidade */}
             <section className="space-y-4">
-              <SectionHeader
-                title="Risco / Qualidade"
-                description="Exceções e rejeitados por portfólio."
-              />
+              <SectionHeader title="Risco / Qualidade" description="Exceções e rejeitados por portfólio. Boletos quebrados: aguardando endpoint." />
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <HomeBarChart
-                  title="Exceções por Portfólio (Qtd)"
-                  data={excecoesPorPortfolio}
-                  color="hsl(347 77% 50%)"
-                  formatValue={(v) => String(v)}
-                  loading={qExcPort.isLoading}
-                />
-                <HomeBarChart
-                  title="Rejeitados por Portfólio (Qtd)"
-                  data={rejeitadosPorPortfolio}
-                  color="hsl(24 95% 53%)"
-                  formatValue={(v) => String(v)}
-                  loading={qRejPort.isLoading}
-                />
+                <HomeBarChart title="Exceções por Portfólio (Qtd)" data={vm.excecoesPorPortfolio} color="hsl(347 77% 50%)" formatValue={(v) => String(v)} loading={vm.loadingExcPort} />
+                <HomeBarChart title="Rejeitados por Portfólio (Qtd)" data={vm.rejeitadosPorPortfolio} color="hsl(24 95% 53%)" formatValue={(v) => String(v)} loading={vm.loadingRejPort} />
               </div>
             </section>
 
-            {/* Top agentes (single consolidated ranking) */}
-            <ExecutiveRankingTable
-              title="Top 10 Agentes por Valor de Acordos"
-              rows={topByValor}
-              primaryColumnLabel="Valor Acordos"
-              secondaryColumnLabel="Qtd Acordos"
-              loading={loading}
-              empty={topByValor.length === 0}
-            />
             </div>
           </div>
         </div>

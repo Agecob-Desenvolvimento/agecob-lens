@@ -7,6 +7,8 @@ import type {
 } from "@/services/api";
 import type { BuValueDatum } from "@/components/executive/BuValueChart";
 import type { BuEfficiencyDatum } from "@/components/executive/BuEfficiencyChart";
+import type { HandoffFinanceiroDatum } from "@/components/executive/HandoffFinanceiroGroupedBar";
+import type { HandoffEficienciaDatum } from "@/components/executive/HandoffEficienciaGroupedBar";
 import { aggregateTotals, buFromSource, calcConversao, calcCpc, shortAgentName } from "@/lib/metrics";
 import type { RankingRow } from "@/types/executive";
 
@@ -90,4 +92,32 @@ export function selectTopPortfolioPorRejeitados(rows: RejeitadosPorPortfolioRow[
     .sort((a, b) => Number(b.qtd_rejeitados || 0) - Number(a.qtd_rejeitados || 0))
     .slice(0, n)
     .map((r) => ({ label: r.portfolio_name, value: Number(r.qtd_rejeitados || 0) }));
+}
+
+export function selectGapDePerformance(rows: ProdutividadeRowWithSource[]): number {
+  const valores = rows
+    .map((r) => Number(r.valor_acordos || 0))
+    .filter((v) => v > 0);
+  if (valores.length === 0) return 0;
+  return Math.max(...valores) - Math.min(...valores);
+}
+
+export function selectFinanceiroHandoffData(
+  rows: ProdutividadeRowWithSource[],
+): HandoffFinanceiroDatum[] {
+  return selectBuValueData(rows).map((d) => ({
+    bu: d.name,
+    valorAcordos: d.valor_acordos,
+    primeiraParcela: d.valor_primeira_parcela,
+  }));
+}
+
+export function selectEficienciaHandoffData(
+  rows: ProdutividadeRowWithSource[],
+): HandoffEficienciaDatum[] {
+  return selectBuEfficiencyData(rows).map((d) => ({
+    bu: d.name,
+    cpc: d.cpc,
+    conversao: d.conversao,
+  }));
 }

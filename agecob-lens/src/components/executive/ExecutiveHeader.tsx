@@ -1,35 +1,29 @@
-import type { ReactNode } from "react";
 import { RefreshCw } from "lucide-react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
-import { Badge } from "@/components/ui/badge";
-
-interface FilterChip {
-  label: string;
-  value: string;
-}
+import { Input } from "@/components/ui/input";
+import { useGlobalFilters } from "@/contexts/GlobalFiltersContext";
+import { cn } from "@/lib/utils";
 
 interface ExecutiveHeaderProps {
   title: string;
-  period?: string;
-  filters?: FilterChip[];
   onRefresh?: () => void;
   refreshing?: boolean;
   refreshHint?: string;
-  periodControl?: ReactNode;
 }
+
+const CATEGORIAS = ["Todas", "AUTOS", "CONSUMER"] as const;
 
 export function ExecutiveHeader({
   title,
-  period,
-  filters,
   onRefresh,
   refreshing,
   refreshHint,
-  periodControl,
 }: ExecutiveHeaderProps) {
+  const { category, setCategory, dateFrom, setDateFrom, dateTo, setDateTo } = useGlobalFilters();
+
   return (
-    <header className="border-b border-border bg-card px-4 py-3 flex flex-wrap items-center gap-3">
-      <div className="flex items-center gap-2">
+    <header className="sticky top-0 z-20 border-b border-border bg-card px-4 py-3 flex flex-wrap items-center gap-4">
+      <div className="flex items-center gap-2 shrink-0">
         <SidebarTrigger />
         {onRefresh ? (
           <button
@@ -45,6 +39,7 @@ export function ExecutiveHeader({
           </button>
         ) : null}
       </div>
+
       <h1 className="text-base font-semibold text-foreground tracking-tight truncate flex-1 min-w-0 flex items-center gap-2">
         <span className="truncate">{title}</span>
         <span
@@ -54,18 +49,48 @@ export function ExecutiveHeader({
           v{__COMMIT_SHA__}
         </span>
       </h1>
-      <div className="flex flex-wrap items-center gap-2">
-        {periodControl ?? (period ? (
-          <Badge variant="outline" className="text-xs capitalize">
-            {period}
-          </Badge>
-        ) : null)}
-        {filters?.map((chip) => (
-          <Badge key={`${chip.label}-${chip.value}`} variant="secondary" className="text-xs">
-            <span className="text-muted-foreground mr-1">{chip.label}:</span>
-            <span className="font-semibold">{chip.value}</span>
-          </Badge>
-        ))}
+
+      <div className="flex items-center gap-3 shrink-0">
+        <div className="flex items-center gap-2">
+          <label htmlFor="hdr-date-from" className="text-[11px] font-medium text-muted-foreground">De</label>
+          <Input
+            id="hdr-date-from"
+            type="date"
+            value={dateFrom}
+            onChange={(e) => setDateFrom(e.target.value)}
+            className="h-7 w-[140px] text-xs"
+          />
+          <label htmlFor="hdr-date-to" className="text-[11px] font-medium text-muted-foreground">Até</label>
+          <Input
+            id="hdr-date-to"
+            type="date"
+            value={dateTo}
+            onChange={(e) => setDateTo(e.target.value)}
+            className="h-7 w-[140px] text-xs"
+          />
+        </div>
+
+        <div className="inline-flex rounded-md border border-border overflow-hidden">
+          {CATEGORIAS.map((opt) => {
+            const active = category === opt;
+            return (
+              <button
+                key={opt}
+                type="button"
+                onClick={() => setCategory(opt)}
+                className={cn(
+                  "h-7 px-3 text-xs font-medium transition-colors",
+                  active
+                    ? "bg-foreground text-background"
+                    : "bg-card text-muted-foreground hover:bg-muted",
+                )}
+                aria-pressed={active}
+              >
+                {opt}
+              </button>
+            );
+          })}
+        </div>
       </div>
     </header>
   );

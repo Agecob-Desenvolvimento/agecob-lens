@@ -1,40 +1,16 @@
-import { lazy, Suspense, useState } from "react";
-import { type DatabaseOption } from "@/services/api";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
-import LazyVisibleSection from "@/components/performance/LazyVisibleSection";
-import { ROUTE_LOAD_PRIORITY } from "@/config/loadPriorities";
-import { useRefreshGuard } from "@/hooks/useRefreshGuard";
-import { trackEvent } from "@/services/analytics";
 import ExecutiveHeader from "@/components/executive/ExecutiveHeader";
-import { useGlobalFilters } from "@/contexts/GlobalFiltersContext";
-
-const AgentComparisonDashboard = lazy(() => import("@/components/AgentComparisonDashboard"));
+import SectionHeader from "@/components/executive/SectionHeader";
+import ApiDebugBanner from "@/components/executive/ApiDebugBanner";
+import ExecutiveInsightCard from "@/components/executive/ExecutiveInsightCard";
+import ExecutiveRankingTable from "@/components/executive/ExecutiveRankingTable";
+import { AgentFilterBar } from "@/components/detalhamento/AgentFilterBar";
+import { useComparacaoViewModel } from "@/hooks/useComparacaoViewModel";
+import { formatBRLCompact, fmtPct } from "@/lib/metrics";
 
 export default function ComparacaoAgentes() {
-  const { category, dateFrom, dateTo } = useGlobalFilters();
-  const db: DatabaseOption =
-    category === "AUTOS"
-      ? "COBwebRCBAUTOS"
-      : category === "CONSUMER"
-        ? "COBwebRCBCONSUMER"
-        : "todos";
-  const [refreshTick, setRefreshTick] = useState(0);
-  const { guardedRefresh, refreshing, remainingMs } = useRefreshGuard(async () => {
-    const startedAt = performance.now();
-    trackEvent("refresh_clicked", { page: "/comparacao-agentes" });
-    try {
-      setRefreshTick((prev) => prev + 1);
-      trackEvent("refresh_success", { page: "/comparacao-agentes", duration_ms: Math.round(performance.now() - startedAt) });
-      window.dispatchEvent(new CustomEvent("dashboard:refresh", { detail: { route: "/comparacao-agentes" } }));
-    } catch {
-      trackEvent("refresh_error", { page: "/comparacao-agentes", duration_ms: Math.round(performance.now() - startedAt) });
-    }
-  });
-
-  const filterChips = [
-    { label: "Categoria", value: category },
-  ];
+  const vm = useComparacaoViewModel();
 
   return (
     <SidebarProvider>
@@ -42,26 +18,121 @@ export default function ComparacaoAgentes() {
         <AppSidebar />
 
         <div className="flex-1 flex flex-col min-w-0">
-          <ExecutiveHeader
-            title="Comparação de Agentes"
-            onRefresh={guardedRefresh}
-            refreshing={refreshing}
-            refreshHint={remainingMs > 0 ? `Aguarde ${Math.ceil(remainingMs / 1000)}s` : "Atualizar"}
-            period="Hoje"
-            filters={filterChips}
-          />
+          <ExecutiveHeader title="Comparação de Agentes" />
 
-          <div className="max-w-7xl mx-auto px-4 py-6 space-y-6 w-full">
-            <LazyVisibleSection
-              id="comparacao-dashboard"
-              scope="/comparacao-agentes"
-              priority={ROUTE_LOAD_PRIORITY["/comparacao-agentes"].dashboard}
-              fallback={<div className="text-sm text-muted-foreground">Preparando dashboard...</div>}
-            >
-              <Suspense fallback={<div className="text-sm text-muted-foreground">Carregando comparação...</div>}>
-                <AgentComparisonDashboard key={`${db}-${dateFrom}-${dateTo}-${refreshTick}`} db={db} dateFrom={dateFrom} dateTo={dateTo} />
-              </Suspense>
-            </LazyVisibleSection>
+          <div className="flex-1 overflow-y-auto bg-background">
+            <div className="mx-auto max-w-[1600px] w-full p-6 space-y-6">
+              <ApiDebugBanner error={vm.error} warnings={vm.warnings} />
+
+              {/* Agent selectors side-by-side */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div>
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground mb-2">
+                    Agente A
+                  </div>
+                  <AgentFilterBar
+                    agents={vm.agentList}
+                    selected={vm.agenteA}
+                    onSelect={vm.setAgenteA}
+                  />
+                  {vm.agenteA && (
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      {vm.kpisA.map((k) => (
+                        <div key={k.label} className="bg-card border rounded-md px-3 py-2">
+                          <div className="text-[10px] uppercase text-muted-foreground">{k.label}</div>
+                          <div className="text-sm font-semibold tabular-nums">
+                            {k.unit === "BRL" ? formatBRLCompact(k.value) : k.unit === "%" ? fmtPct(k.value) : k.value}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground mb-2">
+                    Agente B
+                  </div>
+                  <AgentFilterBar
+                    agents={vm.agentList}
+                    selected={vm.agenteB}
+                    onSelect={vm.setAgenteB}
+                  />
+                  {vm.agenteB && (
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      {vm.kpisB.map((k) => (
+                        <div key={k.label} className="bg-card border rounded-md px-3 py-2">
+                          <div className="text-[10px] uppercase text-muted-foreground">{k.label}</div>
+                          <div className="text-sm font-semibold tabular-nums">
+                            {k.unit === "BRL" ? formatBRLCompact(k.value) : k.unit === "%" ? fmtPct(k.value) : k.value}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Veredito */}
+              <ExecutiveInsightCard
+                variant={vm.veredito.variant}
+                description={vm.veredito.description}
+                loading={vm.loading}
+              />
+
+              {/* Radar chart — simplified bar comparison */}
+              {vm.radarData.length > 0 && (
+                <section className="space-y-3">
+                  <SectionHeader
+                    title="Comparação por Dimensão"
+                    unit="%"
+                    description="Valores normalizados pelo máximo da equipe (BU dos selecionados)."
+                  />
+                  <div className="bg-card border rounded-lg p-5">
+                    <div className="space-y-2">
+                      {vm.radarData.map((d) => (
+                        <div key={d.dim} className="flex items-center gap-3">
+                          <span className="w-20 text-xs text-right text-muted-foreground">{d.dim}</span>
+                          <div className="flex-1 flex items-center gap-1">
+                            <div className="flex-1 h-5 bg-blue-50 rounded-sm overflow-hidden flex justify-end">
+                              <div
+                                className="h-full bg-blue-500 rounded-sm transition-all"
+                                style={{ width: `${d.agentA}%` }}
+                              />
+                            </div>
+                            <span className="w-8 text-[10px] tabular-nums text-center text-blue-700 font-semibold">
+                              {d.agentA}
+                            </span>
+                          </div>
+                          <div className="flex-1 flex items-center gap-1">
+                            <div className="flex-1 h-5 bg-amber-50 rounded-sm overflow-hidden flex justify-end">
+                              <div
+                                className="h-full bg-amber-500 rounded-sm transition-all"
+                                style={{ width: `${d.agentB}%` }}
+                              />
+                            </div>
+                            <span className="w-8 text-[10px] tabular-nums text-center text-amber-700 font-semibold">
+                              {d.agentB}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </section>
+              )}
+
+              {/* Top 10 ranking */}
+              <ExecutiveRankingTable
+                title="Top 10 Agentes por Valor"
+                rows={vm.rankingData}
+                primaryColumnLabel="Valor"
+                secondaryColumnLabel="Qtd"
+                maxRows={10}
+                loading={vm.loading}
+                empty={vm.rankingData.length === 0}
+              />
+            </div>
           </div>
         </div>
       </div>

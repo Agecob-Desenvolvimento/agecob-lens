@@ -252,6 +252,65 @@ def build_rejeitados_por_portfolio_query(db: str, date_from: str = None, date_to
     return wrap_todos_or_single(db, _base, agg, order_by=order, date_from=date_from, date_to_exclusive=date_to_exclusive)
 
 
+def _build_detalhe_por_portfolio(db: str, status_sql: str, date_from: str = None, date_to_exclusive: str = None) -> str:
+    """
+    Lista detalhe (1 linha por acordo) de um portfólio específico, filtrado por
+    status. O nome do portfólio entra como parâmetro `?` (um por banco). CPF
+    mascarado: primeiros 3 + últimos 2 dígitos.
+    """
+    def _base(database: str) -> str:
+        return f"""
+            SELECT
+                R.NR_RECEBIMENTO,
+                R.ID_CARTEIRA,
+                R.VALOR,
+                U.NOME AS agente,
+                CASE
+                    WHEN LEN(D.CPF_CNPJ) >= 5
+                    THEN LEFT(D.CPF_CNPJ, 3) + '.***.***-' + RIGHT(D.CPF_CNPJ, 2)
+                    ELSE D.CPF_CNPJ
+                END AS cpf_mask,
+                D.NOME_RAZAO AS nome_devedor
+            FROM {database}.dbo.REC_MASTER R (NOLOCK)
+            JOIN {database}.dbo.USU_MASTER U (NOLOCK) ON R.ID_USUARIO = U.ID_USUARIO
+            LEFT JOIN {database}.dbo.DEV_MASTER D (NOLOCK) ON R.ID_DEV = D.ID_DEV
+            CROSS APPLY (
+                SELECT TOP 1 DA2.{settings.PORTFOLIO_COLUMN}
+                FROM {database}.dbo.REC_DIVIDAS RD (NOLOCK)
+                JOIN {database}.dbo.DIV_AUX DA2 (NOLOCK) ON RD.ID_DIVIDA = DA2.ID_DIVIDA
+                WHERE RD.NR_RECEBIMENTO = R.NR_RECEBIMENTO
+                  AND RD.ID_CARTEIRA = R.ID_CARTEIRA
+                  AND DA2.{settings.PORTFOLIO_COLUMN} IS NOT NULL
+            ) DA
+            WHERE R.DT_EMISSAO >= @Hoje AND R.DT_EMISSAO < @Amanha
+              AND R.PARCELA = {settings.PRIMEIRA_PARCELA}
+              AND R.ID_REC_STATUS IN {status_sql}
+              {settings.FILTRO_AGENTES_EXCLUIDOS_SQL}
+              AND DA.{settings.PORTFOLIO_COLUMN} = ?
+        """
+
+    agg = """
+        SELECT NR_RECEBIMENTO, ID_CARTEIRA, VALOR, agente, cpf_mask, nome_devedor
+    """
+    order = "ORDER BY VALOR DESC"
+    return wrap_todos_or_single(db, _base, agg, order_by=order, date_from=date_from, date_to_exclusive=date_to_exclusive)
+
+
+def build_excecoes_detalhe_query(db: str, date_from: str = None, date_to_exclusive: str = None) -> str:
+    """Detalhe das exceções (ID_REC_STATUS = 5) de um portfólio (param `?`)."""
+    return _build_detalhe_por_portfolio(db, settings.STATUS_EXCECAO_SQL, date_from, date_to_exclusive)
+
+
+def build_rejeitados_detalhe_query(db: str, date_from: str = None, date_to_exclusive: str = None) -> str:
+    """Detalhe dos rejeitados (ID_REC_STATUS = 7) de um portfólio (param `?`)."""
+    return _build_detalhe_por_portfolio(db, settings.STATUS_REJEITADO_SQL, date_from, date_to_exclusive)
+
+
+def build_acordos_detalhe_query(db: str, date_from: str = None, date_to_exclusive: str = None) -> str:
+    """Detalhe dos acordos aprovados (ID_REC_STATUS IN (1,3,12)) de um portfólio (param `?`)."""
+    return _build_detalhe_por_portfolio(db, settings.STATUS_APROVADOS_SQL, date_from, date_to_exclusive)
+
+
 def build_primeira_parcela_por_agente_query(db: str, assessoria_token: str = "", date_from: str = None, date_to_exclusive: str = None) -> str:
     """
     Gráfico: valor e quantidade da 1ª parcela por agente (acordos aprovados).

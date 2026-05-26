@@ -26,12 +26,15 @@ from dominios.acordos.queries import (
     build_tabela_performance_periodo_query,
 )
 from dominios.graficos.queries import (
+    build_acordos_detalhe_query,
     build_acordos_por_portfolio_query,
+    build_excecoes_detalhe_query,
     build_excecoes_por_agente_query,
     build_excecoes_por_portfolio_query,
     build_excecoes_sem_portfolio_query,
     build_primeira_parcela_dia_query,
     build_primeira_parcela_por_agente_query,
+    build_rejeitados_detalhe_query,
     build_rejeitados_por_portfolio_query,
 )
 from dominios.produtividade.queries import build_produtividade_query
@@ -594,6 +597,72 @@ def get_rejeitados_por_portfolio(
         query_args=(parsed_from, parsed_to_excl),
         filters_extra={"date": f"{parsed_from}/{parsed_to_excl}" if parsed_from else "today"},
         cache_key_suffix=period_suffix,
+    )
+
+
+@router.get("/excecoes-detalhe/{db}/{portfolio}")
+def get_excecoes_detalhe(
+    db: str,
+    portfolio: str,
+    dateFrom: Optional[str] = Query(default=None),
+    dateTo: Optional[str] = Query(default=None),
+    request: Request = None,
+) -> Dict[str, Any]:
+    validated_db = validate_database_or_todos(db)
+    parsed_from, parsed_to_excl = _parse_period(dateFrom, dateTo)
+    period_suffix = f"|period:{parsed_from or 'hoje'}-{parsed_to_excl or 'hoje'}"
+    portfolio_params = (portfolio,) * (2 if validated_db == "todos" else 1)
+    return _run_dashboard_chart(
+        validated_db, build_excecoes_detalhe_query,
+        "dashboard/excecoes-detalhe", request,
+        query_args=(parsed_from, parsed_to_excl),
+        params=portfolio_params,
+        filters_extra={"portfolio": portfolio, "date": f"{parsed_from}/{parsed_to_excl}" if parsed_from else "today"},
+        cache_key_suffix=f"|portfolio:{portfolio}{period_suffix}",
+    )
+
+
+@router.get("/acordos-detalhe/{db}/{portfolio}")
+def get_acordos_detalhe(
+    db: str,
+    portfolio: str,
+    dateFrom: Optional[str] = Query(default=None),
+    dateTo: Optional[str] = Query(default=None),
+    request: Request = None,
+) -> Dict[str, Any]:
+    validated_db = validate_database_or_todos(db)
+    parsed_from, parsed_to_excl = _parse_period(dateFrom, dateTo)
+    period_suffix = f"|period:{parsed_from or 'hoje'}-{parsed_to_excl or 'hoje'}"
+    portfolio_params = (portfolio,) * (2 if validated_db == "todos" else 1)
+    return _run_dashboard_chart(
+        validated_db, build_acordos_detalhe_query,
+        "dashboard/acordos-detalhe", request,
+        query_args=(parsed_from, parsed_to_excl),
+        params=portfolio_params,
+        filters_extra={"portfolio": portfolio, "date": f"{parsed_from}/{parsed_to_excl}" if parsed_from else "today"},
+        cache_key_suffix=f"|portfolio:{portfolio}{period_suffix}",
+    )
+
+
+@router.get("/rejeitados-detalhe/{db}/{portfolio}")
+def get_rejeitados_detalhe(
+    db: str,
+    portfolio: str,
+    dateFrom: Optional[str] = Query(default=None),
+    dateTo: Optional[str] = Query(default=None),
+    request: Request = None,
+) -> Dict[str, Any]:
+    validated_db = validate_database_or_todos(db)
+    parsed_from, parsed_to_excl = _parse_period(dateFrom, dateTo)
+    period_suffix = f"|period:{parsed_from or 'hoje'}-{parsed_to_excl or 'hoje'}"
+    portfolio_params = (portfolio,) * (2 if validated_db == "todos" else 1)
+    return _run_dashboard_chart(
+        validated_db, build_rejeitados_detalhe_query,
+        "dashboard/rejeitados-detalhe", request,
+        query_args=(parsed_from, parsed_to_excl),
+        params=portfolio_params,
+        filters_extra={"portfolio": portfolio, "date": f"{parsed_from}/{parsed_to_excl}" if parsed_from else "today"},
+        cache_key_suffix=f"|portfolio:{portfolio}{period_suffix}",
     )
 
 

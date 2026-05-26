@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AgDash · Dashboard Executivo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    background: #f8fafc;
+    color: #0f172a;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    height: 100%;
+  }
+
+  #root {
+    display: flex;
+    min-height: 100vh;
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+  /* Tabular nums for all data */
+  .tabular-nums { font-variant-numeric: tabular-nums; }
+
+  /* Print: hide sidebar */
+  @media print {
+    aside { display: none !important; }
+    header { position: static !important; }
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<!-- Component scripts -->
+<script type="text/babel" src="design/data.jsx"></script>
+<script type="text/babel" src="design/sidebar.jsx"></script>
+<script type="text/babel" src="design/kpi-components.jsx"></script>
+<script type="text/babel" src="design/insight-card.jsx"></script>
+<script type="text/babel" src="design/heatmap.jsx"></script>
+<script type="text/babel" src="design/ranking-table.jsx"></script>
+<script type="text/babel" src="design/charts.jsx"></script>
+<script type="text/babel" src="design/detalhamento-diagnostico.jsx"></script>
+<script type="text/babel" src="design/detalhamento-contexto.jsx"></script>
+<script type="text/babel" src="design/detalhamento-acao.jsx"></script>
+<script type="text/babel" src="design/detalhamento.jsx"></script>
+<script type="text/babel" src="design/analise-boletos.jsx"></script>
+<script type="text/babel" src="design/analise-portfolio.jsx"></script>
+<script type="text/babel" src="design/analise-page.jsx"></script>
+<script type="text/babel" src="design/tweaks-panel.jsx"></script>
+
+<script type="text/babel">
+
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "insightVariant": "critical",
+  "showHeatmap": true,
+  "showCharts": true,
+  "kpiLayout": "6-col"
+}/*EDITMODE-END*/;
+
+function App() {
+  const [activeNav, setActiveNav] = React.useState("home");
+  const [sidebarCollapsed, setSidebarCollapsed] = React.useState(false);
+
+  const [tweaks, setTweak] = useTweaks(TWEAK_DEFAULTS);
+
+  const insightVariant = tweaks.insightVariant;
+
+  const pageTitles = {
+    home: "Dashboard Executivo",
+    detalhamento: "Detalhamento de Agentes",
+    "analise-prod": "Análise & Efetividade",
+  };
+
+  return (
+    <React.Fragment>
+      {/* Sidebar */}
+      <Sidebar
+        activeNav={activeNav}
+        onNavChange={setActiveNav}
+        collapsed={sidebarCollapsed}
+        onToggle={() => setSidebarCollapsed(c => !c)}
+      />
+
+      {/* Main content */}
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
+        <Topbar
+          title={pageTitles[activeNav] || "AgDash"}
+          subtitle="v6dc8896"
+        />
+
+        {/* Page: Home */}
+        {activeNav === "home" && (
+          <main style={{
+            flex: 1, padding: "24px 24px 48px",
+            maxWidth: 1280, width: "100%",
+            display: "flex", flexDirection: "column", gap: 24,
+          }}>
+            <ExecutiveKpiStrip tweaks={tweaks} />
+
+            {insightVariant === "critical" && (
+              <ExecutiveInsightCard
+                variant="critical"
+                metric="Conversão de acordos"
+                value="1,2%"
+                delta="48% vs meta"
+                description={<span>Conversão baixa com alto volume de acionamentos. Qualidade dos contatos precisa ser revista em <strong>CONSUMER</strong>.</span>}
+                cta={{ label: "Verificar qualidade dos contatos" }}
+              />
+            )}
+            {insightVariant === "positive" && (
+              <ExecutiveInsightCard
+                variant="positive"
+                metric="CPC"
+                value="43,5%"
+                description="acima do patamar operacional."
+                cta={{ label: "Ver agentes do topo" }}
+              />
+            )}
+
+            {tweaks.showHeatmap && <RitmoDiaHeatmap />}
+            {tweaks.showCharts && <ChartsSection />}
+          </main>
+        )}
+
+        {/* Page: Detalhamento Agentes */}
+        {activeNav === "detalhamento" && (
+          <DetalhamentoAgentesPage />
+        )}
+
+        {/* Page: Análise & Efetividade */}
+        {activeNav === "analise-prod" && (
+          <AnaliseEfetividadePage />
+        )}
+
+        {/* Placeholder pages */}
+        {!["home", "detalhamento", "analise-prod"].includes(activeNav) && (
+          <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "#94a3b8", fontSize: 14 }}>
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 32, marginBottom: 8 }}>🚧</div>
+              <div style={{ fontWeight: 600, color: "#64748b" }}>{pageTitles[activeNav]}</div>
+              <div style={{ marginTop: 4 }}>Página em construção</div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Tweaks Panel */}
+      <TweaksPanel title="Tweaks">
+        <TweakSection title="Daily Readout">
+          <TweakRadio
+            label="Estado do insight"
+            value={tweaks.insightVariant}
+            onChange={v => setTweak("insightVariant", v)}
+            options={[
+              { label: "Crítico", value: "critical" },
+              { label: "Positivo", value: "positive" },
+              { label: "Neutro", value: "neutral" },
+            ]}
+          />
+        </TweakSection>
+        <TweakSection title="Seções">
+          <TweakToggle
+            label="Ritmo do Dia (Heatmap)"
+            value={tweaks.showHeatmap}
+            onChange={v => setTweak("showHeatmap", v)}
+          />
+          <TweakToggle
+            label="Gráficos (Financeiro + Eficiência)"
+            value={tweaks.showCharts}
+            onChange={v => setTweak("showCharts", v)}
+          />
+        </TweakSection>
+        <TweakSection title="Layout KPI">
+          <TweakRadio
+            label="Grid"
+            value={tweaks.kpiLayout}
+            onChange={v => setTweak("kpiLayout", v)}
+            options={[
+              { label: "6 colunas", value: "6-col" },
+              { label: "4 colunas", value: "4-col" },
+            ]}
+          />
+        </TweakSection>
+      </TweaksPanel>
+    </React.Fragment>
+  );
+}
+
+const root = ReactDOM.createRoot(document.getElementById("root"));
+root.render(<App />);
+</script>
+</body>
+</html>

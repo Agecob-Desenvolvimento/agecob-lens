@@ -1,16 +1,232 @@
 import type { ReactNode } from "react";
-import { AlertCircle, AlertTriangle, CheckCircle2, Lightbulb, Sparkles } from "lucide-react";
+import { AlertCircle, AlertTriangle, ArrowUpRight, ArrowRight, CheckCircle2, Lightbulb, Sparkles } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import { formatBRLCompact, fmtNum, fmtPct } from "@/lib/metrics";
 import type { InsightEngineOutput, InsightSeverity } from "@/types/executive";
 
-interface ExecutiveInsightCardProps {
+/* ------------------------------------------------------------------ *
+ * Props
+ *
+ * The component supports two prop shapes:
+ *
+ *  (a) Handoff "Daily Readout" hero banner — driven by `variant`.
+ *      This is the spec from docs/CLAUDE.md §1.2 and the handoff bundle.
+ *
+ *  (b) Legacy `InsightEngineOutput` shape — `data={...}` — kept for
+ *      back-compat with Index.tsx / DetalhamentoAgentes.tsx /
+ *      AgentComparisonDashboard.tsx (those callsites are out of scope
+ *      for this audit and must keep working).
+ * ------------------------------------------------------------------ */
+
+export type InsightCardVariant = "critical" | "positive" | "neutral";
+export type InsightMetricUnit = "BRL" | "percent" | "count";
+
+export interface InsightMetric {
+  value: number | string;
+  unit?: InsightMetricUnit;
+  /** Optional label rendered next to the value (e.g. "Conversão"). */
+  label?: string;
+}
+
+export interface InsightDelta {
+  /** Fraction (e.g. 0.12 = 12%). */
+  value: number;
+  baseline: string;
+  betterWhen: "up" | "down";
+}
+
+export interface InsightCta {
+  label: string;
+  onClick?: () => void;
+  href?: string;
+}
+
+interface HandoffProps {
+  variant: InsightCardVariant;
+  title?: string;
+  metric?: InsightMetric;
+  delta?: InsightDelta;
+  description?: string;
+  cta?: InsightCta;
+  loading?: boolean;
+}
+
+interface LegacyProps {
   data: InsightEngineOutput;
   loading?: boolean;
   title?: string;
   embedded?: boolean;
 }
+
+export type ExecutiveInsightCardProps = HandoffProps | LegacyProps;
+
+function isLegacy(p: ExecutiveInsightCardProps): p is LegacyProps {
+  return (p as LegacyProps).data !== undefined;
+}
+
+/* ------------------------------------------------------------------ *
+ * Handoff variant (new)
+ * ------------------------------------------------------------------ */
+
+function formatMetric(m: InsightMetric): string {
+  if (typeof m.value === "string") return m.value;
+  switch (m.unit) {
+    case "BRL":
+      return formatBRLCompact(m.value);
+    case "percent":
+      // value expected as fraction; render with 1 decimal
+      return fmtPct(m.value * 100);
+    case "count":
+      return fmtNum(m.value);
+    default:
+      return String(m.value);
+  }
+}
+
+function HandoffBanner({ variant, metric, delta, description, cta }: HandoffProps) {
+  if (variant === "neutral") return null;
+
+  const isCritical = variant === "critical";
+
+  const palette = isCritical
+    ? {
+        wrapper: "bg-danger-soft border-danger-border",
+        iconWrap: "bg-rose-100 border-danger-border text-danger-fg",
+        accent: "text-danger-fg",
+        textBody: "text-rose-900/85",
+        badgePill: "bg-white border-danger-border text-danger-fg",
+        ctaBtn: "bg-danger hover:bg-danger-fg text-white",
+      }
+    : {
+        wrapper: "bg-success-soft border-success-border",
+        iconWrap: "bg-emerald-100 border-success-border text-success-fg",
+        accent: "text-success-fg",
+        textBody: "text-emerald-900/85",
+        badgePill: "bg-white border-success-border text-success-fg",
+        ctaBtn: "bg-transparent text-success-fg underline underline-offset-[3px] hover:text-emerald-900",
+      };
+
+  const variantLabel = isCritical ? "Crítico" : "Positivo";
+
+  const ctaContent = cta ? (
+    isCritical ? (
+      <button
+        type="button"
+        onClick={cta.onClick}
+        className={cn(
+          "inline-flex items-center gap-1.5 px-4 py-2 rounded-md text-[13px] font-semibold transition-colors",
+          palette.ctaBtn,
+        )}
+      >
+        {cta.label}
+        <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+      </button>
+    ) : (
+      <button
+        type="button"
+        onClick={cta.onClick}
+        className={cn("text-[13px] font-semibold transition-colors", palette.ctaBtn)}
+      >
+        {cta.label} →
+      </button>
+    )
+  ) : null;
+
+  const formattedMetric = metric ? formatMetric(metric) : null;
+
+  return (
+    <div
+      role="status"
+      className={cn(
+        "w-full border rounded-lg flex gap-4",
+        palette.wrapper,
+        isCritical ? "items-start px-6 py-5" : "items-center px-6 py-3.5",
+      )}
+    >
+      {/* Icon */}
+      <div
+        className={cn(
+          "shrink-0 rounded-full border flex items-center justify-center",
+          palette.iconWrap,
+          isCritical ? "w-10 h-10 mt-0.5" : "w-8 h-8",
+        )}
+        aria-hidden="true"
+      >
+        {isCritical ? <AlertCircle className="h-5 w-5" /> : <CheckCircle2 className="h-4 w-4" />}
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 min-w-0">
+        {isCritical ? (
+          <>
+            <div className="flex items-center gap-2">
+              <span className={cn("text-[10px] font-bold uppercase tracking-[0.14em]", palette.accent)}>
+                {variantLabel}
+              </span>
+              {metric?.label && (
+                <>
+                  <span className="text-xs text-rose-900/70">·</span>
+                  <span className="text-xs text-rose-900/70">{metric.label}</span>
+                </>
+              )}
+            </div>
+            <div className="mt-1 flex items-baseline gap-3 flex-wrap">
+              {formattedMetric && (
+                <span className="text-[36px] font-bold tracking-tight tabular-nums leading-none text-rose-900">
+                  {formattedMetric}
+                </span>
+              )}
+              {delta && <DeltaPill delta={delta} className={palette.badgePill} />}
+            </div>
+            {description && (
+              <p className={cn("mt-2 text-[14.5px] leading-relaxed max-w-[640px]", palette.textBody)}>
+                {description}
+              </p>
+            )}
+          </>
+        ) : (
+          <div className="flex items-baseline gap-3 flex-wrap">
+            <span className={cn("text-[10px] font-bold uppercase tracking-[0.14em]", palette.accent)}>
+              {variantLabel}
+            </span>
+            {formattedMetric && (
+              <span className="text-xl font-semibold tabular-nums leading-none text-emerald-900">
+                {formattedMetric}
+                {metric?.label ? ` ${metric.label}` : ""}
+              </span>
+            )}
+            {description && <span className={cn("text-[13.5px]", palette.textBody)}>{description}</span>}
+          </div>
+        )}
+      </div>
+
+      {ctaContent && <div className="shrink-0 self-center">{ctaContent}</div>}
+    </div>
+  );
+}
+
+function DeltaPill({ delta, className }: { delta: InsightDelta; className: string }) {
+  const isUp = delta.value >= 0;
+  const Arrow = isUp ? ArrowUpRight : ArrowRight;
+  const pct = `${Math.round(Math.abs(delta.value) * 100)}%`;
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs font-semibold tabular-nums",
+        className,
+      )}
+    >
+      <Arrow className="h-3 w-3" aria-hidden="true" />
+      {pct} {delta.baseline}
+    </span>
+  );
+}
+
+/* ------------------------------------------------------------------ *
+ * Legacy renderer (kept verbatim in behavior, used by existing pages)
+ * ------------------------------------------------------------------ */
 
 type RenderSlot = {
   text: string;
@@ -39,7 +255,7 @@ const SEVERITY_TILE: Record<InsightSeverity | "action", {
   action:   { icon: Lightbulb,     bg: "bg-sky-50",       ring: "ring-sky-200",        border: "border-sky-500",  iconColor: "text-sky-600",    headlineColor: "text-sky-700",    badgeBg: "bg-sky-600 text-white",   label: "AÇÃO"     },
 };
 
-export function ExecutiveInsightCard({ data, loading, title = "Resumo do dia", embedded }: ExecutiveInsightCardProps) {
+function LegacyInsight({ data, loading, title = "Resumo do dia", embedded }: LegacyProps) {
   if (loading) {
     return (
       <Wrapper embedded={embedded}>
@@ -59,7 +275,6 @@ export function ExecutiveInsightCard({ data, loading, title = "Resumo do dia", e
   }
 
   if (data.empty) {
-    // Estado neutro: omitir o bloco inteiro (CLAUDE.md anti-pattern).
     return null;
   }
 
@@ -117,6 +332,15 @@ export function ExecutiveInsightCard({ data, loading, title = "Resumo do dia", e
       </CardContent>
     </Wrapper>
   );
+}
+
+/* ------------------------------------------------------------------ *
+ * Public entry point — discriminates by props shape.
+ * ------------------------------------------------------------------ */
+
+export function ExecutiveInsightCard(props: ExecutiveInsightCardProps) {
+  if (isLegacy(props)) return <LegacyInsight {...props} />;
+  return <HandoffBanner {...props} />;
 }
 
 export default ExecutiveInsightCard;
