@@ -17,6 +17,12 @@ export interface RankingEntry {
 export interface RankingPrioridadeProps {
   entries: RankingEntry[];
   topN?: number;
+  /** Selected agent's ID — shows rank row at bottom if not in top N */
+  highlightAgentId?: string;
+  /** Selected agent's rank position (1-based; 0 = unknown) */
+  highlightRank?: number;
+  /** Total number of agents */
+  totalAgents?: number;
 }
 
 interface ScoredEntry extends RankingEntry {
@@ -57,7 +63,13 @@ function Sparkline({ values }: { values: number[] }) {
   );
 }
 
-export function RankingPrioridade({ entries, topN = 10 }: RankingPrioridadeProps) {
+export function RankingPrioridade({
+  entries,
+  topN = 10,
+  highlightAgentId,
+  highlightRank,
+  totalAgents,
+}: RankingPrioridadeProps) {
   const ranked = useMemo<ScoredEntry[]>(() => {
     if (!entries.length) return [];
     const maxCpc = Math.max(...entries.map((e) => e.cpc)) || 1;
@@ -75,6 +87,12 @@ export function RankingPrioridade({ entries, topN = 10 }: RankingPrioridadeProps
       .slice(0, topN);
   }, [entries, topN]);
 
+  // Check if highlighted agent is in the top N
+  const hlInTopN = highlightAgentId
+    ? ranked.some((e) => e.id === highlightAgentId)
+    : false;
+  const showHlRow = highlightAgentId && !hlInTopN && (highlightRank ?? 0) > 0;
+
   return (
     <Card>
       <CardHeader>
@@ -84,42 +102,67 @@ export function RankingPrioridade({ entries, topN = 10 }: RankingPrioridadeProps
         {ranked.length === 0 ? (
           <div className="py-10 text-center text-sm text-muted-foreground">Sem dados.</div>
         ) : (
-          <ul className="divide-y divide-border">
-            {ranked.map((e, idx) => {
-              const level = riskLevel(e.score);
-              const style = RISK_STYLE[level];
-              return (
-                <li
-                  key={e.id}
-                  className="group flex items-center gap-3 px-4 py-2.5 hover:bg-muted/50 transition-colors"
-                >
-                  <span
+          <>
+            <ul className="divide-y divide-border">
+              {ranked.map((e, idx) => {
+                const level = riskLevel(e.score);
+                const style = RISK_STYLE[level];
+                const isHl = highlightAgentId && e.id === highlightAgentId;
+                return (
+                  <li
+                    key={e.id}
                     className={cn(
-                      "flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold",
-                      style.rank,
+                      "group flex items-center gap-3 px-4 py-2.5 hover:bg-muted/50 transition-colors",
+                      isHl && "bg-sky-50 ring-1 ring-sky-200",
                     )}
                   >
-                    {idx + 1}
+                    <span
+                      className={cn(
+                        "flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold",
+                        style.rank,
+                      )}
+                    >
+                      {idx + 1}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-medium text-foreground">{e.nome}</div>
+                      {e.mat && <div className="font-mono text-[10px] text-muted-foreground">{e.mat}</div>}
+                    </div>
+                    <Sparkline values={e.trend7d} />
+                    <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold", style.badge)}>
+                      {style.label}
+                    </span>
+                    <span className="w-10 shrink-0 text-right text-sm font-semibold tabular-nums text-foreground">
+                      {Math.round(e.score)}
+                    </span>
+                    <div className="flex shrink-0 gap-1 opacity-40 transition-opacity group-hover:opacity-100">
+                      <Button size="sm" variant="outline" className="h-7 px-2 text-xs">Abrir Ficha</Button>
+                      <Button size="sm" className="h-7 px-2 text-xs">Acionar</Button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+
+            {/* Selected agent rank row (if outside top N) */}
+            {showHlRow && (
+              <div className="border-t-2 border-dashed border-sky-200 mt-1">
+                <div className="px-4 py-2.5 flex items-center gap-3 bg-sky-50/50">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold bg-sky-500 text-white">
+                    {highlightRank}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-medium text-foreground">{e.nome}</div>
-                    {e.mat && <div className="font-mono text-[10px] text-muted-foreground">{e.mat}</div>}
+                    <div className="text-sm font-medium text-sky-700">
+                      Seu agente
+                    </div>
+                    <div className="text-[10px] text-sky-500">
+                      #{highlightRank} de {totalAgents ?? "?"} agentes
+                    </div>
                   </div>
-                  <Sparkline values={e.trend7d} />
-                  <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold", style.badge)}>
-                    {style.label}
-                  </span>
-                  <span className="w-10 shrink-0 text-right text-sm font-semibold tabular-nums text-foreground">
-                    {Math.round(e.score)}
-                  </span>
-                  <div className="flex shrink-0 gap-1 opacity-40 transition-opacity group-hover:opacity-100">
-                    <Button size="sm" variant="outline" className="h-7 px-2 text-xs">Abrir Ficha</Button>
-                    <Button size="sm" className="h-7 px-2 text-xs">Acionar</Button>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </CardContent>
     </Card>

@@ -3,6 +3,7 @@ from datetime import date, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import uuid4
 
+import numpy as np
 from fastapi import APIRouter, Query, Request
 
 import config.settings as settings
@@ -34,10 +35,16 @@ from dominios.graficos.queries import (
     build_excecoes_sem_portfolio_query,
     build_primeira_parcela_dia_query,
     build_primeira_parcela_por_agente_query,
+    build_primeira_parcela_por_portfolio_query,
+    build_quebrados_detalhe_query,
+    build_quebrados_por_portfolio_query,
     build_rejeitados_detalhe_query,
     build_rejeitados_por_portfolio_query,
+    build_excecoes_detalhe_agente_query,
+    build_rejeitados_detalhe_agente_query,
+    build_quebrados_detalhe_agente_query,
 )
-from dominios.produtividade.queries import build_produtividade_query
+from dominios.produtividade.queries import build_benchmark_query, build_produtividade_query
 from dominios.produtividade.servico import produtividade_servico
 
 router = APIRouter(prefix="/dashboard")
@@ -510,6 +517,26 @@ def get_primeira_parcela_dia(
     )
 
 
+@router.get("/primeira-parcela-por-portfolio/{db}")
+def get_primeira_parcela_por_portfolio(
+    db: str,
+    dateFrom: Optional[str] = Query(default=None),
+    dateTo: Optional[str] = Query(default=None),
+    request: Request = None,
+) -> Dict[str, Any]:
+    """Valor da 1ª parcela agrupado por portfólio (apenas acordos aprovados)."""
+    validated_db = validate_database_or_todos(db)
+    parsed_from, parsed_to_excl = _parse_period(dateFrom, dateTo)
+    period_suffix = f"|period:{parsed_from or 'hoje'}-{parsed_to_excl or 'hoje'}"
+    return _run_dashboard_chart(
+        validated_db, build_primeira_parcela_por_portfolio_query,
+        "dashboard/primeira-parcela-por-portfolio", request,
+        query_args=(parsed_from, parsed_to_excl),
+        filters_extra={"date": f"{parsed_from}/{parsed_to_excl}" if parsed_from else "today"},
+        cache_key_suffix=period_suffix,
+    )
+
+
 @router.get("/excecoes-por-portfolio/{db}")
 def get_excecoes_por_portfolio(
     db: str,
@@ -600,6 +627,24 @@ def get_rejeitados_por_portfolio(
     )
 
 
+@router.get("/quebrados-por-portfolio/{db}")
+def get_quebrados_por_portfolio(
+    db: str,
+    dateFrom: Optional[str] = Query(default=None),
+    dateTo: Optional[str] = Query(default=None),
+    request: Request = None,
+) -> Dict[str, Any]:
+    parsed_from, parsed_to_excl = _parse_period(dateFrom, dateTo)
+    period_suffix = f"|period:{parsed_from or 'hoje'}-{parsed_to_excl or 'hoje'}"
+    return _run_dashboard_chart(
+        db, build_quebrados_por_portfolio_query,
+        "dashboard/quebrados-por-portfolio", request,
+        query_args=(parsed_from, parsed_to_excl),
+        filters_extra={"date": f"{parsed_from}/{parsed_to_excl}" if parsed_from else "today"},
+        cache_key_suffix=period_suffix,
+    )
+
+
 @router.get("/excecoes-detalhe/{db}/{portfolio}")
 def get_excecoes_detalhe(
     db: str,
@@ -663,6 +708,137 @@ def get_rejeitados_detalhe(
         params=portfolio_params,
         filters_extra={"portfolio": portfolio, "date": f"{parsed_from}/{parsed_to_excl}" if parsed_from else "today"},
         cache_key_suffix=f"|portfolio:{portfolio}{period_suffix}",
+    )
+
+
+@router.get("/quebrados-detalhe/{db}/{portfolio}")
+def get_quebrados_detalhe(
+    db: str,
+    portfolio: str,
+    dateFrom: Optional[str] = Query(default=None),
+    dateTo: Optional[str] = Query(default=None),
+    request: Request = None,
+) -> Dict[str, Any]:
+    validated_db = validate_database_or_todos(db)
+    parsed_from, parsed_to_excl = _parse_period(dateFrom, dateTo)
+    period_suffix = f"|period:{parsed_from or 'hoje'}-{parsed_to_excl or 'hoje'}"
+    portfolio_params = (portfolio,) * (2 if validated_db == "todos" else 1)
+    return _run_dashboard_chart(
+        validated_db, build_quebrados_detalhe_query,
+        "dashboard/quebrados-detalhe", request,
+        query_args=(parsed_from, parsed_to_excl),
+        params=portfolio_params,
+        filters_extra={"portfolio": portfolio, "date": f"{parsed_from}/{parsed_to_excl}" if parsed_from else "today"},
+        cache_key_suffix=f"|portfolio:{portfolio}{period_suffix}",
+    )
+
+
+# ── agent-level detail routes ──────────────────────────────────
+
+@router.get("/excecoes-detalhe-agente/{db}/{agente}")
+def get_excecoes_detalhe_agente(
+    db: str,
+    agente: str,
+    dateFrom: Optional[str] = Query(default=None),
+    dateTo: Optional[str] = Query(default=None),
+    request: Request = None,
+) -> Dict[str, Any]:
+    validated_db = validate_database_or_todos(db)
+    parsed_from, parsed_to_excl = _parse_period(dateFrom, dateTo)
+    agente_params = (agente,) * (2 if validated_db == "todos" else 1)
+    return _run_dashboard_chart(
+        validated_db, build_excecoes_detalhe_agente_query,
+        "dashboard/excecoes-detalhe-agente", request,
+        query_args=(parsed_from, parsed_to_excl),
+        params=agente_params,
+    )
+
+
+@router.get("/rejeitados-detalhe-agente/{db}/{agente}")
+def get_rejeitados_detalhe_agente(
+    db: str,
+    agente: str,
+    dateFrom: Optional[str] = Query(default=None),
+    dateTo: Optional[str] = Query(default=None),
+    request: Request = None,
+) -> Dict[str, Any]:
+    validated_db = validate_database_or_todos(db)
+    parsed_from, parsed_to_excl = _parse_period(dateFrom, dateTo)
+    agente_params = (agente,) * (2 if validated_db == "todos" else 1)
+    return _run_dashboard_chart(
+        validated_db, build_rejeitados_detalhe_agente_query,
+        "dashboard/rejeitados-detalhe-agente", request,
+        query_args=(parsed_from, parsed_to_excl),
+        params=agente_params,
+    )
+
+
+@router.get("/quebrados-detalhe-agente/{db}/{agente}")
+def get_quebrados_detalhe_agente(
+    db: str,
+    agente: str,
+    dateFrom: Optional[str] = Query(default=None),
+    dateTo: Optional[str] = Query(default=None),
+    request: Request = None,
+) -> Dict[str, Any]:
+    validated_db = validate_database_or_todos(db)
+    parsed_from, parsed_to_excl = _parse_period(dateFrom, dateTo)
+    agente_params = (agente,) * (2 if validated_db == "todos" else 1)
+    return _run_dashboard_chart(
+        validated_db, build_quebrados_detalhe_agente_query,
+        "dashboard/quebrados-detalhe-agente", request,
+        query_args=(parsed_from, parsed_to_excl),
+        params=agente_params,
+    )
+
+
+@router.get("/benchmarks/{db}")
+def get_benchmarks(
+    db: str,
+    lookback_months: int = Query(default=3, ge=1, le=12),
+    request: Request = None,
+) -> Dict[str, Any]:
+    """Benchmarks internos (quartis históricos) por banco para KPIs de produtividade."""
+    run_id = getattr(request.state, "run_id", f"srv-{uuid4().hex[:12]}") if request else f"srv-{uuid4().hex[:12]}"
+    validated_db = validate_database(db)
+
+    def _compute() -> List[Dict[str, Any]]:
+        query = build_benchmark_query(validated_db, lookback_months=lookback_months)
+        return run_query(query, validated_db, run_id=run_id, context="dashboard/benchmarks")
+
+    cache_key = f"benchmarks|{validated_db}|{lookback_months}m"
+    rows = cache_manager.get_or_compute(cache_key, _compute)
+
+    def _quartis(values: List[Any]) -> Dict[str, Any]:
+        arr = np.array([
+            float(v) for v in values
+            if v is not None and not (isinstance(v, float) and np.isnan(v))
+        ])
+        if arr.size == 0:
+            return {"q1": None, "median": None, "q3": None, "top10_mean": None}
+        n_top10 = max(1, arr.size // 10)
+        top10 = np.sort(arr)[-n_top10:]
+        return {
+            "q1": round(float(np.percentile(arr, 25)), 2),
+            "median": round(float(np.percentile(arr, 50)), 2),
+            "q3": round(float(np.percentile(arr, 75)), 2),
+            "top10_mean": round(float(np.mean(top10)), 2),
+        }
+
+    data = {
+        "taxa_contato": _quartis([r.get("avg_taxa_contato") for r in rows]),
+        "taxa_conversao": _quartis([r.get("avg_taxa_conversao") for r in rows]),
+        "efetividade_caixa": _quartis([r.get("avg_efetividade_caixa") for r in rows]),
+        "pct_excecoes": _quartis([r.get("avg_pct_excecoes") for r in rows]),
+        "n_agentes": len(rows),
+        "lookback_months": lookback_months,
+    }
+
+    return build_response_envelope(
+        data,
+        [validated_db],
+        filters={"database": validated_db, "lookback_months": lookback_months},
+        run_id=run_id,
     )
 
 

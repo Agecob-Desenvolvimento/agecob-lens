@@ -17,7 +17,8 @@ export async function requestNotificationPermission(): Promise<NotificationPermi
 export function notify(title: string, body: string, tag: string): void {
   if (!notificationsSupported() || Notification.permission !== "granted") return;
   try {
-    new Notification(title, { body, tag, silent: false, renotify: true });
+    // `renotify` é válido na API do browser mas falta na tipagem DOM do TS
+    new Notification(title, { body, tag, silent: false, renotify: true } as NotificationOptions & { renotify?: boolean });
   } catch {
     // ignore — alguns browsers exigem ServiceWorker para certos contextos
   }

@@ -126,7 +126,7 @@ export function useEfetividadeViewModel(tipo: TipoParcela): EfetividadeViewModel
   });
 
   // Monthly trend
-  const mensalQuery = useQuery({
+  const mensalQuery = useQuery<EfMensalRow[] | EfMensalColchaoRow[]>({
     queryKey: ["efetividade", "mensal", selectedDatabase, tipo] as const,
     queryFn: () =>
       tipo === "primeira"
@@ -135,7 +135,7 @@ export function useEfetividadeViewModel(tipo: TipoParcela): EfetividadeViewModel
   });
 
   // Agent ranking
-  const agenteQuery = useQuery({
+  const agenteQuery = useQuery<EfAgenteRow[] | EfAgenteColchaoRow[]>({
     queryKey: ["efetividade", "agente", selectedDatabase, tipo] as const,
     queryFn: () =>
       tipo === "primeira"

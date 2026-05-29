@@ -91,7 +91,7 @@ function RankingBarChart({
             );
           }}
         />
-        <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={barSize}>
+        <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={barSize} isAnimationActive={false}>
           {data.map((d, i) => (
             <Cell key={i} fill={d.color ?? defaultColor} />
           ))}

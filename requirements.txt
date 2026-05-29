@@ -1,6 +1,8 @@
-fastapi
+fastapi==0.136.1
 uvicorn[standard]
-pyodbc
-joblib
-scikit-learn
-numpy
+pyodbc==5.3.0
+joblib==1.5.3
+scikit-learn==1.8.0
+numpy==2.4.4
+pandas==3.0.2
+pytest==9.0.3

@@ -14,12 +14,16 @@ type Direction = "up" | "down" | "flat";
 export interface HomeKpiPrimary {
   label: string;
   value: number | null;
-  unit: "BRL" | "count";
+  unit: "BRL" | "count" | "percent";
   baseline?: {
     value: number;
     label: string;
     betterWhen: "up" | "down";
+    /** previous-period absolute value, shown as "· R$ 1,44 mi" suffix */
+    baselineValue?: number;
   };
+  /** internal benchmark (top-10 historical mean) shown as a reference line */
+  benchmark?: { value: number; label: string };
 }
 
 export interface HomeKpiSecondary {
@@ -31,6 +35,10 @@ export interface HomeKpiSecondary {
     label: string;
     betterWhen: "up" | "down" | "flat";
   };
+  /** plain descriptive text shown when there is no comparative baseline */
+  caption?: string;
+  /** internal benchmark (top-10 historical mean) shown as a reference line */
+  benchmark?: { value: number; label: string };
 }
 
 export interface HomeKpiStripProps {
@@ -46,6 +54,7 @@ function deriveDirection(value: number): Direction {
 function formatPrimaryValue(kpi: HomeKpiPrimary): string {
   if (kpi.value == null) return "—";
   if (kpi.unit === "BRL") return formatBRLCompact(kpi.value);
+  if (kpi.unit === "percent") return fmtPct(kpi.value);
   return fmtNum(kpi.value);
 }
 
@@ -70,13 +79,22 @@ const ICON = {
 
 export function HomeKpiStrip({ primary, secondary }: HomeKpiStripProps) {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-      {primary.map((kpi) => (
-        <PrimaryCard key={kpi.label} kpi={kpi} />
-      ))}
-      {secondary.map((kpi) => (
-        <SecondaryCard key={kpi.label} kpi={kpi} />
-      ))}
+    <div className="space-y-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+        {primary.map((kpi) => (
+          <PrimaryCard key={kpi.label} kpi={kpi} />
+        ))}
+        {secondary.map((kpi) => (
+          <SecondaryCard key={kpi.label} kpi={kpi} />
+        ))}
+      </div>
+      <p className="text-[10px] leading-relaxed text-muted-foreground/80">
+        Em alguns KPIs aparece a linha <span className="font-semibold text-foreground">Média dos 10% melhores</span>:
+        é a referência interna — a média histórica dos 10% agentes com melhor desempenho naquela métrica
+        (últimos 9 meses, por banco). Compare o número do KPI com ela —{" "}
+        <span className="text-success-fg font-medium">verde</span> = acima da referência,{" "}
+        <span className="text-amber-600 font-medium">âmbar</span> = abaixo.
+      </p>
     </div>
   );
 }
@@ -103,16 +121,28 @@ function PrimaryCard({ kpi }: { kpi: HomeKpiPrimary }) {
       </div>
       <div className="mt-3">
         {baseline && direction ? (
-          <KpiDeltaBadge
-            value={baseline.value}
-            direction={direction}
-            baselineLabel={baseline.label}
-            inverted={baseline.betterWhen === "down"}
-          />
+          <div className="flex items-center gap-2">
+            <KpiDeltaBadge
+              value={baseline.value}
+              direction={direction}
+              baselineLabel={baseline.label}
+              inverted={baseline.betterWhen === "down"}
+            />
+            {baseline.baselineValue != null ? (
+              <span className="text-xs text-muted-foreground">
+                · {formatBRLCompact(baseline.baselineValue)}
+              </span>
+            ) : null}
+          </div>
         ) : (
           <span className="block text-xs text-muted-foreground/60">—</span>
         )}
       </div>
+      {kpi.benchmark ? (
+        <div className="mt-1">
+          <BenchmarkLine value={kpi.value} benchmark={kpi.benchmark} betterWhen={baseline?.betterWhen} />
+        </div>
+      ) : null}
     </Card>
   );
 }
@@ -131,7 +161,7 @@ function SecondaryCard({ kpi }: { kpi: HomeKpiSecondary }) {
       <div className="mt-2 text-xl md:text-2xl font-semibold tabular-nums leading-none text-foreground">
         {formatSecondaryValue(kpi)}
       </div>
-      <div className="mt-2 min-h-[1rem]">
+      <div className="mt-2 min-h-[1rem] space-y-0.5">
         {baseline && direction && Icon ? (
           <span
             className={cn(
@@ -146,8 +176,37 @@ function SecondaryCard({ kpi }: { kpi: HomeKpiSecondary }) {
             </span>
           </span>
         ) : null}
+        {kpi.caption ? (
+          <div className="text-[10px] text-muted-foreground/70 mt-0.5">{kpi.caption}</div>
+        ) : null}
+        {kpi.benchmark ? (
+          <BenchmarkLine value={kpi.value} benchmark={kpi.benchmark} betterWhen={baseline?.betterWhen} />
+        ) : null}
       </div>
     </Card>
+  );
+}
+
+function BenchmarkLine({
+  value,
+  benchmark,
+  betterWhen,
+}: {
+  value: number | null;
+  benchmark: { value: number; label: string };
+  betterWhen?: "up" | "down" | "flat";
+}) {
+  const above =
+    betterWhen === "down"
+      ? value != null && value <= benchmark.value
+      : value != null && value >= benchmark.value;
+  return (
+    <div
+      title="Referência interna — média histórica dos 10% melhores agentes nos últimos 9 meses (por banco)."
+      className={cn("text-[10px] font-medium", above ? "text-success-fg" : "text-amber-600")}
+    >
+      {benchmark.label}: {fmtPct(benchmark.value)}
+    </div>
   );
 }
 

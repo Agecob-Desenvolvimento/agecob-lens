@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import ExecutiveHeader from "@/components/executive/ExecutiveHeader";
@@ -6,12 +6,15 @@ import SectionHeader from "@/components/executive/SectionHeader";
 import ApiDebugBanner from "@/components/executive/ApiDebugBanner";
 import { cn } from "@/lib/utils";
 import { BoletosKpiStrip } from "@/components/analise/BoletosKpiStrip";
-import { EfetividadeDiariaChart } from "@/components/analise/EfetividadeDiariaChart";
-import { TendenciaMensalChart } from "@/components/analise/TendenciaMensalChart";
-import { RankingAgentesBoletos } from "@/components/analise/RankingAgentesBoletos";
-import { PortfolioSection } from "@/components/analise/PortfolioSection";
-import { BoletosQuebradosChart } from "@/components/analise/BoletosQuebradosChart";
 import { useEfetividadeViewModel, type TipoParcela } from "@/hooks/useEfetividadeViewModel";
+
+const EfetividadeDiariaChart = lazy(() => import("@/components/analise/EfetividadeDiariaChart").then((m) => ({ default: m.EfetividadeDiariaChart })));
+const TendenciaMensalChart = lazy(() => import("@/components/analise/TendenciaMensalChart").then((m) => ({ default: m.TendenciaMensalChart })));
+const RankingAgentesBoletos = lazy(() => import("@/components/analise/RankingAgentesBoletos").then((m) => ({ default: m.RankingAgentesBoletos })));
+const PortfolioSection = lazy(() => import("@/components/analise/PortfolioSection").then((m) => ({ default: m.PortfolioSection })));
+const BoletosQuebradosChart = lazy(() => import("@/components/analise/BoletosQuebradosChart").then((m) => ({ default: m.BoletosQuebradosChart })));
+
+const CHART_FALLBACK = <div className="h-64 animate-pulse bg-muted rounded-lg" />;
 
 const TIPOS = ["Primeira Parcela", "Colchão"] as const;
 
@@ -69,16 +72,20 @@ export default function EfetividadeBoletos() {
               </section>
 
               {/* Efetividade Diária */}
-              <EfetividadeDiariaChart
-                data={vm.diaria}
-                title={`Efetividade Diária por Data de Vencimento — ${vm.diaria.length > 0 ? vm.diaria[0].dia : ""} — ${vm.diaria.length > 0 ? vm.diaria[vm.diaria.length - 1].dia : ""}`}
-              />
+              <Suspense fallback={CHART_FALLBACK}>
+                <EfetividadeDiariaChart
+                  data={vm.diaria}
+                  title={`Efetividade Diária por Data de Vencimento — ${vm.diaria.length > 0 ? vm.diaria[0].dia : ""} — ${vm.diaria.length > 0 ? vm.diaria[vm.diaria.length - 1].dia : ""}`}
+                />
+              </Suspense>
 
               {/* Tendência + Ranking */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                <TendenciaMensalChart data={vm.tendencia} />
-                <RankingAgentesBoletos data={vm.rankingAgentes} />
-              </div>
+              <Suspense fallback={CHART_FALLBACK}>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                  <TendenciaMensalChart data={vm.tendencia} />
+                  <RankingAgentesBoletos data={vm.rankingAgentes} />
+                </div>
+              </Suspense>
 
               {/* Portfólio */}
               <section className="space-y-3">
@@ -86,12 +93,14 @@ export default function EfetividadeBoletos() {
                   title="Portfólio"
                   description="Acordos, exceções e rejeitados agrupados por portfólio (CAMPO010)."
                 />
-                <PortfolioSection
-                  portfolioValor={vm.portfolioValor}
-                  excecoesPorPortfolio={vm.portfolioExcecoes}
-                  rejeitadosPorPortfolio={vm.portfolioRejeitados}
-                  loading={vm.loadingPortfolio}
-                />
+                <Suspense fallback={CHART_FALLBACK}>
+                  <PortfolioSection
+                    portfolioValor={vm.portfolioValor}
+                    excecoesPorPortfolio={vm.portfolioExcecoes}
+                    rejeitadosPorPortfolio={vm.portfolioRejeitados}
+                    loading={vm.loadingPortfolio}
+                  />
+                </Suspense>
               </section>
 
               {/* Boletos Quebrados */}
@@ -100,11 +109,12 @@ export default function EfetividadeBoletos() {
                   title="Boletos Quebrados"
                   description="Acordos que não foram mantidos — análise por portfólio com perfil do devedor."
                 />
-                <BoletosQuebradosChart
-                  portfolioRows={vm.boletosQuebrados}
-                  detalhes={[]}
-                  loading={vm.loadingQuebrados}
-                />
+                <Suspense fallback={CHART_FALLBACK}>
+                  <BoletosQuebradosChart
+                    portfolioRows={vm.boletosQuebrados}
+                    loading={vm.loadingQuebrados}
+                  />
+                </Suspense>
               </section>
             </div>
           </div>

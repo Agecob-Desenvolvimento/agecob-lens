@@ -73,6 +73,7 @@ export function HandoffFinanceiroGroupedBar({
             fill={COLOR_VALOR}
             barSize={32}
             radius={[4, 4, 0, 0]}
+            isAnimationActive={false}
           >
             <LabelList
               dataKey="valorAcordos"
@@ -87,6 +88,7 @@ export function HandoffFinanceiroGroupedBar({
             fill={COLOR_PRIMEIRA}
             barSize={32}
             radius={[4, 4, 0, 0]}
+            isAnimationActive={false}
           >
             <LabelList
               dataKey="primeiraParcela"

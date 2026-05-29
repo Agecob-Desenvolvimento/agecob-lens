@@ -2,7 +2,7 @@
 title: Agecob — Decisões Técnicas
 tags: [agecob, decisao, adr]
 created: 2026-04-27
-updated: 2026-04-27
+updated: 2026-05-29
 ---
 
 # Decisões Técnicas — agecob-lens
@@ -73,7 +73,7 @@ Registro de decisões técnicas significativas no formato leve (ADR simplificado
 
 ## ADR-006: CPC IDs hardcoded
 
-**Data:** 2026-04 · **Status:** permanente
+**Data:** 2026-04 · **Status:** SUPERSEDED por [[#ADR-012]] (2026-05-29) — CPC virou JOIN `CTO_COMPLEMENTO.CONTATO=1`; constante só sobrevive no monolito legado
 
 **Contexto:** Os IDs de complemento que definem CPC poderiam ser configuráveis ou lidos de tabela.
 
@@ -140,6 +140,28 @@ Registro de decisões técnicas significativas no formato leve (ADR simplificado
 **Decisão:** Campo `freshness_status` (`fresh|stale`) e `last_aggregation_at` no `meta` de toda resposta histórica.
 
 **Consequência:** Frontend pode exibir banner de aviso quando dados estão desatualizados.
+
+---
+
+## ADR-012: Premissas falsas dos prompts de perf (Wave C/D) vs. backend real
+
+**Data:** 2026-05-29 · **Status:** ativo (calibra prompts futuros)
+
+**Contexto:** Os prompts de otimização "Wave C" (orjson + Pydantic response_model) e "Wave D" (run_in_executor + thread-local connection pool) foram escritos contra o backend **monolito antigo** (`agecob-lens/main.py`). O backend de produção já é o **modular** (root: `api/`, `core/`, `dominios/`, `config/` — ADR-001 já superado). Ao executar, o agente detectou premissas falsas que invalidam partes dos prompts:
+
+- **"main.py only" / constantes no main.py** — falso. `run_query` vive em `core/database/query_executor.py`; `pyodbc.connect` em `core/database/pool_manager.py:56`; constantes de status/CPC em módulos `dominios/`, não no `main.py` (fino, só wiring).
+- **"CPC_COMPLEMENTO_IDS hardcoded, never make dynamic"** — desatualizado. CPC virou JOIN `CTO_COMPLEMENTO.CONTATO=1`; a constante só existe no monolito legado (contradiz ADR-006, que está stale).
+- **Wave C2 — "os 4 endpoints retornam o mesmo envelope"** — falso. `/dashboard/produtividade-agentes` retorna `{generated_at, cache_age_seconds, agents}` (`dominios/produtividade/servico.py:84`), **não** `{meta, data, errors}`. Um `response_model` único derrubaria campos do `meta` silenciosamente (`total_rows`, `sources`, `filters`, `run_id`, `quality`, `pagination`).
+- **Wave D — "pyodbc dentro de `async def` bloqueando o event loop"** — falso. **Todos** os endpoints de DB são `def` síncrono → FastAPI já os roda no threadpool externo. O único `async def` (`api/routers/regressao.py:19`) não toca DB.
+- **Wave D — criar thread-local connection pool** — redundante e conflitante. Já existe `pool_manager` (pool por database/worker, `DB_POOL_SIZE`, max-age, timeout, telemetria). Um segundo pool ignoraria esse ciclo de vida.
+
+**Decisão:**
+1. **C1 (orjson):** aplicado e depois **revertido** (2026-05-29). FastAPI 0.136 **deprecou `ORJSONResponse`** — serializa direto para JSON bytes via Pydantic (mais rápido, sem response class custom). Além de não dar ganho, `import orjson` no render quebrou produção (interpretador do servidor sem orjson → 500 "Internal Server Error" em todo endpoint, DB intacto). Conclusão: não usar orjson nesta versão de FastAPI.
+2. **C2 (response_model):** **não aplicar.** Não é perf (é overhead Pydantic) e risca o contrato consumido pelo frontend. Só faria sentido com models permissivos (`extra="allow"`) cobrindo os 2 shapes, e apenas para OpenAPI/`/docs`.
+3. **D:** **não aplicar como escrito.** Premissa inexistente neste código. O ganho de concorrência genuíno equivalente é mover `fit_all_models` (sklearn, CPU-bound) de `regressao.py:19` para fora do event loop (`def` simples ou `run_in_executor`).
+4. **Calibração de prompts:** prompts de perf futuros devem mirar a arquitetura modular real, referenciar `pool_manager`/`query_executor`, e validar shape de resposta por endpoint antes de propor `response_model`.
+
+**Consequência:** Os prompts Wave C/D na forma original são parcialmente inválidos contra o backend atual. **Nenhum item de C/D ficou** — C1 foi revertido (FastAPI 0.136 já serializa rápido nativamente; orjson quebrou prod). Premissas sobre monolito, constantes, envelope uniforme e endpoints async ficam registradas como **falsas** para não se repetirem. ADR-006 deve ser revisado (CPC não é mais hardcoded). **Lição:** validar versão da lib (deprecações) e paridade de dependências entre `.venv` local e interpretador do servidor antes de adicionar dep de runtime.
 
 ---
 

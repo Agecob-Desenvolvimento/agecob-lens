@@ -1,18 +1,24 @@
+import { lazy, Suspense } from "react";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import ExecutiveHeader from "@/components/executive/ExecutiveHeader";
 import BlockHeader from "@/components/executive/BlockHeader";
+import ExecutiveInsightCard from "@/components/executive/ExecutiveInsightCard";
 import ApiDebugBanner from "@/components/executive/ApiDebugBanner";
 import { AgentFilterBar } from "@/components/detalhamento/AgentFilterBar";
 import { DetalhamentoKpiStrip } from "@/components/detalhamento/DetalhamentoKpiStrip";
-import { FunilConversao } from "@/components/detalhamento/FunilConversao";
-import { BulletChartsPanel } from "@/components/detalhamento/BulletChartsPanel";
-import { PerformanceHeatmap } from "@/components/detalhamento/PerformanceHeatmap";
-import { ImprovedScatterPlot } from "@/components/detalhamento/ImprovedScatterPlot";
-import { RegressionView } from "@/components/detalhamento/RegressionView";
-import { RankingPrioridade } from "@/components/detalhamento/RankingPrioridade";
-import { ParetoChart } from "@/components/detalhamento/ParetoChart";
 import { useDetalhamentoViewModel } from "@/hooks/useDetalhamentoViewModel";
+
+const FunilConversao = lazy(() => import("@/components/detalhamento/FunilConversao").then((m) => ({ default: m.FunilConversao })));
+const BulletChartsPanel = lazy(() => import("@/components/detalhamento/BulletChartsPanel").then((m) => ({ default: m.BulletChartsPanel })));
+const RadarDesempenho = lazy(() => import("@/components/detalhamento/RadarDesempenho").then((m) => ({ default: m.RadarDesempenho })));
+const PerformanceHeatmap = lazy(() => import("@/components/detalhamento/PerformanceHeatmap").then((m) => ({ default: m.PerformanceHeatmap })));
+const ImprovedScatterPlot = lazy(() => import("@/components/detalhamento/ImprovedScatterPlot").then((m) => ({ default: m.ImprovedScatterPlot })));
+const RankingPrioridade = lazy(() => import("@/components/detalhamento/RankingPrioridade").then((m) => ({ default: m.RankingPrioridade })));
+const ParetoChart = lazy(() => import("@/components/detalhamento/ParetoChart").then((m) => ({ default: m.ParetoChart })));
+const AgenteDetalheSection = lazy(() => import("@/components/detalhamento/AgenteDetalheSection"));
+
+const CHART_FALLBACK = <div className="h-64 animate-pulse bg-muted rounded-lg" />;
 
 export default function DetalhamentoAgentes() {
   const vm = useDetalhamentoViewModel();
@@ -38,6 +44,7 @@ export default function DetalhamentoAgentes() {
               <DetalhamentoKpiStrip
                 primary={vm.kpiPrimary}
                 secondary={vm.kpiSecondary}
+                deltas={vm.insight.kpiDeltas}
               />
 
               {/* Bloco 1 — Diagnóstico Individual */}
@@ -45,12 +52,30 @@ export default function DetalhamentoAgentes() {
                 <BlockHeader
                   number="1"
                   title="Diagnóstico Individual"
-                  description="Entender o porquê do desempenho — funil de conversão e performance vs meta."
+                  description="Entender o porquê do desempenho — diagnóstico multidimensional."
                 />
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                  <FunilConversao data={vm.funil} />
-                  <BulletChartsPanel data={vm.metas} />
+
+                <div className="mb-4">
+                  <ExecutiveInsightCard
+                    variant={vm.insight.variant}
+                    title={vm.insight.title}
+                    description={vm.insight.description}
+                  />
                 </div>
+
+                <Suspense fallback={CHART_FALLBACK}>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                    <FunilConversao data={vm.funil} />
+                    <BulletChartsPanel data={vm.metas} />
+                  </div>
+
+                  <div className="mt-3 max-w-xl mx-auto">
+                    <RadarDesempenho
+                      data={vm.radarData}
+                      agentName={vm.selectedAgent}
+                    />
+                  </div>
+                </Suspense>
               </section>
 
               {/* Bloco 2 — Contexto Comparativo */}
@@ -60,16 +85,18 @@ export default function DetalhamentoAgentes() {
                   title="Contexto Comparativo"
                   description="Onde cada agente está no time — padrões visuais e validação estatística."
                 />
-                <div className="space-y-3">
-                  <PerformanceHeatmap
-                    agents={vm.heatmapAgents}
-                    highlightId={vm.selectedAgent ?? undefined}
-                  />
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                    <ImprovedScatterPlot points={vm.scatterPoints} />
-                    <RegressionView points={vm.scatterPoints} />
+                <Suspense fallback={CHART_FALLBACK}>
+                  <div className="space-y-3">
+                    <PerformanceHeatmap
+                      agents={vm.heatmapAgents}
+                      highlightId={vm.selectedAgent ?? undefined}
+                    />
+                    <ImprovedScatterPlot
+                      points={vm.scatterPoints}
+                      highlightId={vm.selectedAgent ?? undefined}
+                    />
                   </div>
-                </div>
+                </Suspense>
               </section>
 
               {/* Bloco 3 — Ação */}
@@ -79,11 +106,25 @@ export default function DetalhamentoAgentes() {
                   title="Ação"
                   description="Quem atender primeiro — fila de prioridade e concentração de resultado."
                 />
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                  <RankingPrioridade entries={vm.rankingEntries} />
-                  <ParetoChart points={vm.paretoPoints} />
-                </div>
+                <Suspense fallback={CHART_FALLBACK}>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                    <RankingPrioridade
+                      entries={vm.rankingEntries}
+                      highlightAgentId={vm.selectedAgent ?? undefined}
+                      highlightRank={vm.insight.agentRank}
+                      totalAgents={vm.insight.totalAgents}
+                    />
+                    <ParetoChart points={vm.paretoPoints} />
+                  </div>
+                </Suspense>
               </section>
+
+              {/* Bloco 4 — Detalhe do Agente (lazy) */}
+              {vm.selectedAgent && (
+                <Suspense fallback={<div className="h-48 animate-pulse bg-muted rounded-lg" />}>
+                  <AgenteDetalheSection agente={vm.selectedAgent} />
+                </Suspense>
+              )}
             </div>
           </div>
         </div>

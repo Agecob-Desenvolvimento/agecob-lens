@@ -8,20 +8,22 @@ import { useGlobalFilters } from "@/contexts/GlobalFiltersContext";
 import {
   fetchAcordosDetalhe,
   fetchExcecoesDetalhe,
+  fetchQuebradosDetalhe,
   fetchRejeitadosDetalhe,
-  type ExcecaoSemPortfolioRow,
+  type QuebradoDetalheRow,
 } from "@/services/api";
 
-export type DetalheTipo = "valor" | "excecoes" | "rejeitados";
+export type DetalheTipo = "valor" | "excecoes" | "rejeitados" | "quebrados";
 
 const FETCHERS = {
   valor: fetchAcordosDetalhe,
   excecoes: fetchExcecoesDetalhe,
   rejeitados: fetchRejeitadosDetalhe,
+  quebrados: fetchQuebradosDetalhe,
 } as const;
 
 export interface PortfolioDetalheResult {
-  rows: ExcecaoSemPortfolioRow[];
+  rows: QuebradoDetalheRow[];
   loading: boolean;
   error: string | null;
 }

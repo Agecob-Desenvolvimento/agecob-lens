@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { useNavigate } from "react-router-dom";
 import { ExternalLink } from "lucide-react";
 import { SidebarProvider } from "@/components/ui/sidebar";
@@ -7,17 +8,20 @@ import SectionHeader from "@/components/executive/SectionHeader";
 import ApiDebugBanner from "@/components/executive/ApiDebugBanner";
 import HomeKpiStrip from "@/components/executive/HomeKpiStrip";
 import ExecutiveRankingTable from "@/components/executive/ExecutiveRankingTable";
-import HandoffFinanceiroGroupedBar from "@/components/executive/HandoffFinanceiroGroupedBar";
-import HandoffEficienciaGroupedBar from "@/components/executive/HandoffEficienciaGroupedBar";
 import { cn } from "@/lib/utils";
 import { useAnaliseViewModel } from "@/hooks/useAnaliseViewModel";
+
+const HandoffFinanceiroGroupedBar = lazy(() => import("@/components/executive/HandoffFinanceiroGroupedBar"));
+const HandoffEficienciaGroupedBar = lazy(() => import("@/components/executive/HandoffEficienciaGroupedBar"));
+
+const CHART_FALLBACK = <div className="h-64 animate-pulse bg-muted rounded-lg" />;
 
 export default function AnaliseProdutividade() {
   const vm = useAnaliseViewModel();
   const navigate = useNavigate();
 
   const kpiPrimary = [
-    { label: "CPC %", value: vm.kpiCpc, unit: "percent" as const },
+    { label: "CPC", value: vm.kpiContatos, unit: "count" as const },
     { label: "Conversão %", value: vm.kpiConversao, unit: "percent" as const },
   ];
 
@@ -67,33 +71,36 @@ export default function AnaliseProdutividade() {
               <HomeKpiStrip primary={kpiPrimary} secondary={kpiSecondary} />
 
               {/* Financeiro + Eficiência */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <HandoffFinanceiroGroupedBar
-                  title="Valor por Unidade de Negócio"
-                  data={vm.financeiroData}
-                  empty={vm.financeiroData.length === 0}
-                  loading={vm.loading}
-                />
-                <HandoffEficienciaGroupedBar
-                  title="CPC % e Conversão % por Unidade de Negócio"
-                  data={vm.eficienciaData}
-                  summary={{ cpcAvg: vm.kpiCpc, conversaoAvg: vm.kpiConversao }}
-                  empty={vm.eficienciaData.length === 0}
-                  loading={vm.loading}
-                />
-              </div>
+              <Suspense fallback={CHART_FALLBACK}>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <HandoffFinanceiroGroupedBar
+                    title="Valor por Unidade de Negócio"
+                    data={vm.financeiroData}
+                    empty={vm.financeiroData.length === 0}
+                    loading={vm.loading}
+                  />
+                  <HandoffEficienciaGroupedBar
+                    title="Taxa de contato % e Conversão % por Unidade de Negócio"
+                    data={vm.eficienciaData}
+                    summary={{ cpcAvg: vm.kpiCpc, conversaoAvg: vm.kpiConversao }}
+                    empty={vm.eficienciaData.length === 0}
+                    loading={vm.loading}
+                    metaConversao={3}
+                  />
+                </div>
+              </Suspense>
 
-              {/* Ranking CPC */}
+              {/* Ranking Taxa de contato */}
               <section className="space-y-3">
                 <SectionHeader
-                  title="Top 10 Agentes por CPC"
+                  title="Top 10 Agentes por Taxa de contato"
                   unit="%"
                   description="Ranking por contato/acionamento. Clique para abrir ficha do agente."
                 />
                 <ExecutiveRankingTable
-                  title="Top 10 Agentes por CPC"
+                  title="Top 10 Agentes por Taxa de contato"
                   rows={vm.cpcRanking}
-                  primaryColumnLabel="CPC %"
+                  primaryColumnLabel="Taxa de contato %"
                   secondaryColumnLabel="Conversão %"
                   maxRows={10}
                   loading={vm.loading}

@@ -5,6 +5,7 @@ import {
   selectTopAgentesPorPrimeiraParcela,
   selectTopByValor,
   selectTopPortfolioPorExcecoes,
+  selectTopPortfolioPorQuebrados,
   selectTopPortfolioPorRejeitados,
   selectTopPortfolioPorValor,
 } from "./homeSelectors";
@@ -83,10 +84,10 @@ describe("selectBuValueData / selectBuEfficiencyData", () => {
     const eff = selectBuEfficiencyData(rows);
     expect(eff[0].name).toBe("AUTOS");
     expect(eff[0].cpc).toBeCloseTo(40, 5); // 12/30 * 100
-    expect(eff[0].conversao).toBeCloseTo(20, 5); // 6/30 * 100
+    expect(eff[0].conversao).toBeCloseTo(50, 5); // 6/12*100
     expect(eff[1].name).toBe("CONSUMER");
     expect(eff[1].cpc).toBeCloseTo(50, 5);
-    expect(eff[1].conversao).toBeCloseTo(20, 5);
+    expect(eff[1].conversao).toBeCloseTo(40, 5); // 10/25*100
   });
 
   it("omits BUs with no rows", () => {
@@ -144,5 +145,17 @@ describe("portfolio selectors", () => {
     );
     expect(out).toHaveLength(1);
     expect(out[0]).toEqual({ label: "Y", value: 7 });
+  });
+
+  it("selectTopPortfolioPorQuebrados filters zero qtd and sorts desc", () => {
+    const out = selectTopPortfolioPorQuebrados(
+      [
+        { portfolio_name: "X", qtd_quebrados: 0, valor_quebrados: 0 },
+        { portfolio_name: "Y", qtd_quebrados: 4, valor_quebrados: 120 },
+        { portfolio_name: "Z", qtd_quebrados: 9, valor_quebrados: 300 },
+      ],
+      10,
+    );
+    expect(out.map((r) => r.label)).toEqual(["Z", "Y"]);
   });
 });

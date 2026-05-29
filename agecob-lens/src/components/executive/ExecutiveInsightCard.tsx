@@ -282,7 +282,7 @@ function LegacyInsight({ data, loading, title = "Resumo do dia", embedded }: Leg
     data.insight1 ? { ...data.insight1, key: "i1" } : null,
     data.insight2 ? { ...data.insight2, key: "i2" } : null,
     data.action ? { text: data.action.text, severity: "action" as const, key: "a1", headline: data.action.headline } : null,
-  ].filter((s): s is RenderSlot => Boolean(s));
+  ].filter(Boolean) as RenderSlot[];
 
   return (
     <Wrapper embedded={embedded}>

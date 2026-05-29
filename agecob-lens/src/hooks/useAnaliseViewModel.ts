@@ -68,6 +68,7 @@ export function useAnaliseViewModel(): AnaliseViewModel {
   const filteredRows = useMemo(() => filterByBu(rows, selectedBu), [rows, selectedBu]);
   const totals = useMemo(() => aggregateTotals(filteredRows), [filteredRows]);
 
+  // razão contatos/acionamentos — alimenta o gráfico "Taxa de contato %"; não é o KPI "CPC" (que agora é contagem = kpiContatos)
   const kpiCpc = useMemo(() => calcCpc(totals), [totals]);
   const kpiConversao = useMemo(() => calcConversao(totals), [totals]);
   const kpiTicket = useMemo(() => calcTicketMedio(totals), [totals]);

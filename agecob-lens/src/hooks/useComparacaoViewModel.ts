@@ -48,7 +48,7 @@ function agentKpis(totals: ReturnType<typeof aggregateTotals>) {
   return [
     { label: "Valor Acordos", value: totals.valor_acordos, unit: "BRL" as const },
     { label: "Qtd Acordos", value: totals.qtd_acordos, unit: "count" as const },
-    { label: "CPC %", value: calcCpc(totals), unit: "%" as const },
+    { label: "CPC", value: totals.qtd_contatos, unit: "count" as const },
     { label: "Conversão %", value: calcConversao(totals), unit: "%" as const },
     { label: "Ticket Médio", value: calcTicketMedio(totals), unit: "BRL" as const },
     { label: "Acionamentos", value: totals.qtd_acionamentos, unit: "count" as const },

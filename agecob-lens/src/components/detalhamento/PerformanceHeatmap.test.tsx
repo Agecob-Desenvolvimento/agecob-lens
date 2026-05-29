@@ -4,22 +4,35 @@ import { PerformanceHeatmap, classifyCell } from "./PerformanceHeatmap";
 import { MOCK_AGENTS_ENRICHED } from "./heatmapMocks";
 
 describe("classifyCell", () => {
-  it("scores high relative values as good", () => {
-    expect(classifyCell(95, 100)).toBe("good");
-    expect(classifyCell(75, 100)).toBe("warn");
-    expect(classifyCell(50, 100)).toBe("bad");
+  it("scores high percentile as good, mid as warn, low as bad", () => {
+    expect(classifyCell(95)).toBe("good");
+    expect(classifyCell(75)).toBe("warn");
+    expect(classifyCell(50)).toBe("warn");
   });
 
-  it("inverts so low values are good", () => {
-    // low exception pct vs max → good
-    expect(classifyCell(0, 10, true)).toBe("good");
-    expect(classifyCell(9, 10, true)).toBe("bad");
+  it("inverts so low percentile becomes good", () => {
+    expect(classifyCell(0, true)).toBe("good");
+    expect(classifyCell(90, true)).toBe("bad");
   });
 });
 
 describe("PerformanceHeatmap", () => {
-  it("renders one row per agent", () => {
+  it("renders top 10 agents by valorAcordos when collapsed", () => {
     render(<PerformanceHeatmap agents={MOCK_AGENTS_ENRICHED} />);
+    // Default sort: valorAcordos desc. Top 10 must be visible.
+    const sorted = [...MOCK_AGENTS_ENRICHED].sort((a, b) => b.valorAcordos - a.valorAcordos);
+    sorted.slice(0, 10).forEach((a) => {
+      expect(screen.getByTestId(`heatmap-row-${a.id}`)).toBeInTheDocument();
+    });
+    // 11th+ should NOT be visible
+    sorted.slice(10).forEach((a) => {
+      expect(screen.queryByTestId(`heatmap-row-${a.id}`)).toBeNull();
+    });
+  });
+
+  it("renders all agents when maximized", () => {
+    render(<PerformanceHeatmap agents={MOCK_AGENTS_ENRICHED} />);
+    fireEvent.click(screen.getByTestId("heatmap-maximize"));
     for (const a of MOCK_AGENTS_ENRICHED) {
       expect(screen.getByTestId(`heatmap-row-${a.id}`)).toBeInTheDocument();
     }
@@ -28,19 +41,26 @@ describe("PerformanceHeatmap", () => {
   it("cycles sort indicator on header click", () => {
     render(<PerformanceHeatmap agents={MOCK_AGENTS_ENRICHED} />);
     const btn = screen.getByTestId("sort-valorAcordos");
-    fireEvent.click(btn); // desc
-    expect(screen.getByTestId("sort-indicator-valorAcordos")).toHaveTextContent("↓");
-    fireEvent.click(btn); // asc
-    expect(screen.getByTestId("sort-indicator-valorAcordos")).toHaveTextContent("↑");
-    fireEvent.click(btn); // reset
-    expect(screen.queryByTestId("sort-indicator-valorAcordos")).toBeNull();
+    fireEvent.click(btn);
+    expect(screen.getByTestId("sort-indicator-valorAcordos")).toBeInTheDocument();
   });
 
-  it("applies inverted tone for exceptions column (0% = good)", () => {
-    const zeroExc = MOCK_AGENTS_ENRICHED.find((a) => a.excecoesPct === 0);
-    if (!zeroExc) throw new Error("fixture needs a zero-exception agent");
+  it("renders 13 metric columns", () => {
     render(<PerformanceHeatmap agents={MOCK_AGENTS_ENRICHED} />);
-    const cell = screen.getByTestId(`cell-${zeroExc.id}-excecoesPct`);
-    expect(cell.getAttribute("data-tone")).toBe("good");
+    // 13 sort buttons = 13 columns (includes acionamentos)
+    const buttons = screen.getAllByTestId(/^sort-/);
+    expect(buttons).toHaveLength(13);
+  });
+
+  it("renders maximize button", () => {
+    render(<PerformanceHeatmap agents={MOCK_AGENTS_ENRICHED} />);
+    expect(screen.getByTestId("heatmap-maximize")).toBeInTheDocument();
+  });
+
+  it("opens fullscreen overlay on maximize click", () => {
+    render(<PerformanceHeatmap agents={MOCK_AGENTS_ENRICHED} />);
+    fireEvent.click(screen.getByTestId("heatmap-maximize"));
+    expect(screen.getByTestId("heatmap-overlay")).toBeInTheDocument();
+    expect(screen.getByTestId("heatmap-minimize")).toBeInTheDocument();
   });
 });

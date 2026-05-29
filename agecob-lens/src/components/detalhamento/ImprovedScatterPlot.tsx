@@ -8,8 +8,8 @@ export interface ImprovedScatterPlotProps {
   highlightId?: string;
 }
 
-const W = 720;
-const H = 320;
+const W = 1200;
+const H = 520;
 const PAD = { l: 60, r: 24, t: 16, b: 44 };
 
 function median(values: number[]): number {
@@ -20,9 +20,9 @@ function median(values: number[]): number {
 }
 
 function dotColor(excPct: number): string {
-  if (excPct > 15) return "#ef4444"; // rose-500
-  if (excPct >= 5) return "#f59e0b"; // amber-500
-  return "#22c55e"; // emerald-500
+  if (excPct > 15) return "#ef4444";
+  if (excPct >= 5) return "#f59e0b";
+  return "#22c55e";
 }
 
 function dotRadius(acordos: number): number {
@@ -54,17 +54,26 @@ export function ImprovedScatterPlot({ points, highlightId }: ImprovedScatterPlot
   const yTicks = [0, 0.25, 0.5, 0.75, 1].map((f) => maxY * f);
   const xTicks = [0, 0.25, 0.5, 0.75, 1].map((f) => maxEff * f);
 
+  // Sort so highlighted dot renders last (on top)
+  const sorted = useMemo(() => {
+    if (!highlightId) return points;
+    const hl = points.filter((d) => d.id === highlightId);
+    const rest = points.filter((d) => d.id !== highlightId);
+    return [...rest, ...hl];
+  }, [points, highlightId]);
+  const hasHighlight = highlightId && points.some((d) => d.id === highlightId);
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Eficiência × Resultado × Qualidade</CardTitle>
-        <CardDescription className="text-xs">
-          X: CPC×Conversão (eficiência) · Y: Valor Acordos · Cor: % exceções · Tamanho: qtd acordos
+        <CardTitle className="text-lg">Matriz de Performance</CardTitle>
+        <CardDescription className="text-sm text-slate-600">
+          Correlação entre produtividade, recuperação financeira e incidência de exceções.
         </CardDescription>
-        <div className="mt-1 flex gap-4 text-[10px] text-muted-foreground">
+        <div className="mt-1 flex gap-4 text-xs text-slate-500">
           <span className="flex items-center gap-1">
             <span className="inline-block h-2 w-2 rounded-full" style={{ background: "#22c55e" }} />
-            exc &lt;5%
+            Taxa exc &lt;5%
           </span>
           <span className="flex items-center gap-1">
             <span className="inline-block h-2 w-2 rounded-full" style={{ background: "#f59e0b" }} />
@@ -92,7 +101,7 @@ export function ImprovedScatterPlot({ points, highlightId }: ImprovedScatterPlot
             {yTicks.map((v, i) => (
               <g key={`y${i}`}>
                 <line x1={PAD.l} x2={W - PAD.r} y1={toY(v)} y2={toY(v)} stroke="#f1f5f9" strokeWidth={1} />
-                <text x={PAD.l - 6} y={toY(v) + 3} textAnchor="end" fontSize={9} fill="#94a3b8">
+                <text x={PAD.l - 6} y={toY(v) + 3} textAnchor="end" fontSize={11} fill="#475569">
                   {v < 1000 ? "R$ 0" : `R$ ${(v / 1000).toFixed(0)}k`}
                 </text>
               </g>
@@ -100,64 +109,54 @@ export function ImprovedScatterPlot({ points, highlightId }: ImprovedScatterPlot
             {xTicks.map((v, i) => (
               <g key={`x${i}`}>
                 <line x1={toX(v)} x2={toX(v)} y1={PAD.t} y2={H - PAD.b} stroke="#f1f5f9" strokeWidth={1} />
-                <text x={toX(v)} y={H - PAD.b + 14} textAnchor="middle" fontSize={9} fill="#94a3b8">
+                <text x={toX(v)} y={H - PAD.b + 14} textAnchor="middle" fontSize={11} fill="#475569">
                   {v.toFixed(2)}
                 </text>
               </g>
             ))}
-            <line
-              x1={toX(medEff)}
-              x2={toX(medEff)}
-              y1={PAD.t}
-              y2={H - PAD.b}
-              stroke="#94a3b8"
-              strokeWidth={1}
-              strokeDasharray="4 4"
-              data-testid="median-x"
-            />
-            <line
-              x1={PAD.l}
-              x2={W - PAD.r}
-              y1={toY(medY)}
-              y2={toY(medY)}
-              stroke="#94a3b8"
-              strokeWidth={1}
-              strokeDasharray="4 4"
-              data-testid="median-y"
-            />
-            <text x={W / 2} y={H - 4} textAnchor="middle" fontSize={10} fill="#64748b">
-              Eficiência (CPC × Conversão)
-            </text>
-            <text
-              x={10}
-              y={H / 2}
-              textAnchor="middle"
-              fontSize={10}
-              fill="#64748b"
-              transform={`rotate(-90, 10, ${H / 2})`}
-            >
-              Valor Acordos
-            </text>
-            {points.map((d, i) => {
-              const isHov = hov === i;
+            <line x1={toX(medEff)} x2={toX(medEff)} y1={PAD.t} y2={H - PAD.b} stroke="#94a3b8" strokeWidth={1} strokeDasharray="4 4" data-testid="median-x" />
+            <line x1={PAD.l} x2={W - PAD.r} y1={toY(medY)} y2={toY(medY)} stroke="#94a3b8" strokeWidth={1} strokeDasharray="4 4" data-testid="median-y" />
+            {/* Quadrant labels */}
+            <text x={toX(medEff) - 6} y={toY(medY) - 10} textAnchor="end" fontSize={11} fill="#334155" opacity={0.85}>Potencial subutilizado</text>
+            <text x={toX(medEff) + 6} y={toY(medY) - 10} textAnchor="start" fontSize={11} fill="#334155" opacity={0.85}>Elite operacional</text>
+            <text x={toX(medEff) - 6} y={toY(medY) + 16} textAnchor="end" fontSize={11} fill="#334155" opacity={0.85}>Necessita intervenção</text>
+            <text x={toX(medEff) + 6} y={toY(medY) + 16} textAnchor="start" fontSize={11} fill="#334155" opacity={0.85}>Resultado caro</text>
+            <text x={W / 2} y={H - 4} textAnchor="middle" fontSize={13} fill="#1e293b">Índice de Eficiência</text>
+            <text x={10} y={H / 2} textAnchor="middle" fontSize={13} fill="#1e293b" transform={`rotate(-90, 10, ${H / 2})`}>Valor Recuperado</text>
+            {sorted.map((d) => {
+              const origIdx = points.findIndex((p) => p.id === d.id);
+              const isHov = hov === origIdx;
               const isHl = highlightId !== undefined && d.id === highlightId;
-              const r = dotRadius(d.acordos) + (isHov ? 2 : 0);
+              const baseR = dotRadius(d.acordos);
+              const r = isHl ? baseR + 5 : isHov ? baseR + 2 : baseR;
               return (
-                <circle
-                  key={d.id}
-                  data-testid="scatter-dot"
-                  data-color={dotColor(d.excPct)}
-                  cx={toX(d.eficiencia)}
-                  cy={toY(d.valor)}
-                  r={r}
-                  fill={dotColor(d.excPct)}
-                  opacity={isHov ? 1 : 0.78}
-                  stroke={isHov || isHl ? "#0f172a" : "none"}
-                  strokeWidth={2}
-                  style={{ cursor: "pointer" }}
-                  onMouseEnter={() => setHov(i)}
-                  onMouseLeave={() => setHov(null)}
-                />
+                <g key={d.id}>
+                  {isHl && (
+                    <circle
+                      cx={toX(d.eficiencia)}
+                      cy={toY(d.valor)}
+                      r={r + 3}
+                      fill="none"
+                      stroke="hsl(var(--foreground))"
+                      strokeWidth={2.5}
+                      opacity={0.9}
+                    />
+                  )}
+                  <circle
+                    data-testid="scatter-dot"
+                    data-color={dotColor(d.excPct)}
+                    cx={toX(d.eficiencia)}
+                    cy={toY(d.valor)}
+                    r={r}
+                    fill={dotColor(d.excPct)}
+                    opacity={isHov || isHl ? 1 : hasHighlight ? 0.45 : 0.78}
+                    stroke={isHov || isHl ? "#0f172a" : "none"}
+                    strokeWidth={isHl ? 2.5 : 2}
+                    style={{ cursor: "pointer" }}
+                    onMouseEnter={() => setHov(origIdx)}
+                    onMouseLeave={() => setHov(null)}
+                  />
+                </g>
               );
             })}
             {hov !== null && points[hov] && (() => {
@@ -167,11 +166,11 @@ export function ImprovedScatterPlot({ points, highlightId }: ImprovedScatterPlot
               return (
                 <g data-testid="scatter-tooltip">
                   <rect x={tx} y={ty} width={188} height={40} rx={4} fill="#0f172a" opacity={0.92} />
-                  <text x={tx + 8} y={ty + 14} fontSize={11} fill="#e2e8f0">
+                  <text x={tx + 8} y={ty + 14} fontSize={13} fill="#e2e8f0">
                     {d.nome.substring(0, 26)}
                   </text>
-                  <text x={tx + 8} y={ty + 28} fontSize={10} fill="#94a3b8">
-                    eff: {d.eficiencia.toFixed(2)} · {formatBRLCompact(d.valor)} · exc: {d.excPct.toFixed(1)}%
+                  <text x={tx + 8} y={ty + 28} fontSize={12} fill="#cbd5e1">
+                    eficiência: {d.eficiencia.toFixed(2)} · {formatBRLCompact(d.valor)} · exceções: {d.excPct.toFixed(1)}%
                   </text>
                 </g>
               );

@@ -267,18 +267,61 @@ export interface RejeitadosPorPortfolioRow {
   valor_rejeitados: number;
 }
 
+export interface QuebradosPorPortfolioRow {
+  portfolio_name: string;
+  qtd_quebrados: number;
+  valor_quebrados: number;
+}
+
 export interface ExcecaoSemPortfolioRow {
   NR_RECEBIMENTO: number;
   ID_CARTEIRA: number;
-  VALOR: number;
+  valor_primeira_parcela: number;
+  valor_total: number;
   agente: string;
+  matricula: string;
   cpf_mask: string;
   nome_devedor: string;
+  data_acordo: string | null;
+  data_vencimento: string | null;
+  total_parcelas: number;
+}
+
+export interface QuebradoDetalheRow extends ExcecaoSemPortfolioRow {
 }
 
 export interface PrimeiraParcelaPorAgenteRow {
   agente: string;
   qtd_acordos_primeira_parcela: number;
+  valor_primeira_parcela: number;
+}
+
+export interface BenchmarkQuartiles {
+  q1: number | null;
+  median: number | null;
+  q3: number | null;
+  top10_mean: number | null;
+}
+
+export interface BenchmarkData {
+  taxa_contato: BenchmarkQuartiles;
+  taxa_conversao: BenchmarkQuartiles;
+  efetividade_caixa: BenchmarkQuartiles;
+  pct_excecoes: BenchmarkQuartiles;
+  n_agentes: number;
+  lookback_months: number;
+}
+
+/** Benchmarks return a single object as `data`, not an array. */
+export interface BenchmarkEnvelope {
+  meta: ApiMeta;
+  data: BenchmarkData;
+  errors: ApiErrorItem[];
+}
+
+export interface PrimeiraParcelaPorPortfolioRow {
+  portfolio_name: string;
+  qtd_acordos: number;
   valor_primeira_parcela: number;
 }
 
@@ -381,17 +424,29 @@ export async function fetchRejeitadosPorPortfolio(
   return request<ApiEnvelope<RejeitadosPorPortfolioRow>>(`/dashboard/rejeitados-por-portfolio/${db}${suffix}`);
 }
 
+export async function fetchQuebradosPorPortfolio(
+  db: DatabaseOption,
+  dateFrom?: string,
+  dateTo?: string,
+): Promise<ApiEnvelope<QuebradosPorPortfolioRow>> {
+  const query = new URLSearchParams();
+  if (dateFrom) query.set("dateFrom", dateFrom);
+  if (dateTo) query.set("dateTo", dateTo);
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<ApiEnvelope<QuebradosPorPortfolioRow>>(`/dashboard/quebrados-por-portfolio/${db}${suffix}`);
+}
+
 export async function fetchExcecoesDetalhe(
   db: DatabaseOption,
   portfolio: string,
   dateFrom?: string,
   dateTo?: string,
-): Promise<ApiEnvelope<ExcecaoSemPortfolioRow>> {
+): Promise<ApiEnvelope<QuebradoDetalheRow>> {
   const query = new URLSearchParams();
   if (dateFrom) query.set("dateFrom", dateFrom);
   if (dateTo) query.set("dateTo", dateTo);
   const suffix = query.toString() ? `?${query.toString()}` : "";
-  return request<ApiEnvelope<ExcecaoSemPortfolioRow>>(
+  return request<ApiEnvelope<QuebradoDetalheRow>>(
     `/dashboard/excecoes-detalhe/${db}/${encodeURIComponent(portfolio)}${suffix}`,
   );
 }
@@ -401,12 +456,12 @@ export async function fetchRejeitadosDetalhe(
   portfolio: string,
   dateFrom?: string,
   dateTo?: string,
-): Promise<ApiEnvelope<ExcecaoSemPortfolioRow>> {
+): Promise<ApiEnvelope<QuebradoDetalheRow>> {
   const query = new URLSearchParams();
   if (dateFrom) query.set("dateFrom", dateFrom);
   if (dateTo) query.set("dateTo", dateTo);
   const suffix = query.toString() ? `?${query.toString()}` : "";
-  return request<ApiEnvelope<ExcecaoSemPortfolioRow>>(
+  return request<ApiEnvelope<QuebradoDetalheRow>>(
     `/dashboard/rejeitados-detalhe/${db}/${encodeURIComponent(portfolio)}${suffix}`,
   );
 }
@@ -416,13 +471,85 @@ export async function fetchAcordosDetalhe(
   portfolio: string,
   dateFrom?: string,
   dateTo?: string,
+): Promise<ApiEnvelope<QuebradoDetalheRow>> {
+  const query = new URLSearchParams();
+  if (dateFrom) query.set("dateFrom", dateFrom);
+  if (dateTo) query.set("dateTo", dateTo);
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<ApiEnvelope<QuebradoDetalheRow>>(
+    `/dashboard/acordos-detalhe/${db}/${encodeURIComponent(portfolio)}${suffix}`,
+  );
+}
+
+export async function fetchQuebradosDetalhe(
+  db: DatabaseOption,
+  portfolio: string,
+  dateFrom?: string,
+  dateTo?: string,
+): Promise<ApiEnvelope<QuebradoDetalheRow>> {
+  const query = new URLSearchParams();
+  if (dateFrom) query.set("dateFrom", dateFrom);
+  if (dateTo) query.set("dateTo", dateTo);
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<ApiEnvelope<QuebradoDetalheRow>>(
+    `/dashboard/quebrados-detalhe/${db}/${encodeURIComponent(portfolio)}${suffix}`,
+  );
+}
+
+// ── agent-level detail ─────────────────────────────────────────
+
+export async function fetchExcecoesDetalheAgente(
+  db: DatabaseOption,
+  agente: string,
+  dateFrom?: string,
+  dateTo?: string,
 ): Promise<ApiEnvelope<ExcecaoSemPortfolioRow>> {
   const query = new URLSearchParams();
   if (dateFrom) query.set("dateFrom", dateFrom);
   if (dateTo) query.set("dateTo", dateTo);
   const suffix = query.toString() ? `?${query.toString()}` : "";
   return request<ApiEnvelope<ExcecaoSemPortfolioRow>>(
-    `/dashboard/acordos-detalhe/${db}/${encodeURIComponent(portfolio)}${suffix}`,
+    `/dashboard/excecoes-detalhe-agente/${db}/${encodeURIComponent(agente)}${suffix}`,
+  );
+}
+
+export async function fetchRejeitadosDetalheAgente(
+  db: DatabaseOption,
+  agente: string,
+  dateFrom?: string,
+  dateTo?: string,
+): Promise<ApiEnvelope<ExcecaoSemPortfolioRow>> {
+  const query = new URLSearchParams();
+  if (dateFrom) query.set("dateFrom", dateFrom);
+  if (dateTo) query.set("dateTo", dateTo);
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<ApiEnvelope<ExcecaoSemPortfolioRow>>(
+    `/dashboard/rejeitados-detalhe-agente/${db}/${encodeURIComponent(agente)}${suffix}`,
+  );
+}
+
+export async function fetchQuebradosDetalheAgente(
+  db: DatabaseOption,
+  agente: string,
+  dateFrom?: string,
+  dateTo?: string,
+): Promise<ApiEnvelope<QuebradoDetalheRow>> {
+  const query = new URLSearchParams();
+  if (dateFrom) query.set("dateFrom", dateFrom);
+  if (dateTo) query.set("dateTo", dateTo);
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<ApiEnvelope<QuebradoDetalheRow>>(
+    `/dashboard/quebrados-detalhe-agente/${db}/${encodeURIComponent(agente)}${suffix}`,
+  );
+}
+
+export async function fetchBenchmarks(
+  db: DatabaseOption,
+  lookbackMonths = 9,
+): Promise<BenchmarkEnvelope> {
+  const resolved = db === "todos" ? "COBwebRCBAUTOS" : db;
+  return request<BenchmarkEnvelope>(
+    `/dashboard/benchmarks/${resolved}?lookback_months=${lookbackMonths}`,
   );
 }
 
@@ -438,6 +565,18 @@ export async function fetchPrimeiraParcelaPorAgente(
   if (dateTo) query.set("dateTo", dateTo);
   const suffix = query.toString() ? `?${query.toString()}` : "";
   return request<ApiEnvelope<PrimeiraParcelaPorAgenteRow>>(`/dashboard/primeira-parcela-por-agente/${db}${suffix}`);
+}
+
+export async function fetchPrimeiraParcelaPorPortfolio(
+  db: DatabaseOption,
+  dateFrom?: string,
+  dateTo?: string,
+): Promise<ApiEnvelope<PrimeiraParcelaPorPortfolioRow>> {
+  const query = new URLSearchParams();
+  if (dateFrom) query.set("dateFrom", dateFrom);
+  if (dateTo) query.set("dateTo", dateTo);
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<ApiEnvelope<PrimeiraParcelaPorPortfolioRow>>(`/dashboard/primeira-parcela-por-portfolio/${db}${suffix}`);
 }
 
 export async function fetchStatusCarga(
@@ -769,4 +908,59 @@ export interface RitmoDiaResponse {
 
 export async function fetchRitmoDia(db: DatabaseOption): Promise<RitmoDiaResponse> {
   return request<RitmoDiaResponse>(`/dashboard/ritmo-dia/${db}`);
+}
+
+// ── Regressao ──────────────────────────────────────────────────────────────
+
+export interface RegressionModelResult {
+  id: string;
+  label: string;
+  description: string;
+  drawable: boolean;
+  r2_train: number;
+  r2_test: number;
+  adj_r2: number;
+  cv_train_n: number;
+  cv_test_n: number;
+  intercept: number;
+  intercept_se: number;
+  coefficients: Array<{ name: string; value: number; se: number }>;
+}
+
+export interface RegressionCleaningMeta {
+  raw_count: number;
+  clean_count: number;
+  removed_nulls: number;
+  removed_duplicates: number;
+  removed_outliers: number;
+}
+
+export interface RegressionEnvelope {
+  meta: ApiMeta & { raw_count?: number };
+  data: Array<{
+    meta: RegressionCleaningMeta;
+    modelos: RegressionModelResult[];
+  }>;
+  errors: ApiErrorItem[];
+}
+
+export interface RegressionPoint {
+  id: string;
+  nome: string;
+  eficiencia: number;
+  valor: number;
+  acionamentos: number;
+  contatos: number;
+  cpc: number;
+  conversao: number;
+}
+
+export async function fetchRegressionModels(
+  pontos: RegressionPoint[],
+): Promise<RegressionEnvelope> {
+  return request<RegressionEnvelope>("/regressao/agentes", {
+    method: "POST",
+    body: { pontos },
+    skipInflightDedup: true,
+  });
 }

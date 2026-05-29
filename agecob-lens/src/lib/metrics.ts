@@ -51,10 +51,10 @@ export function calcCpc(t: Pick<MetricTotals, "qtd_contatos" | "qtd_acionamentos
   return (t.qtd_contatos * 100) / t.qtd_acionamentos;
 }
 
-/** Conversão = qtd_acordos / qtd_acionamentos */
-export function calcConversao(t: Pick<MetricTotals, "qtd_acordos" | "qtd_acionamentos">): number {
-  if (t.qtd_acionamentos <= 0) return 0;
-  return (t.qtd_acordos * 100) / t.qtd_acionamentos;
+/** Conversão = qtd_acordos / qtd_contatos (sobre quem o agente realmente conversou) */
+export function calcConversao(t: Pick<MetricTotals, "qtd_acordos" | "qtd_contatos">): number {
+  if (t.qtd_contatos <= 0) return 0;
+  return (t.qtd_acordos * 100) / t.qtd_contatos;
 }
 
 /** Ticket médio = valor_acordos / qtd_acordos */

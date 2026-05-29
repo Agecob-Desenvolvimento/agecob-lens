@@ -55,7 +55,7 @@ function kpisFor(row: AgentRow | null): ExecutiveKpi[] {
     { label: "Valor Acordos", value: t.valor_acordos, unit: "BRL", priority: "primary", formula: "Σ valor_acordos" },
     { label: "Qtd Acordos", value: t.qtd_acordos, unit: "count", priority: "primary", formula: "Σ qtd_acordos" },
     { label: "CPC %", value: calcCpc(t), unit: "%", priority: "primary", formula: "qtd_contatos / qtd_acionamentos" },
-    { label: "Conversão %", value: calcConversao(t), unit: "%", priority: "primary", formula: "qtd_acordos / qtd_acionamentos" },
+    { label: "Conversão %", value: calcConversao(t), unit: "%", priority: "primary", formula: "qtd_acordos / qtd_contatos" },
   ];
 }
 

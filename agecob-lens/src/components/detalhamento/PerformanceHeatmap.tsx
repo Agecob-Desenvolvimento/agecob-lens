@@ -7,15 +7,35 @@ export interface AgentRow {
   id: string;
   nome: string;
   mat?: string;
+  acionamentos: number;
   cpc: number;
   conversao: number;
   valorAcordos: number;
   contatos: number;
-  excecoesPct: number;
+  /** Quantidade de acordos aprovados */
+  qtdAcordos: number;
+  /** 1ª parcela dos acordos aprovados */
   primeiraParcela: number;
+  /** Quantidade de exceções (ID_REC_STATUS = 5) */
+  qtdExcecoes: number;
+  /** Valor total das exceções */
+  valorExcecoes: number;
+  /** 1ª parcela das exceções */
+  excPrimeiraParcela: number;
+  /** Quantidade de rejeitados (ID_REC_STATUS = 7) — aguardando endpoint */
+  qtdRejeitados: number;
+  /** Valor total dos rejeitados — aguardando endpoint */
+  valorRejeitados: number;
+  /** 1ª parcela dos rejeitados — aguardando endpoint */
+  rejPrimeiraParcela: number;
 }
 
-type MetricKey = "cpc" | "conversao" | "valorAcordos" | "contatos" | "excecoesPct" | "primeiraParcela";
+type MetricKey =
+  | "acionamentos" | "cpc" | "conversao" | "valorAcordos" | "contatos"
+  | "qtdAcordos" | "primeiraParcela"
+  | "qtdExcecoes" | "valorExcecoes" | "excPrimeiraParcela"
+  | "qtdRejeitados" | "valorRejeitados" | "rejPrimeiraParcela";
+
 type SortDir = "desc" | "asc";
 
 interface MetricDef {
@@ -26,27 +46,49 @@ interface MetricDef {
 }
 
 const METRICS: MetricDef[] = [
-  { key: "cpc", label: "CPC %", fmt: (v) => `${v.toFixed(1)}%` },
+  { key: "acionamentos", label: "Acionam.", fmt: (v) => fmtNum(v) },
+  { key: "cpc", label: "CPC", fmt: (v) => fmtNum(v) },
+  { key: "contatos", label: "Contato", fmt: (v) => fmtNum(v) },
   { key: "conversao", label: "Conv. %", fmt: (v) => `${v.toFixed(1)}%` },
-  { key: "valorAcordos", label: "Valor Acordos", fmt: (v) => formatBRLCompact(v) },
-  { key: "contatos", label: "Contatos", fmt: (v) => fmtNum(v) },
-  { key: "excecoesPct", label: "Exc. %", invert: true, fmt: (v) => `${v.toFixed(1)}%` },
+  { key: "qtdAcordos", label: "Acordos", fmt: (v) => fmtNum(v) },
+  { key: "valorAcordos", label: "Vlr Acordos", fmt: (v) => formatBRLCompact(v) },
   { key: "primeiraParcela", label: "1ª Parc.", fmt: (v) => formatBRLCompact(v) },
+  { key: "qtdExcecoes", label: "Exc. qtd", invert: true, fmt: (v) => fmtNum(v) },
+  { key: "valorExcecoes", label: "Vlr Exc.", invert: true, fmt: (v) => formatBRLCompact(v) },
+  { key: "excPrimeiraParcela", label: "Exc. 1ª Parc.", invert: true, fmt: (v) => formatBRLCompact(v) },
+  { key: "qtdRejeitados", label: "Rej. qtd", invert: true, fmt: (v) => fmtNum(v) },
+  { key: "valorRejeitados", label: "Vlr Rej.", invert: true, fmt: (v) => formatBRLCompact(v) },
+  { key: "rejPrimeiraParcela", label: "Rej. 1ª Parc.", invert: true, fmt: (v) => formatBRLCompact(v) },
 ];
 
-export function classifyCell(value: number, max: number, invert = false): "good" | "warn" | "bad" {
-  if (max <= 0) return "bad";
-  if (invert) {
-    // lower = better. score = 1 - value/max (clamped 0..1)
-    const score = 1 - value / max;
-    if (score >= 0.9) return "good";
-    if (score >= 0.7) return "warn";
-    return "bad";
-  }
-  const score = value / max;
-  if (score >= 0.9) return "good";
-  if (score >= 0.7) return "warn";
+export function classifyCell(percentile: number, invert = false): "good" | "warn" | "bad" {
+  const p = invert ? 100 - percentile : percentile;
+  if (p >= 80) return "good";
+  if (p >= 40) return "warn";
   return "bad";
+}
+
+/**
+ * Build a lookup: raw value → percentile rank (0–100) for a set of numbers.
+ * Uses percentile-rank formula: (# below + 0.5 × # equal) / n × 100.
+ */
+export function buildPercentileMap(allValues: number[]): Map<number, number> {
+  if (allValues.length === 0) return new Map();
+  const sorted = [...allValues].sort((a, b) => a - b);
+  const n = sorted.length;
+  const map = new Map<number, number>();
+  let i = 0;
+  while (i < n) {
+    const v = sorted[i];
+    let j = i;
+    while (j < n && sorted[j] === v) j++;
+    const count = j - i;
+    const below = i;
+    const rank = ((below + 0.5 * count) / n) * 100;
+    map.set(v, Math.round(rank));
+    i = j;
+  }
+  return map;
 }
 
 const CELL_CLASS: Record<"good" | "warn" | "bad", string> = {
@@ -63,6 +105,7 @@ interface PerformanceHeatmapProps {
 export function PerformanceHeatmap({ agents, highlightId }: PerformanceHeatmapProps) {
   const [sortCol, setSortCol] = useState<MetricKey | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [maximized, setMaximized] = useState(false);
 
   const toggleSort = (key: MetricKey) => {
     if (sortCol !== key) {
@@ -79,31 +122,53 @@ export function PerformanceHeatmap({ agents, highlightId }: PerformanceHeatmapPr
   };
 
   const sortedAgents = useMemo(() => {
-    if (!sortCol) return agents;
     const copy = [...agents];
-    copy.sort((a, b) => {
-      const va = a[sortCol] ?? 0;
-      const vb = b[sortCol] ?? 0;
-      return sortDir === "desc" ? vb - va : va - vb;
-    });
+    if (sortCol) {
+      copy.sort((a, b) => {
+        const va = a[sortCol] ?? 0;
+        const vb = b[sortCol] ?? 0;
+        return sortDir === "desc" ? vb - va : va - vb;
+      });
+    } else {
+      copy.sort((a, b) => (b.valorAcordos ?? 0) - (a.valorAcordos ?? 0));
+    }
     return copy;
   }, [agents, sortCol, sortDir]);
 
-  const columnMax = useMemo(() => {
-    const result = {} as Record<MetricKey, number>;
+  const displayAgents = useMemo(
+    () => (maximized ? sortedAgents : sortedAgents.slice(0, 10)),
+    [sortedAgents, maximized],
+  );
+
+  const columnPercentile = useMemo(() => {
+    const result = {} as Record<MetricKey, Map<number, number>>;
     for (const m of METRICS) {
-      result[m.key] = agents.reduce((acc, a) => Math.max(acc, a[m.key] ?? 0), 0);
+      result[m.key] = buildPercentileMap(agents.map((a) => a[m.key] ?? 0));
     }
     return result;
   }, [agents]);
 
-  return (
+  const card = (
     <Card>
       <CardHeader>
-        <CardTitle className="text-sm font-semibold">Heatmap de Performance</CardTitle>
-        <CardDescription className="text-xs">
-          Agentes x Metricas. Cor por desempenho relativo ao maximo da coluna. Clique no cabecalho para ordenar.
-        </CardDescription>
+        <div className="flex items-start justify-between">
+          <div>
+            <CardTitle className="text-sm font-semibold">Matriz de Performance</CardTitle>
+            <CardDescription className="text-xs">
+              Agentes x Metricas. Cor por percentil na distribuicao do periodo. Rejeitados: aguardando endpoint (ID_REC_STATUS = 7).
+            </CardDescription>
+          </div>
+          {!maximized && (
+            <button
+              type="button"
+              data-testid="heatmap-maximize"
+              onClick={() => setMaximized(true)}
+              className="rounded border border-slate-300 px-2 py-1 text-[10px] text-slate-500 hover:bg-slate-100"
+            >
+              Tela cheia
+            </button>
+          )}
+        </div>
       </CardHeader>
       <CardContent>
         <div className="overflow-x-auto">
@@ -143,7 +208,7 @@ export function PerformanceHeatmap({ agents, highlightId }: PerformanceHeatmapPr
               </tr>
             </thead>
             <tbody>
-              {sortedAgents.map((agent) => {
+              {displayAgents.map((agent) => {
                 const isHighlight = highlightId && agent.id === highlightId;
                 return (
                   <tr
@@ -162,7 +227,8 @@ export function PerformanceHeatmap({ agents, highlightId }: PerformanceHeatmapPr
                     </td>
                     {METRICS.map((m) => {
                       const raw = agent[m.key] ?? 0;
-                      const cls = classifyCell(raw, columnMax[m.key], m.invert);
+                      const pct = columnPercentile[m.key].get(raw) ?? 0;
+                      const cls = classifyCell(pct, m.invert);
                       return (
                         <td
                           key={m.key}
@@ -187,19 +253,43 @@ export function PerformanceHeatmap({ agents, highlightId }: PerformanceHeatmapPr
         <div className="mt-3 flex flex-wrap gap-3 text-[10px] text-muted-foreground">
           <span className="inline-flex items-center gap-1">
             <span className="inline-block h-2.5 w-2.5 rounded-sm bg-emerald-100" />
-            &ge;90% do maximo
+            top 20% (percentil &ge;80)
           </span>
           <span className="inline-flex items-center gap-1">
             <span className="inline-block h-2.5 w-2.5 rounded-sm bg-amber-100" />
-            70-90%
+            mediano (40–79)
           </span>
           <span className="inline-flex items-center gap-1">
             <span className="inline-block h-2.5 w-2.5 rounded-sm bg-rose-100" />
-            &lt;70%
+            inferior (&lt;40)
           </span>
         </div>
       </CardContent>
     </Card>
+  );
+
+  return (
+    <>
+      {maximized && (
+        <div className="fixed inset-0 z-50 bg-white flex flex-col" data-testid="heatmap-overlay">
+          <div className="flex items-center justify-between px-6 py-3 border-b border-slate-200">
+            <span className="text-sm font-semibold">Matriz de Performance — Tela cheia</span>
+            <button
+              type="button"
+              data-testid="heatmap-minimize"
+              onClick={() => setMaximized(false)}
+              className="rounded border border-slate-300 px-3 py-1 text-xs text-slate-600 hover:bg-slate-100"
+            >
+              ✕
+            </button>
+          </div>
+          <div className="flex-1 overflow-auto p-4">
+            {card}
+          </div>
+        </div>
+      )}
+      {!maximized && card}
+    </>
   );
 }
 

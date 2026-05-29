@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { ParetoChart } from "./ParetoChart";
 import { MOCK_PARETO_POINTS } from "./acaoMocks";
 
@@ -26,5 +26,28 @@ describe("ParetoChart", () => {
   it("renders empty state", () => {
     render(<ParetoChart points={[]} />);
     expect(screen.getByText(/Sem dados/i)).toBeInTheDocument();
+  });
+
+  it("renders maximize button", () => {
+    render(<ParetoChart points={MOCK_PARETO_POINTS} />);
+    expect(screen.getByTestId("pareto-maximize")).toBeInTheDocument();
+    expect(screen.getByTestId("pareto-maximize")).toHaveTextContent("Tela cheia");
+  });
+
+  it("opens fullscreen overlay on maximize click", () => {
+    render(<ParetoChart points={MOCK_PARETO_POINTS} />);
+    fireEvent.click(screen.getByTestId("pareto-maximize"));
+    expect(screen.getByTestId("pareto-overlay")).toBeInTheDocument();
+    expect(screen.getByTestId("pareto-minimize")).toBeInTheDocument();
+    // Chart rendered in both overlay + background card → 2× bars
+    expect(screen.getAllByTestId("pareto-bar").length).toBeGreaterThanOrEqual(MOCK_PARETO_POINTS.length);
+  });
+
+  it("closes overlay on minimize click", () => {
+    render(<ParetoChart points={MOCK_PARETO_POINTS} />);
+    fireEvent.click(screen.getByTestId("pareto-maximize"));
+    expect(screen.getByTestId("pareto-overlay")).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("pareto-minimize"));
+    expect(screen.queryByTestId("pareto-overlay")).not.toBeInTheDocument();
   });
 });

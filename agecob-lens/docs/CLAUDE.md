@@ -1,4 +1,7 @@
 First of all, you only can answer and ask, type, only in english language
+
+MANDATORY DATA-WORK READ: any task touching data — fetching, ViewModels, selectors, metrics, adapters, or the data-layer contract (frontend or backend) — REQUIRES reading docs/data-layer.md IN FULL before editing any code. Applies to the main session and every subagent. Do not edit data code without having read the entire file.
+
 AgDash — Context for Claude Code
 Project
 Executive redesign of AgDash: transform the interface into an executive decision-making tool with clear visual hierarchy, consistent KPI semantics, and action narrative.
@@ -17,7 +20,8 @@ Official Metrics Dictionary
 These are the only valid definitions. Do not create variations or alternative labels.
 Table
 Metric	Formula
-CPC	Σ qtd_contatos / Σ qtd_acionamentos
+CPC	Σ qtd_contatos (count of contacts — same as "Contatos", just another name). Unit: count, NOT %.
+Contact rate (Taxa de contato %)	Σ qtd_contatos / Σ qtd_acionamentos — the ratio. MUST be labelled "Taxa de contato", never "CPC".
 Agreement conversion	Σ qtd_acordos / Σ qtd_acionamentos
 Average ticket	Σ valor_acordos / Σ qtd_acordos
 Exceptions (% value)	Σ valor_excecoes / Σ valor_acordos

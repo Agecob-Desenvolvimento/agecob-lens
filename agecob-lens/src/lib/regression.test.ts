@@ -198,11 +198,11 @@ describe("adjustedR2", () => {
 // ── cleanRegressionData ──────────────────────────────────────────────────
 
 describe("cleanRegressionData", () => {
-  interface TestRow {
+  type TestRow = {
     id: string;
     a: number;
     b: number;
-  }
+  };
 
   it("removes null/NaN values", () => {
     const rows: TestRow[] = [

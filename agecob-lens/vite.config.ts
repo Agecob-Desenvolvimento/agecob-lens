@@ -6,7 +6,7 @@ import { componentTagger } from "lovable-tagger";
 
 function gitShortSha(): string {
   try {
-    return execSync("git rev-parse --short HEAD", { cwd: __dirname }).toString().trim();
+    return execSync("git rev-parse --short HEAD", { cwd: __dirname, stdio: ["pipe", "pipe", "ignore"] }).toString().trim();
   } catch {
     return "dev";
   }

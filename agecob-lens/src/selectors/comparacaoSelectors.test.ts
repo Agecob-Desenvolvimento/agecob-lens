@@ -95,7 +95,7 @@ describe("selectRadarDimensions", () => {
   it("returns 5 dimensions in fixed order", () => {
     const out = selectRadarDimensions([rows[0]], [rows[1]], rows);
     expect(out).toHaveLength(5);
-    expect(out.map((p) => p.dim)).toEqual(["Valor", "Qtd", "CPC", "Conversão", "Ticket"]);
+    expect(out.map((p) => p.dim)).toEqual(["Valor", "Qtd", "Taxa contato", "Conversão", "Ticket"]);
   });
 
   it("normalizes to 0..100 using team max", () => {
@@ -111,9 +111,9 @@ describe("selectRadarDimensions", () => {
 
   it("carries raw values and unit per dimension", () => {
     const out = selectRadarDimensions([rows[0]], [rows[1]], rows);
-    const cpc = out.find((p) => p.dim === "CPC")!;
+    const cpc = out.find((p) => p.dim === "Taxa contato")!;
     expect(cpc.unit).toBe("%");
-    // Ana CPC = 10/20*100 = 50; Bruno = 8/10*100 = 80
+    // Ana taxa de contato = 10/20*100 = 50; Bruno = 8/10*100 = 80
     expect(cpc.rawA).toBeCloseTo(50, 5);
     expect(cpc.rawB).toBeCloseTo(80, 5);
   });

@@ -48,10 +48,10 @@ export function GroupedVolumeChart({ title, data, loading, empty }: GroupedVolum
             formatter={(value: number) => fmtNum(value)}
           />
           <Legend wrapperStyle={{ fontSize: 12 }} />
-          <Bar dataKey="qtd_acionamentos" name="Acionamentos" fill="hsl(217, 91%, 45%)" barSize={36} radius={[4, 4, 0, 0]}>
+          <Bar dataKey="qtd_acionamentos" name="Acionamentos" fill="hsl(217, 91%, 45%)" barSize={36} radius={[4, 4, 0, 0]} isAnimationActive={false}>
             <LabelList dataKey="qtd_acionamentos" position="top" formatter={(v: number) => fmtNum(v)} style={{ fontSize: 11, fontWeight: 600 }} />
           </Bar>
-          <Bar dataKey="qtd_contatos" name="Contatos" fill="hsl(217, 91%, 70%)" barSize={36} radius={[4, 4, 0, 0]}>
+          <Bar dataKey="qtd_contatos" name="Contatos" fill="hsl(217, 91%, 70%)" barSize={36} radius={[4, 4, 0, 0]} isAnimationActive={false}>
             <LabelList dataKey="qtd_contatos" position="top" formatter={(v: number) => fmtNum(v)} style={{ fontSize: 11, fontWeight: 600 }} />
           </Bar>
         </BarChart>

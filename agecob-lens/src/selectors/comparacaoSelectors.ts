@@ -79,7 +79,7 @@ export function selectRadarDimensions(
       unit: "count",
     },
     {
-      dim: "CPC",
+      dim: "Taxa contato",
       agentA: norm(calcCpc(ta), maxCpc),
       agentB: norm(calcCpc(tb), maxCpc),
       rawA: calcCpc(ta),

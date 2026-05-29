@@ -97,7 +97,7 @@ function SimpleBarChart<T extends object>({
           contentStyle={TOOLTIP_STYLE}
           formatter={(value: number) => [formatter(value), dataKey]}
         />
-        <Bar dataKey={dataKey} radius={[0, 4, 4, 0]} barSize={28}>
+        <Bar dataKey={dataKey} radius={[0, 4, 4, 0]} barSize={28} isAnimationActive={false}>
           {data.map((_, i) => (
             <Cell key={i} fill={color} />
           ))}

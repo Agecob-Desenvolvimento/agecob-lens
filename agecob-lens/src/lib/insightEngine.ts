@@ -59,7 +59,7 @@ export function generateDailyReadout(
       category: "cpc",
       severity: "positive",
       headline: fmtPct(cpc),
-      text: "CPC acima do patamar operacional.",
+      text: "Taxa de contato acima do patamar operacional.",
       rank: SEVERITY_RANK.positive,
     });
   } else if (cpc < 20 && totals.qtd_acionamentos > 0) {
@@ -68,7 +68,7 @@ export function generateDailyReadout(
       category: "cpc",
       severity: "warning",
       headline: fmtPct(cpc),
-      text: "CPC abaixo do patamar operacional.",
+      text: "Taxa de contato abaixo do patamar operacional.",
       rank: SEVERITY_RANK.warning,
     });
   }

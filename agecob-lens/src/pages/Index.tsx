@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { AppSidebar } from "@/components/AppSidebar";
 import { useGlobalFilters } from "@/contexts/GlobalFiltersContext";
 import { SidebarProvider } from "@/components/ui/sidebar";
@@ -9,13 +9,16 @@ import ExecutiveHeader from "@/components/executive/ExecutiveHeader";
 import HomeKpiStrip from "@/components/executive/HomeKpiStrip";
 import ExecutiveInsightCard from "@/components/executive/ExecutiveInsightCard";
 import ApiDebugBanner from "@/components/executive/ApiDebugBanner";
-import RitmoDiaCard from "@/components/executive/RitmoDiaCard";
 import SectionHeader from "@/components/executive/SectionHeader";
-import HomeBarChart from "@/components/executive/HomeBarChart";
-import HandoffFinanceiroGroupedBar from "@/components/executive/HandoffFinanceiroGroupedBar";
-import HandoffTopAgentes1aParcela from "@/components/executive/HandoffTopAgentes1aParcela";
-import HandoffEficienciaGroupedBar from "@/components/executive/HandoffEficienciaGroupedBar";
-import HandoffPortfolio1aParcela from "@/components/executive/HandoffPortfolio1aParcela";
+
+const RitmoDiaCard = lazy(() => import("@/components/executive/RitmoDiaCard"));
+const HomeRiscoQualidade = lazy(() => import("@/components/executive/HomeRiscoQualidade"));
+const HandoffTopAgentes1aParcela = lazy(() => import("@/components/executive/HandoffTopAgentes1aParcela"));
+const HandoffFunnelChart = lazy(() => import("@/components/executive/HandoffFunnelChart"));
+const HandoffDiagnosticCards = lazy(() => import("@/components/executive/HandoffDiagnosticCards"));
+const HandoffPortfolioRentabilidade = lazy(() => import("@/components/executive/HandoffPortfolioRentabilidade"));
+
+const CHART_FALLBACK = <div className="h-64 animate-pulse bg-muted rounded-lg" />;
 
 export default function Index() {
   const { selectedDatabase } = useGlobalFilters();
@@ -23,7 +26,7 @@ export default function Index() {
 
   useEffect(() => {
     if (vm.kpiSecondary.length === 0) return;
-    const totalsExcecoes = vm.kpiSecondary.find((k) => k.label === "Exceções %");
+    const totalsExcecoes = vm.kpiSecondary.find((k) => k.label === "% Exc. s/ Valor Acordos");
     if (!totalsExcecoes) return;
     const ratio = totalsExcecoes.value;
     let severity: "critical" | "warning" | null = null;
@@ -63,32 +66,51 @@ export default function Index() {
             <ApiDebugBanner error={vm.error} warnings={vm.warnings} onRetry={guardedRefresh} />
 
             <ExecutiveInsightCard {...vm.insight} loading={vm.loading} />
-            <RitmoDiaCard db={selectedDatabase} />
+            <Suspense fallback={CHART_FALLBACK}>
+              <RitmoDiaCard db={selectedDatabase} />
+            </Suspense>
 
             <HomeKpiStrip primary={vm.kpiPrimary} secondary={vm.kpiSecondary} />
 
+
             <section className="space-y-4">
-              <SectionHeader title="Financeiro" unit="BRL" description="Resultados em valor de acordos e entrada de caixa (1ª parcela)." />
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <HandoffFinanceiroGroupedBar title="Valor por Unidade de Negócio" data={vm.financeiroData} empty={vm.financeiroData.length === 0} loading={vm.loading} />
+              <SectionHeader title="Financeiro" unit="BRL" description="Resultados em valor de acordos, entrada de caixa (1ª parcela) e rentabilidade por portfólio." />
+              <Suspense fallback={CHART_FALLBACK}>
                 <HandoffTopAgentes1aParcela title="Top 10 Agentes por 1ª Parcela" rows={vm.top10PrimeiraParcela} empty={vm.top10PrimeiraParcela.length === 0} loading={vm.loadingPpAgente} />
-              </div>
+                <div className="mt-4">
+                  <HandoffPortfolioRentabilidade
+                    title="1ª Parcela por Portfólio · Rentabilidade & Risco"
+                    rows={vm.ppPortfolioRows}
+                    riskMap={vm.portfolioRiskMap}
+                    empty={vm.ppPortfolioRows.length === 0}
+                    loading={vm.loadingPpPortfolio}
+                  />
+                </div>
+              </Suspense>
             </section>
 
             <section className="space-y-4">
-              <SectionHeader title="Eficiência" unit="%" description="Esforço (acionamentos/contatos) e taxas (CPC/Conversão) por unidade de negócio." />
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <HandoffEficienciaGroupedBar title="CPC % e Conversão % por Unidade de Negócio" data={vm.eficienciaData} summary={{ cpcAvg: vm.cpcAvg, conversaoAvg: vm.convAvg }} empty={vm.eficienciaData.length === 0} loading={vm.loading} />
-                <HandoffPortfolio1aParcela title="Valor de Acordos por Portfólio" rows={vm.portfolio1aParcela} empty={vm.portfolio1aParcela.length === 0} loading={vm.loadingAcdPort} />
-              </div>
+              <SectionHeader title="Eficiência" unit="%" description="Funil de conversão (Acionamentos → Contatos → Acordos) e diagnóstico por unidade de negócio." />
+              <Suspense fallback={CHART_FALLBACK}>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <HandoffFunnelChart title="Funil de Conversão" data={vm.funnelData} empty={vm.funnelData.length === 0} loading={vm.loading} />
+                  <HandoffDiagnosticCards title="Diagnóstico por Unidade de Negócio" data={vm.eficienciaData} funnelData={vm.funnelData} benchByBu={vm.benchByBu} cpcRef={vm.cpcAvg} conversaoRef={vm.convAvg} empty={vm.eficienciaData.length === 0} loading={vm.loading} />
+                </div>
+              </Suspense>
             </section>
 
             <section className="space-y-4">
-              <SectionHeader title="Risco / Qualidade" description="Exceções e rejeitados por portfólio. Boletos quebrados: aguardando endpoint." />
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <HomeBarChart title="Exceções por Portfólio (Qtd)" data={vm.excecoesPorPortfolio} color="hsl(347 77% 50%)" formatValue={(v) => String(v)} loading={vm.loadingExcPort} />
-                <HomeBarChart title="Rejeitados por Portfólio (Qtd)" data={vm.rejeitadosPorPortfolio} color="hsl(24 95% 53%)" formatValue={(v) => String(v)} loading={vm.loadingRejPort} />
-              </div>
+              <SectionHeader title="Risco / Qualidade" description="Exceções, rejeitados e boletos quebrados por portfólio. Clique num portfólio para detalhar." />
+              <Suspense fallback={CHART_FALLBACK}>
+                <HomeRiscoQualidade
+                  excecoes={vm.excecoesPorPortfolio}
+                  rejeitados={vm.rejeitadosPorPortfolio}
+                  quebrados={vm.quebradosPorPortfolio}
+                  loadingExcecoes={vm.loadingExcPort}
+                  loadingRejeitados={vm.loadingRejPort}
+                  loadingQuebrados={vm.loadingQbrPort}
+                />
+              </Suspense>
             </section>
 
             </div>

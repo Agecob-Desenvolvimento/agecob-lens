@@ -130,7 +130,7 @@ export default function DetalhamentoChartsPanel({
                 <XAxis dataKey="name" tick={{ fontSize: 12, fontWeight: 600 }} axisLine={false} tickLine={false} />
                 <YAxis tickFormatter={(v: number) => fmtNum(v)} tick={{ fontSize: 11 }} axisLine={false} tickLine={false} width={60} />
                 <Tooltip formatter={(v: number) => fmtNum(v)} contentStyle={{ fontSize: 12 }} />
-                <Bar dataKey="value" radius={[6, 6, 0, 0]} barSize={56}>
+                <Bar dataKey="value" radius={[6, 6, 0, 0]} barSize={56} isAnimationActive={false}>
                   <Cell fill="hsl(217, 91%, 45%)" />
                   <Cell fill="hsl(217, 91%, 70%)" />
                   <LabelList dataKey="value" position="top" formatter={(v: number) => fmtNum(v)} style={{ fontSize: 12, fontWeight: 600 }} />
@@ -138,7 +138,7 @@ export default function DetalhamentoChartsPanel({
               </BarChart>
             </ResponsiveContainer>
             <p className="text-xs text-muted-foreground mt-2">
-              CPC: <span className="font-semibold text-foreground tabular-nums">{fmtPct(cpc)}</span> · Conversão: <span className="font-semibold text-foreground tabular-nums">{fmtPct(conversao)}</span>
+              Taxa de contato: <span className="font-semibold text-foreground tabular-nums">{fmtPct(cpc)}</span> · Conversão: <span className="font-semibold text-foreground tabular-nums">{fmtPct(conversao)}</span>
             </p>
           </CardContent>
         </Card>
@@ -154,7 +154,7 @@ export default function DetalhamentoChartsPanel({
                 <XAxis dataKey="name" tick={{ fontSize: 12, fontWeight: 600 }} axisLine={false} tickLine={false} />
                 <YAxis tickFormatter={(v: number) => fmtBRL(v, { compact: true })} tick={{ fontSize: 11 }} axisLine={false} tickLine={false} width={70} />
                 <Tooltip formatter={(v: number) => fmtBRL(v)} contentStyle={{ fontSize: 12 }} />
-                <Bar dataKey="value" radius={[6, 6, 0, 0]} barSize={56}>
+                <Bar dataKey="value" radius={[6, 6, 0, 0]} barSize={56} isAnimationActive={false}>
                   <Cell fill="hsl(142, 65%, 55%)" />
                   <Cell fill="hsl(142, 71%, 38%)" />
                   <LabelList dataKey="value" position="top" formatter={(v: number) => fmtBRL(v, { compact: true })} style={{ fontSize: 12, fontWeight: 600 }} />
@@ -188,7 +188,7 @@ export default function DetalhamentoChartsPanel({
                   <TableHead className="text-sm font-semibold whitespace-nowrap">Agente</TableHead>
                   <TableHead className="text-sm font-semibold whitespace-nowrap">Matrícula</TableHead>
                   <TableHead className="text-sm font-semibold text-right whitespace-nowrap">Acionamentos</TableHead>
-                  <TableHead className="text-sm font-semibold text-right whitespace-nowrap">CPC %</TableHead>
+                  <TableHead className="text-sm font-semibold text-right whitespace-nowrap">Taxa de contato %</TableHead>
                   <TableHead className="text-sm font-semibold text-right whitespace-nowrap">Acordos</TableHead>
                   <TableHead className="text-sm font-semibold text-right whitespace-nowrap">Conversão %</TableHead>
                   <TableHead className="text-sm font-semibold text-right whitespace-nowrap">Valor Total</TableHead>

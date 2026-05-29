@@ -56,7 +56,7 @@ function buildSteps(d: FunilData): FunilStep[] {
       value: d.contatos,
       display: fmtNum(d.contatos),
       pct: cpc,
-      pctLabel: "CPC",
+      pctLabel: "Taxa contato",
       barWidth: (d.contatos / max) * 100,
       role: "info",
     },

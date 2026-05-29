@@ -15,6 +15,7 @@ import {
   calcCpc,
   calcConversao,
   fmtBRL,
+  shortAgentName,
 } from "@/lib/metrics";
 import SectionHeader from "@/components/executive/SectionHeader";
 import HorizontalRankingChart from "@/components/executive/HorizontalRankingChart";
@@ -153,7 +154,7 @@ export default function AnaliseChartsPanel({ rows, db, dateFrom, dateTo }: Anali
                 <ul className="text-xs space-y-0.5 pt-1">
                   {excSemPortfolio.slice(0, 10).map((r) => (
                     <li key={r.NR_RECEBIMENTO} className="font-mono">
-                      • NR {r.NR_RECEBIMENTO} · CPF {r.cpf_mask} · {r.nome_devedor} · {fmtBRL(Number(r.VALOR || 0))} · agente {r.agente}
+                      • NR {r.NR_RECEBIMENTO} · CPF {r.cpf_mask} · {r.nome_devedor} · {fmtBRL(Number(r.valor_primeira_parcela || 0))} · agente {r.agente}
                     </li>
                   ))}
                   {excSemPortfolio.length > 10 ? (
@@ -204,7 +205,7 @@ export default function AnaliseChartsPanel({ rows, db, dateFrom, dateTo }: Anali
       <section className="space-y-3">
         <SectionHeader
           title="Eficiência"
-          description="Volume de esforço (acionamentos/contatos) e taxas (CPC/Conversão) por unidade de negócio."
+          description="Volume de esforço (acionamentos/contatos) e taxas (contato/Conversão) por unidade de negócio."
         />
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <GroupedVolumeChart
@@ -213,7 +214,7 @@ export default function AnaliseChartsPanel({ rows, db, dateFrom, dateTo }: Anali
             empty={buVolume.length === 0}
           />
           <BuEfficiencyChart
-            title="CPC % e Conversão % por Unidade de Negócio"
+            title="Taxa de contato % e Conversão % por Unidade de Negócio"
             data={buEfficiency}
             cpcAverage={cpcAvg}
             conversaoAverage={convAvg}

@@ -12,9 +12,9 @@ describe("FunilConversao", () => {
     expect(screen.getByTestId("funil-step-1ª Parcela")).toBeInTheDocument();
   });
 
-  it("shows CPC conversion percentage on the Contatos stage", () => {
+  it("shows contact-rate percentage on the Contatos stage", () => {
     render(<FunilConversao data={MOCK_FUNIL} />);
-    // CPC = 13939 / 31967 = 43.6%
-    expect(screen.getByText(/CPC: 43,6%|CPC: 43\.6%/)).toBeInTheDocument();
+    // taxa de contato = 13939 / 31967 = 43.6%
+    expect(screen.getByText(/Taxa contato: 43,6%|Taxa contato: 43\.6%/)).toBeInTheDocument();
   });
 });

@@ -22,20 +22,22 @@ Fonte de verdade para todas as regras de negócio que governam o agecob-lens. Qu
 
 ## Contato com Pessoa Certa (CPC)
 
-IDs de complemento que qualificam um contato como CPC:
+Um acionamento qualifica como contato (CPC) quando o complemento está marcado
+como contato no cadastro:
 
 ```
-CPC_COMPLEMENTO_IDS = (252, 130, 110, 111, 253, 144, 151, 216, 140, 108, 90)
+JOIN CTO_COMPLEMENTO CC ON CM.ID_COMPLEMENTO = CC.ID_COMPLEMENTO
+... CC.CONTATO = 1
 ```
 
-**Gestão:** hardcoded, mantido manualmente por Isaque como cientista de dados. Não mover para config dinâmica.
+**Gestão:** dirigido por dado (`CTO_COMPLEMENTO.CONTATO`), mantido no cadastro do sistema. Substituiu a antiga lista hardcoded `CPC_COMPLEMENTO_IDS`.
 
 ## Terminologia Operacional
 
 | Termo | Definição | Filtro técnico |
 |---|---|---|
 | **Acionamento** | Qualquer tentativa de contato | Todo `ID_CTO_MASTER` (sem filtro de complemento) |
-| **Contato (CPC)** | Contato efetivado com a pessoa certa | `ID_COMPLEMENTO IN CPC_COMPLEMENTO_IDS` |
+| **Contato (CPC)** | Contato efetivado com a pessoa certa | `CTO_COMPLEMENTO.CONTATO = 1` (via JOIN por `ID_COMPLEMENTO`) |
 | **Acordo aprovado** | Acordo em status ativo ou baixado | `ID_REC_STATUS IN (1, 3, 12)` |
 | **Exceção** | Acordo pendente de aprovação bancária | `ID_REC_STATUS = 11` |
 | **Primeira parcela** | Parcela de entrada do acordo | `PARCELA = 0` (não 1 — convenção COBweb) |
@@ -84,7 +86,8 @@ O mesmo agente pode existir em `COBwebRCBCONSUMER` e `COBwebRCBAUTOS`. Regra:
 
 | KPI | Fórmula | Nota |
 |---|---|---|
-| CPC % | `CEILING((qtd_contatos / qtd_acionamentos) × 10000) / 100` | |
+| CPC | `Σ qtd_contatos` (contagem) | CPC = Contatos, só que com outro nome. Unidade: count, **não** %. |
+| Taxa de contato % | `CEILING((qtd_contatos / qtd_acionamentos) × 10000) / 100` | a razão. Rotular sempre "Taxa de contato", nunca "CPC". |
 | Taxa de conversão | `qtd_acordos / qtd_acionamentos × 100` | |
 | Desconto médio % | `AVG(valor_total_acordo / VR_SALDO × 100)` | guarda `VR_ORIGINAL > 0` |
 | Valor primeira parcela | produtividade: `AVG(VALOR_P1)` · comparação: `SUM(VALOR_P1)` | granularidade intencional |

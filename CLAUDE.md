@@ -22,6 +22,8 @@ Antes de qualquer ação, leia nesta ordem:
 
 Essas regras prevalecem sobre interpretações alternativas do código.
 
+> **OBRIGATÓRIO ao mexer com dados:** qualquer trabalho que toque fetching, ViewModels, selectors, métricas, adapters ou contrato de dados (frontend ou backend) exige ler **@agecob-lens/docs/data-layer.md POR INTEIRO** antes de qualquer edição. Vale para a sessão principal e para todo subagente. Sem leitura completa, não edite código de dados.
+
 ---
 
 ## Commands
@@ -66,12 +68,13 @@ Graph (após mudanças relevantes): `/graphify . --update`
 | Primeira parcela | `PARCELA = 0` |
 | Acordos aprovados (`ID_REC_STATUS`) | `IN (1, 3, 12)` |
 | Exceções (`ID_REC_STATUS`) | `IN (5)` — negócio chama de "Exceção" o status que o enum REC_MASTER nomeia como PENDENTE |
+| Boletos quebrados (`ID_REC_STATUS`) | `IN (2)` |
 | Pré-filtro CTE | `IN (1, 3, 5, 12)` |
 | Portfólio | `DIV_AUX.CAMPO010` |
 | Filtro de data padrão | `DT_EMISSAO >= @Hoje AND DT_EMISSAO < @Amanha` |
 | `NOLOCK` | **Obrigatório** em todas as tabelas de leitura |
 | Agentes excluídos | `COBDESANTOS`, `ANTLIA%`, `INTERNA%`, `suporte%`, `SISTEMA%` — aplicar **no SQL** (ADR-005), nunca em pós-processamento |
-| CPC IDs | hardcoded em `CPC_COMPLEMENTO_IDS` (ADR-006) |
+| Contato (CPC) | `CTO_COMPLEMENTO.CONTATO = 1` — JOIN `CTO_MASTER.ID_COMPLEMENTO = CTO_COMPLEMENTO.ID_COMPLEMENTO` (substituiu a lista hardcoded de IDs) |
 | Bancos | `COBwebRCBAUTOS` \| `COBwebRCBCONSUMER` \| `todos` |
 
 Dicionário oficial de métricas (CPC, Conversão, Ticket médio, Exceções) está em `agecob-lens/docs/CLAUDE.md`. **Não criar variações.**

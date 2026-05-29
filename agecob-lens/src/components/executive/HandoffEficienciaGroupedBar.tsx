@@ -4,6 +4,7 @@ import {
   CartesianGrid,
   Legend,
   LabelList,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -29,6 +30,8 @@ interface HandoffEficienciaGroupedBarProps {
   title?: string;
   loading?: boolean;
   empty?: boolean;
+  /** Horizontal reference line on the Y axis, e.g. 3 for 3% conversion target */
+  metaConversao?: number;
 }
 
 const CPC_COLOR = "#f59e0b";
@@ -37,9 +40,10 @@ const CONVERSAO_COLOR = "#a3a300";
 export function HandoffEficienciaGroupedBar({
   data,
   summary,
-  title = "CPC % e Conversão % por Unidade de Negócio",
+  title = "Taxa de contato % e Conversão % por Unidade de Negócio",
   loading,
   empty,
+  metaConversao = 3,
 }: HandoffEficienciaGroupedBarProps) {
   const isEmpty = empty || data.length === 0;
 
@@ -77,8 +81,18 @@ export function HandoffEficienciaGroupedBar({
             }}
             formatter={(value: number) => fmtPct(value)}
           />
+          {metaConversao != null && metaConversao > 0 && (
+            <ReferenceLine
+              y={metaConversao}
+              stroke="#6b7280"
+              strokeDasharray="5 5"
+              strokeWidth={1.5}
+              label={{ value: `Meta ${metaConversao}%`, position: "right", fontSize: 11, fill: "#6b7280" }}
+              ifOverflow="extendDomain"
+            />
+          )}
           <Legend wrapperStyle={{ fontSize: 12 }} />
-          <Bar dataKey="cpc" name="CPC %" fill={CPC_COLOR} barSize={32} radius={[4, 4, 0, 0]}>
+          <Bar dataKey="cpc" name="Taxa de contato %" fill={CPC_COLOR} barSize={32} radius={[4, 4, 0, 0]} isAnimationActive={false}>
             <LabelList
               dataKey="cpc"
               position="top"
@@ -92,6 +106,7 @@ export function HandoffEficienciaGroupedBar({
             fill={CONVERSAO_COLOR}
             barSize={32}
             radius={[4, 4, 0, 0]}
+            isAnimationActive={false}
           >
             <LabelList
               dataKey="conversao"
@@ -103,7 +118,7 @@ export function HandoffEficienciaGroupedBar({
         </BarChart>
       </ResponsiveContainer>
       <p className="mt-2 text-xs font-medium text-slate-600 tabular-nums">
-        Média CPC: {fmtPct(summary.cpcAvg)} · Média Conv.: {fmtPct(summary.conversaoAvg)}
+        Média taxa de contato: {fmtPct(summary.cpcAvg)} · Média Conv.: {fmtPct(summary.conversaoAvg)}
       </p>
     </ChartShell>
   );

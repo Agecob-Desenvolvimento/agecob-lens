@@ -22,10 +22,10 @@ export const MOCK_METAS: BulletPanelData = {
     ranges: { poor: 1.6, ok: 2.8, good: 4 },
     unit: "%",
   },
-  ticket: {
-    value: 4502.79,
-    meta: 5000,
-    ranges: { poor: 4000, ok: 7000, good: 10000 },
+  primeiraParcela: {
+    value: 333560.16,
+    meta: 350000,
+    ranges: { poor: 200000, ok: 400000, good: 600000 },
     unit: "BRL",
   },
   excecoes: {

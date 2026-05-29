@@ -3,9 +3,9 @@ import { render, screen } from "@testing-library/react";
 import { DetalhamentoKpiStrip, type KpiDatum } from "./DetalhamentoKpiStrip";
 
 const primary: KpiDatum[] = [
-  { id: "valor_acordos", label: "Valor Acordos", value: 1_675_038.91, unit: "BRL" },
+  { id: "valor_acordos", label: "Receita", value: 1_675_038.91, unit: "BRL" },
   { id: "primeira_parcela", label: "1ª Parcela", value: 333_560.16, unit: "BRL" },
-  { id: "qtd_acordos", label: "Qtd Acordos", value: 372, unit: "count" },
+  { id: "qtd_acordos", label: "Acordos Fechados", value: 372, unit: "count" },
   { id: "ticket_medio", label: "Ticket Médio", value: 4_502.79, unit: "BRL" },
 ];
 

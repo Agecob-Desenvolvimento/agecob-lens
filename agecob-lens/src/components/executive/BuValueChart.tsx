@@ -54,10 +54,10 @@ export function BuValueChart({ title, data, loading, empty }: BuValueChartProps)
             formatter={(value: number) => fmtBRL(value)}
           />
           <Legend wrapperStyle={{ fontSize: 12 }} />
-          <Bar dataKey="valor_acordos" name="Valor Acordos" fill="hsl(142, 71%, 38%)" barSize={36} radius={[4, 4, 0, 0]}>
+          <Bar dataKey="valor_acordos" name="Valor Acordos" fill="hsl(142, 71%, 38%)" barSize={36} radius={[4, 4, 0, 0]} isAnimationActive={false}>
             <LabelList dataKey="valor_acordos" position="top" formatter={(v: number) => fmtBRL(v, { compact: true })} style={{ fontSize: 11, fontWeight: 600 }} />
           </Bar>
-          <Bar dataKey="valor_primeira_parcela" name="1ª Parcela" fill="hsl(142, 65%, 65%)" barSize={36} radius={[4, 4, 0, 0]}>
+          <Bar dataKey="valor_primeira_parcela" name="1ª Parcela" fill="hsl(142, 65%, 65%)" barSize={36} radius={[4, 4, 0, 0]} isAnimationActive={false}>
             <LabelList dataKey="valor_primeira_parcela" position="top" formatter={(v: number) => fmtBRL(v, { compact: true })} style={{ fontSize: 11, fontWeight: 600 }} />
           </Bar>
         </BarChart>

@@ -4,17 +4,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatBRLCompact } from "@/lib/metrics";
 import { cn } from "@/lib/utils";
 import { usePortfolioDetalhe } from "@/hooks/usePortfolioDetalhe";
+import { type BarRow, excecoesToRows, rejeitadosToRows } from "./portfolioRows";
 
-interface BarRow {
-  label: string;
-  ratio: number;
-  valueText: string;
-  barColor: string;
-  trackClass: string;
-  valueClass: string;
-}
-
-function HBarList({
+export function HBarList({
   rows,
   onBarClick,
   selectedLabel,
@@ -23,7 +15,7 @@ function HBarList({
   rows: BarRow[];
   onBarClick?: (label: string) => void;
   selectedLabel?: string | null;
-  type: "valor" | "excecoes" | "rejeitados";
+  type: "valor" | "excecoes" | "rejeitados" | "quebrados";
 }) {
   if (rows.length === 0) {
     return <p className="text-[11px] italic text-muted-foreground">Sem registros no período.</p>;
@@ -72,7 +64,7 @@ function HBarList({
 }
 
 /** Detail panel rendered below a clicked portfolio bar. */
-function PortfolioDetailPanel({
+export function PortfolioDetailPanel({
   type,
   portfolio,
   onClose,
@@ -128,7 +120,8 @@ function PortfolioDetailPanel({
                   <th className="py-1 pr-3 font-medium">Devedor</th>
                   <th className="py-1 pr-3 font-medium">Agente</th>
                   <th className="py-1 pr-3 font-medium">Recebimento</th>
-                  <th className="py-1 text-right font-medium">Valor</th>
+                  <th className="py-1 pr-3 text-right font-medium">1ª Parcela</th>
+                  <th className="py-1 text-right font-medium">Total</th>
                 </tr>
               </thead>
               <tbody>
@@ -140,7 +133,8 @@ function PortfolioDetailPanel({
                     </td>
                     <td className="py-1 pr-3 truncate max-w-[120px]" title={r.agente}>{r.agente}</td>
                     <td className="py-1 pr-3 text-muted-foreground">{r.NR_RECEBIMENTO}/{r.ID_CARTEIRA}</td>
-                    <td className={cn("py-1 text-right font-semibold", c.text)}>{formatBRLCompact(r.VALOR)}</td>
+                    <td className={cn("py-1 pr-3 text-right tabular-nums", c.text)}>{formatBRLCompact(r.valor_primeira_parcela)}</td>
+                    <td className={cn("py-1 text-right font-semibold", c.text)}>{formatBRLCompact(r.valor_total)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -179,23 +173,8 @@ export function PortfolioSection({
     valueClass: "text-muted-foreground",
   }));
 
-  const excecoesRows: BarRow[] = excecoesPorPortfolio.map((d) => ({
-    label: d.nome,
-    ratio: 1,
-    valueText: String(d.qtd),
-    barColor: "#f43f5e",
-    trackClass: "bg-rose-50",
-    valueClass: "text-rose-600 font-semibold",
-  }));
-
-  const rejeitadosRows: BarRow[] = rejeitadosPorPortfolio.map((d) => ({
-    label: d.nome,
-    ratio: 1,
-    valueText: String(d.qtd),
-    barColor: "#f97316",
-    trackClass: "bg-orange-50",
-    valueClass: "text-orange-600 font-semibold",
-  }));
+  const excecoesRows: BarRow[] = excecoesToRows(excecoesPorPortfolio);
+  const rejeitadosRows: BarRow[] = rejeitadosToRows(rejeitadosPorPortfolio);
 
   return (
     <div className="space-y-3">

@@ -3,6 +3,7 @@ import type {
   AcordosPorPortfolioRow,
   ExcecoesPorPortfolioRow,
   PrimeiraParcelaPorAgenteRow,
+  QuebradosPorPortfolioRow,
   RejeitadosPorPortfolioRow,
 } from "@/services/api";
 import type { BuValueDatum } from "@/components/executive/BuValueChart";
@@ -18,6 +19,12 @@ export interface BarDatum {
 }
 
 const BU_ORDER: ("AUTOS" | "CONSUMER")[] = ["AUTOS", "CONSUMER"];
+
+/** Fractional change current vs previous. Undefined when no comparable baseline. */
+export function selectPeriodDelta(current: number, previous: number): number | undefined {
+  if (!previous || previous <= 0) return undefined;
+  return (current - previous) / previous;
+}
 
 export function selectTopByValor(rows: ProdutividadeRowWithSource[], n = 10): RankingRow[] {
   return [...rows]
@@ -94,6 +101,23 @@ export function selectTopPortfolioPorRejeitados(rows: RejeitadosPorPortfolioRow[
     .map((r) => ({ label: r.portfolio_name, value: Number(r.qtd_rejeitados || 0) }));
 }
 
+/** Portfolio-level quebrados with financial impact. Sort by valor_quebrados DESC. */
+export interface QuebradoPortfolioDatum {
+  label: string;
+  /** financial impact in BRL */
+  value: number;
+  /** raw count of broken boletos (for detail panel) */
+  qtd: number;
+}
+
+export function selectTopPortfolioPorQuebrados(rows: QuebradosPorPortfolioRow[], n = 10): QuebradoPortfolioDatum[] {
+  return [...rows]
+    .filter((r) => Number(r.valor_quebrados || 0) > 0)
+    .sort((a, b) => Number(b.valor_quebrados || 0) - Number(a.valor_quebrados || 0))
+    .slice(0, n)
+    .map((r) => ({ label: r.portfolio_name, value: Number(r.valor_quebrados || 0), qtd: Number(r.qtd_quebrados || 0) }));
+}
+
 export function selectGapDePerformance(rows: ProdutividadeRowWithSource[]): number {
   const valores = rows
     .map((r) => Number(r.valor_acordos || 0))
@@ -120,4 +144,26 @@ export function selectEficienciaHandoffData(
     cpc: d.cpc,
     conversao: d.conversao,
   }));
+}
+
+// ── Funnel data (raw counts per BU) ──────────────────────────────
+
+export interface FunnelDatum {
+  bu: "AUTOS" | "CONSUMER";
+  acionamentos: number;
+  contatos: number;
+  acordos: number;
+}
+
+export function selectFunnelData(rows: ProdutividadeRowWithSource[]): FunnelDatum[] {
+  const map = groupByBu(rows);
+  return BU_ORDER.filter((bu) => map.has(bu)).map((bu) => {
+    const t = aggregateTotals(map.get(bu) ?? []);
+    return {
+      bu,
+      acionamentos: t.qtd_acionamentos,
+      contatos: t.qtd_contatos,
+      acordos: t.qtd_acordos,
+    };
+  });
 }

@@ -15,7 +15,6 @@ import {
   MOCK_EXCECOES_PORTFOLIO,
   MOCK_REJEITADOS_PORTFOLIO,
   MOCK_BOLETOS_QUEBRADOS,
-  MOCK_BOLETOS_QUEBRADOS_DETALHE,
 } from "./analiseMocks";
 
 describe("BoletosKpiStrip", () => {
@@ -85,30 +84,17 @@ describe("PortfolioSection", () => {
 
 describe("BoletosQuebradosChart", () => {
   it("renders portfolio summary bars", () => {
-    render(
-      <BoletosQuebradosChart
-        portfolioRows={MOCK_BOLETOS_QUEBRADOS}
-        detalhes={MOCK_BOLETOS_QUEBRADOS_DETALHE}
-      />,
-    );
+    render(<BoletosQuebradosChart portfolioRows={MOCK_BOLETOS_QUEBRADOS} />);
     expect(screen.getByText("Boletos Quebrados")).toBeInTheDocument();
   });
 
-  it("expands an acordo row to show debtor profile", () => {
-    render(
-      <BoletosQuebradosChart
-        portfolioRows={MOCK_BOLETOS_QUEBRADOS}
-        detalhes={MOCK_BOLETOS_QUEBRADOS_DETALHE}
-      />,
-    );
-    // Click first acordo row to expand
-    const rows = screen.getAllByText(/Prevista|Inesperada/);
-    fireEvent.click(rows[0].closest("button")!);
-    expect(screen.getByText("Perfil do Devedor")).toBeInTheDocument();
+  it("exposes each portfolio bar as a clickable drill-down", () => {
+    render(<BoletosQuebradosChart portfolioRows={MOCK_BOLETOS_QUEBRADOS} />);
+    expect(screen.getAllByRole("button").length).toBeGreaterThan(0);
   });
 
   it("shows empty state when no data", () => {
-    render(<BoletosQuebradosChart portfolioRows={[]} detalhes={[]} />);
+    render(<BoletosQuebradosChart portfolioRows={[]} />);
     expect(screen.getByText(/Sem boletos quebrados/i)).toBeInTheDocument();
   });
 });

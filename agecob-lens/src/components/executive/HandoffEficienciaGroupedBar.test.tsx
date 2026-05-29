@@ -26,10 +26,10 @@ describe("HandoffEficienciaGroupedBar", () => {
       />,
     );
     expect(
-      screen.getByText("CPC % e Conversão % por Unidade de Negócio"),
+      screen.getByText("Taxa de contato % e Conversão % por Unidade de Negócio"),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/Média CPC: 43,5% · Média Conv\.: 1,2%/),
+      screen.getByText(/Média taxa de contato: 43,5% · Média Conv\.: 1,2%/),
     ).toBeInTheDocument();
   });
 

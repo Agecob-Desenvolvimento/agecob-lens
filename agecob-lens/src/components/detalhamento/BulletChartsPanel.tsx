@@ -19,7 +19,7 @@ export interface BulletDatum {
 export interface BulletPanelData {
   cpc: BulletDatum;
   conversao: BulletDatum;
-  ticket: BulletDatum;
+  primeiraParcela: BulletDatum;
   excecoes: BulletDatum;
 }
 
@@ -123,9 +123,9 @@ export function BulletChartsPanel({ data }: BulletChartsPanelProps) {
         </p>
       </CardHeader>
       <CardContent className="space-y-3.5">
-        <BulletRow label="CPC" datum={data.cpc} />
+        <BulletRow label="Taxa contato" datum={data.cpc} />
         <BulletRow label="Conversão" datum={data.conversao} />
-        <BulletRow label="Ticket Médio" datum={data.ticket} />
+        <BulletRow label="1ª Parcela" datum={data.primeiraParcela} />
         <BulletRow label="Exceções" datum={data.excecoes} />
 
         <div className="mt-3 flex flex-wrap gap-3.5 text-[10px] text-slate-500">

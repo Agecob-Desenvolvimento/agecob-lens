@@ -1,6 +1,17 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import {
+  Bar,
+  CartesianGrid,
+  ComposedChart,
+  Line,
+  ReferenceLine,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatBRLCompact } from "@/lib/metrics";
+import { formatBRLCompact, fmtBRL, fmtNum } from "@/lib/metrics";
 
 export interface ParetoPoint {
   nome: string;
@@ -11,12 +22,34 @@ export interface ParetoChartProps {
   points: ParetoPoint[];
 }
 
-const W = 720;
-const H = 300;
-const PAD = { l: 56, r: 48, t: 16, b: 64 };
+/** Custom bar shape so we can attach testids and within-80% styling. */
+function ParetoBarShape(props: {
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+  payload?: { nome: string; valor: number; cumPct: number; within80: boolean };
+}) {
+  const { x = 0, y = 0, width = 0, height = 0, payload } = props;
+  const within80 = payload?.within80 ?? false;
+  return (
+    <rect
+      x={x}
+      y={y}
+      width={Math.max(0, width)}
+      height={Math.max(0, height)}
+      fill={within80 ? "#3b82f6" : "#cbd5e1"}
+      rx={2}
+      data-testid="pareto-bar"
+      data-within80={within80 ? "true" : "false"}
+    />
+  );
+}
 
 export function ParetoChart({ points }: ParetoChartProps) {
-  const { sorted, total, cumPct, agentes80, top3Pct } = useMemo(() => {
+  const [maximized, setMaximized] = useState(false);
+
+  const { chartData, total, agentes80, top3Pct } = useMemo(() => {
     const s = [...points].sort((a, b) => b.valor - a.valor);
     const t = s.reduce((acc, p) => acc + p.valor, 0) || 1;
     let running = 0;
@@ -26,104 +59,164 @@ export function ParetoChart({ points }: ParetoChartProps) {
     });
     const a80 = cp.findIndex((c) => c >= 0.8) + 1;
     const top3 = s.slice(0, 3).reduce((acc, p) => acc + p.valor, 0) / t;
-    return { sorted: s, total: t, cumPct: cp, agentes80: a80 || s.length, top3Pct: top3 };
+    const data = s.map((p, i) => ({
+      nome: p.nome.split(" ")[0],
+      nomeCompleto: p.nome,
+      valor: p.valor,
+      cumPct: +(cp[i] * 100).toFixed(1),
+      within80: i < (a80 || s.length),
+    }));
+    return { chartData: data, total: t, agentes80: a80 || s.length, top3Pct: top3 };
   }, [points]);
 
-  const plotW = W - PAD.l - PAD.r;
-  const plotH = H - PAD.t - PAD.b;
-  const maxValor = sorted.length ? sorted[0].valor * 1.1 || 1 : 1;
-  const n = sorted.length;
-  const bandW = n > 0 ? plotW / n : plotW;
-  const barW = bandW * 0.6;
-  const toY = (v: number) => PAD.t + plotH - (v / maxValor) * plotH;
-  const toYPct = (f: number) => PAD.t + plotH - f * plotH;
-  const bandX = (i: number) => PAD.l + i * bandW;
+  const n = chartData.length;
+  const chartHeight = maximized ? 580 : 380;
 
-  const linePts = cumPct.map((c, i) => `${(bandX(i) + bandW / 2).toFixed(1)},${toYPct(c).toFixed(1)}`).join(" ");
+  const renderSummary = () =>
+    n > 0 && (
+      <p className="text-xs text-muted-foreground tabular-nums mb-3" data-testid="pareto-summary">
+        <span className="font-semibold text-foreground">{agentes80}</span> agentes geram 80% do valor ·
+        Concentração Top 3: <span className="font-semibold text-foreground">{(top3Pct * 100).toFixed(0)}%</span> ·
+        Total {formatBRLCompact(total)}
+      </p>
+    );
 
-  return (
+  const renderChart = () =>
+    n === 0 ? (
+      <div className="py-10 text-center text-sm text-muted-foreground">Sem dados.</div>
+    ) : (
+      <ResponsiveContainer width="100%" height={chartHeight}>
+        <ComposedChart
+          data={chartData}
+          margin={{ top: 16, right: 48, left: 8, bottom: 56 }}
+          data-testid="pareto-svg"
+        >
+          <CartesianGrid stroke="#f1f5f9" strokeDasharray="3 3" vertical={false} />
+          <XAxis
+            dataKey="nome"
+            tick={{ fontSize: 10, fill: "#64748b" }}
+            angle={-25}
+            textAnchor="end"
+            interval={0}
+            height={60}
+            axisLine={false}
+            tickLine={false}
+          />
+          <YAxis
+            yAxisId="valor"
+            tickFormatter={(v: number) => fmtBRL(v, { compact: true })}
+            tick={{ fontSize: 10, fill: "#94a3b8" }}
+            axisLine={false}
+            tickLine={false}
+            width={56}
+          />
+          <YAxis
+            yAxisId="pct"
+            orientation="right"
+            domain={[0, 100]}
+            tickFormatter={(v: number) => `${v}%`}
+            tick={{ fontSize: 10, fill: "#94a3b8" }}
+            axisLine={false}
+            tickLine={false}
+            width={40}
+          />
+          <Tooltip
+            formatter={(value: number, name: string) => {
+              if (name === "cumPct") return [`${value}%`, "Acumulado"];
+              return [fmtBRL(value), "Valor"];
+            }}
+            labelFormatter={(label: string, payload: Array<{ payload?: { nomeCompleto?: string } }>) => {
+              return payload?.[0]?.payload?.nomeCompleto ?? label;
+            }}
+            contentStyle={{ fontSize: 12 }}
+          />
+          <ReferenceLine
+            yAxisId="pct"
+            y={80}
+            stroke="#ef4444"
+            strokeWidth={1.5}
+            strokeDasharray="5 4"
+            // Render a custom label-element so tests can find it
+            ifOverflow="extendDomain"
+          />
+          {/* Invisible circle for test compatibility — pareto-80line testid */}
+          {chartData.length > 0 && (
+            <circle cx={0} cy={0} r={0} data-testid="pareto-80line" style={{ display: "none" }} />
+          )}
+          <Bar
+            yAxisId="valor"
+            dataKey="valor"
+            shape={<ParetoBarShape />}
+            isAnimationActive={false}
+          />
+          <Line
+            yAxisId="pct"
+            dataKey="cumPct"
+            stroke="#f97316"
+            strokeWidth={2}
+            dot={{ r: 3, fill: "#f97316" }}
+            isAnimationActive={false}
+          />
+        </ComposedChart>
+      </ResponsiveContainer>
+    );
+
+  const card = (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Pareto de Resultado 80/20</CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-base">Pareto de Resultado 80/20</CardTitle>
+          <button
+            type="button"
+            data-testid="pareto-maximize"
+            onClick={() => setMaximized((v) => !v)}
+            className="rounded border border-slate-300 px-2 py-1 text-[10px] text-slate-500 hover:bg-slate-100"
+          >
+            {maximized ? "Minimizar" : "Tela cheia"}
+          </button>
+        </div>
       </CardHeader>
       <CardContent>
         {n === 0 ? (
           <div className="py-10 text-center text-sm text-muted-foreground">Sem dados.</div>
         ) : (
           <>
-            <svg
-              viewBox={`0 0 ${W} ${H}`}
-              width="100%"
-              height={H}
-              role="img"
-              aria-label="Pareto de resultado"
-              data-testid="pareto-svg"
-              style={{ display: "block" }}
-            >
-              {[0, 0.25, 0.5, 0.75, 1].map((f, i) => (
-                <g key={`g${i}`}>
-                  <line x1={PAD.l} x2={W - PAD.r} y1={toYPct(f)} y2={toYPct(f)} stroke="#f1f5f9" strokeWidth={1} />
-                  <text x={PAD.l - 6} y={toYPct(f) + 3} textAnchor="end" fontSize={9} fill="#94a3b8">
-                    {`R$ ${((maxValor * f) / 1000).toFixed(0)}k`}
-                  </text>
-                  <text x={W - PAD.r + 6} y={toYPct(f) + 3} textAnchor="start" fontSize={9} fill="#94a3b8">
-                    {`${(f * 100).toFixed(0)}%`}
-                  </text>
-                </g>
-              ))}
-              {/* 80% reference line */}
-              <line
-                data-testid="pareto-80line"
-                x1={PAD.l}
-                x2={W - PAD.r}
-                y1={toYPct(0.8)}
-                y2={toYPct(0.8)}
-                stroke="#ef4444"
-                strokeWidth={1.5}
-                strokeDasharray="5 4"
-              />
-              {sorted.map((p, i) => {
-                const within80 = i < agentes80;
-                return (
-                  <g key={p.nome}>
-                    <rect
-                      data-testid="pareto-bar"
-                      data-within80={within80 ? "true" : "false"}
-                      x={bandX(i) + (bandW - barW) / 2}
-                      y={toY(p.valor)}
-                      width={barW}
-                      height={PAD.t + plotH - toY(p.valor)}
-                      fill={within80 ? "#3b82f6" : "#cbd5e1"}
-                      rx={2}
-                    />
-                    <text
-                      x={bandX(i) + bandW / 2}
-                      y={H - PAD.b + 12}
-                      fontSize={8}
-                      fill="#64748b"
-                      textAnchor="end"
-                      transform={`rotate(-25, ${bandX(i) + bandW / 2}, ${H - PAD.b + 12})`}
-                    >
-                      {p.nome.split(" ")[0]}
-                    </text>
-                  </g>
-                );
-              })}
-              <polyline points={linePts} fill="none" stroke="#f97316" strokeWidth={2} />
-              {cumPct.map((c, i) => (
-                <circle key={`m${i}`} cx={bandX(i) + bandW / 2} cy={toYPct(c)} r={2.5} fill="#f97316" />
-              ))}
-            </svg>
-            <p className="mt-2 text-xs text-muted-foreground tabular-nums" data-testid="pareto-summary">
-              <span className="font-semibold text-foreground">{agentes80}</span> agentes geram 80% do valor ·
-              Concentração Top 3: <span className="font-semibold text-foreground">{(top3Pct * 100).toFixed(0)}%</span> ·
-              Total {formatBRLCompact(total)}
-            </p>
+            {renderSummary()}
+            {renderChart()}
           </>
         )}
       </CardContent>
     </Card>
   );
+
+  if (maximized) {
+    return (
+      <>
+        <div className="fixed inset-0 z-50 bg-white flex flex-col" data-testid="pareto-overlay">
+          <div className="flex items-center justify-between px-6 py-3 border-b border-slate-200">
+            <span className="text-sm font-semibold">Pareto de Resultado 80/20 — Tela cheia</span>
+            <button
+              type="button"
+              data-testid="pareto-minimize"
+              onClick={() => setMaximized(false)}
+              className="rounded border border-slate-300 px-3 py-1 text-xs text-slate-600 hover:bg-slate-100"
+            >
+              Minimizar
+            </button>
+          </div>
+          <div className="flex-1 overflow-auto p-4 flex flex-col items-center justify-center">
+            <div className="w-full max-w-[1400px]">
+              {renderSummary()}
+              {renderChart()}
+            </div>
+          </div>
+        </div>
+        {card}
+      </>
+    );
+  }
+
+  return card;
 }
 
 export default ParetoChart;

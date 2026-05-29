@@ -8,12 +8,16 @@ import { useQueries, useQuery } from "@tanstack/react-query";
 import { useGlobalFilters } from "@/contexts/GlobalFiltersContext";
 import { useProdutividadeData } from "@/hooks/useProdutividadeData";
 import {
+  fetchBenchmarks,
   fetchPrimeiraParcelaDia,
   fetchPrimeiraParcelaPorAgente,
+  fetchPrimeiraParcelaPorPortfolio,
   fetchAcordosPorPortfolio,
   fetchExcecoesPorPortfolio,
   fetchRejeitadosPorPortfolio,
+  fetchQuebradosPorPortfolio,
 } from "@/services/api";
+import type { BenchmarkData } from "@/services/api";
 import {
   aggregateTotals,
   calcConversao,
@@ -21,14 +25,17 @@ import {
   calcTicketMedio,
 } from "@/lib/metrics";
 import { generateDailyReadout } from "@/lib/insightEngine";
-import { firstOfMonthStr, lastOfMonthStr, todayStr } from "@/lib/dates";
+import { firstOfMonthStr, lastOfMonthStr, previousPeriod, todayStr } from "@/lib/dates";
 import {
   selectEficienciaHandoffData,
   selectFinanceiroHandoffData,
+  selectFunnelData,
   selectGapDePerformance,
+  selectPeriodDelta,
   selectTopAgentesPorPrimeiraParcela,
   selectTopPortfolioPorExcecoes,
   selectTopPortfolioPorRejeitados,
+  selectTopPortfolioPorQuebrados,
   selectTopPortfolioPorValor,
 } from "@/selectors/homeSelectors";
 import type { HomeViewModel } from "@/types/viewModels";
@@ -51,6 +58,13 @@ export function useHomeViewModel(): HomeViewModel {
     { dateFrom, dateTo },
   );
 
+  // previous equal-length window for period-over-period baselines
+  const prev = useMemo(() => previousPeriod(dateFrom, dateTo), [dateFrom, dateTo]);
+  const { rows: prevRows } = useProdutividadeData(selectedDatabase, {
+    dateFrom: prev.from,
+    dateTo: prev.to,
+  });
+
   // primeiraParcela queries (ex-useState)
   const { data: ppDiaEnv } = useQuery({
     queryKey: ["home", "primeira-parcela-dia", selectedDatabase, dateFrom, dateTo] as const,
@@ -62,6 +76,15 @@ export function useHomeViewModel(): HomeViewModel {
     return { total_valor: Number(row.total_valor) || 0, total_acordos: Number(row.total_acordos) || 0 };
   }, [ppDiaEnv]);
 
+  const { data: ppDiaPrevEnv } = useQuery({
+    queryKey: ["home", "primeira-parcela-dia", selectedDatabase, prev.from, prev.to] as const,
+    queryFn: () => fetchPrimeiraParcelaDia(selectedDatabase, undefined, prev.from, prev.to),
+  });
+  const primeiraParcelaDiaPrev = useMemo(() => {
+    const row = ppDiaPrevEnv?.data?.[0];
+    return row ? Number(row.total_valor) || 0 : null;
+  }, [ppDiaPrevEnv]);
+
   const { data: ppMesEnv } = useQuery({
     queryKey: ["home", "primeira-parcela-mes", selectedDatabase] as const,
     queryFn: () => fetchPrimeiraParcelaDia(selectedDatabase, undefined, firstOfMonthStr(), todayStr()),
@@ -71,8 +94,46 @@ export function useHomeViewModel(): HomeViewModel {
     return row ? Number(row.total_valor) || 0 : null;
   }, [ppMesEnv]);
 
+  // Internal benchmarks (top-10 historical mean) — per bank, long cache.
+  const { data: benchAutosEnv } = useQuery({
+    queryKey: ["benchmarks", "COBwebRCBAUTOS"] as const,
+    queryFn: () => fetchBenchmarks("COBwebRCBAUTOS"),
+    staleTime: 3_600_000,
+  });
+  const { data: benchConsumerEnv } = useQuery({
+    queryKey: ["benchmarks", "COBwebRCBCONSUMER"] as const,
+    queryFn: () => fetchBenchmarks("COBwebRCBCONSUMER"),
+    staleTime: 3_600_000,
+  });
+  const bench = useMemo(() => {
+    const benchAutos = benchAutosEnv?.data as BenchmarkData | undefined;
+    const benchConsumer = benchConsumerEnv?.data as BenchmarkData | undefined;
+    const pickBench = (b?: BenchmarkData) =>
+      b
+        ? {
+            taxa_contato: b.taxa_contato?.top10_mean ?? null,
+            taxa_conversao: b.taxa_conversao?.top10_mean ?? null,
+            efetividade_caixa: b.efetividade_caixa?.top10_mean ?? null,
+            pct_excecoes: b.pct_excecoes?.top10_mean ?? null,
+          }
+        : undefined;
+    if (selectedDatabase === "COBwebRCBAUTOS") return pickBench(benchAutos);
+    if (selectedDatabase === "COBwebRCBCONSUMER") return pickBench(benchConsumer);
+    if (!benchAutos || !benchConsumer) return undefined;
+    const avg = (a: number | null, b: number | null) =>
+      a != null && b != null ? (a + b) / 2 : a ?? b ?? null;
+    return {
+      taxa_contato: avg(benchAutos.taxa_contato?.top10_mean ?? null, benchConsumer.taxa_contato?.top10_mean ?? null),
+      taxa_conversao: avg(benchAutos.taxa_conversao?.top10_mean ?? null, benchConsumer.taxa_conversao?.top10_mean ?? null),
+      efetividade_caixa: avg(benchAutos.efetividade_caixa?.top10_mean ?? null, benchConsumer.efetividade_caixa?.top10_mean ?? null),
+      pct_excecoes: avg(benchAutos.pct_excecoes?.top10_mean ?? null, benchConsumer.pct_excecoes?.top10_mean ?? null),
+    };
+  }, [selectedDatabase, benchAutosEnv, benchConsumerEnv]);
+
   // Derived totals
   const totals = useMemo(() => aggregateTotals(rows), [rows]);
+  const prevTotals = useMemo(() => aggregateTotals(prevRows), [prevRows]);
+  const periodLabel = dateFrom === dateTo ? "dia útil ant." : "período anterior";
   const diasUteisPeriodo = useMemo(() => countBusinessDays(dateFrom, dateTo), [dateFrom, dateTo]);
   const gapDePerformance = useMemo(() => selectGapDePerformance(rows), [rows]);
 
@@ -89,31 +150,65 @@ export function useHomeViewModel(): HomeViewModel {
   }, [primeiraParcelaMes]);
 
   // KPI primaries
-  const kpiPrimary = useMemo(() => [
-    { label: "Valor de Acordos", value: totals.valor_acordos, unit: "BRL" as const },
-    {
-      label: "1ª Parcela",
-      value: primeiraParcelaDia?.total_valor ?? totals.valor_primeira_parcela,
-      unit: "BRL" as const,
-    },
-  ], [totals, primeiraParcelaDia]);
+  const kpiPrimary = useMemo(() => {
+    const ppValor = primeiraParcelaDia?.total_valor ?? totals.valor_primeira_parcela;
+    const ppValorPrev = primeiraParcelaDiaPrev ?? prevTotals.valor_primeira_parcela;
+    const dAcordos = selectPeriodDelta(totals.valor_acordos, prevTotals.valor_acordos);
+    const dPp = selectPeriodDelta(ppValor, ppValorPrev);
+    return [
+      {
+        label: "Valor de Acordos",
+        value: totals.valor_acordos,
+        unit: "BRL" as const,
+        baseline: dAcordos != null
+          ? { value: dAcordos, label: periodLabel, betterWhen: "up" as const, baselineValue: prevTotals.valor_acordos }
+          : undefined,
+      },
+      {
+        label: "1ª Parcela",
+        value: ppValor,
+        unit: "BRL" as const,
+        baseline: dPp != null
+          ? { value: dPp, label: periodLabel, betterWhen: "up" as const, baselineValue: ppValorPrev }
+          : undefined,
+      },
+    ];
+  }, [totals, prevTotals, primeiraParcelaDia, primeiraParcelaDiaPrev, periodLabel]);
+
+  // Cash conversion index: 1ª Parcela / Valor de Acordos
+  const ppValor = primeiraParcelaDia?.total_valor ?? totals.valor_primeira_parcela;
+  const ppValorPrev = primeiraParcelaDiaPrev ?? prevTotals.valor_primeira_parcela;
+  const indiceConversaoCaixa = useMemo(() =>
+    totals.valor_acordos > 0 ? (ppValor * 100) / totals.valor_acordos : null,
+  [totals.valor_acordos, ppValor]);
+  const indiceConversaoCaixaPrev = useMemo(() =>
+    prevTotals.valor_acordos > 0 ? (ppValorPrev * 100) / prevTotals.valor_acordos : null,
+  [prevTotals.valor_acordos, ppValorPrev]);
 
   // KPI secondaries
   const kpiSecondary = useMemo(() => {
-    const cpc = calcCpc(totals);
     const conv = calcConversao(totals);
-    const ticket = calcTicketMedio(totals);
     const excecoesPct = totals.valor_acordos > 0 ? (totals.valor_excecoes * 100) / totals.valor_acordos : 0;
+    const convPrev = calcConversao(prevTotals);
+    const excecoesPctPrev = prevTotals.valor_acordos > 0 ? (prevTotals.valor_excecoes * 100) / prevTotals.valor_acordos : 0;
+    const excecoesPctParcela = totals.valor_primeira_parcela > 0 ? (totals.valor_excecoes * 100) / totals.valor_primeira_parcela : 0;
+    const excecoesPctParcelaPrev = prevTotals.valor_primeira_parcela > 0 ? (prevTotals.valor_excecoes * 100) / prevTotals.valor_primeira_parcela : 0;
+    const mk = (value: number, prevValue: number, betterWhen: "up" | "down") => {
+      const d = selectPeriodDelta(value, prevValue);
+      return d != null ? { value: d, label: periodLabel, betterWhen } : undefined;
+    };
+    const bm = (v: number | null | undefined) => (v != null ? { value: v, label: "Média dos 10% melhores" } : undefined);
     return [
-      { label: "CPC %", value: cpc, unit: "percent" as const },
-      { label: "Conversão %", value: conv, unit: "percent" as const },
-      { label: "Ticket Médio", value: ticket, unit: "BRL" as const },
-      { label: "Exceções %", value: excecoesPct, unit: "percent" as const },
-      { label: "Qtd Acordos", value: totals.qtd_acordos, unit: "count" as const, baseline: { value: 0, label: `${diasUteisPeriodo} dias úteis`, betterWhen: "flat" as const } },
-      { label: "Gap de Performance", value: gapDePerformance, unit: "BRL" as const, baseline: { value: 0, label: "Top agente vs piso da equipe", betterWhen: "flat" as const } },
-      { label: "Qtd Acionamentos", value: totals.qtd_acionamentos, unit: "count" as const },
+      { label: "Efetividade de Caixa", value: indiceConversaoCaixa ?? 0, unit: "percent" as const, baseline: mk(indiceConversaoCaixa ?? 0, indiceConversaoCaixaPrev ?? 0, "up"), benchmark: bm(bench?.efetividade_caixa) },
+      { label: "CPC", value: totals.qtd_contatos, unit: "count" as const, baseline: mk(totals.qtd_contatos, prevTotals.qtd_contatos, "up") },
+      { label: "Conversão %", value: conv, unit: "percent" as const, baseline: mk(conv, convPrev, "up"), benchmark: bm(bench?.taxa_conversao) },
+      { label: "% Exc. s/ 1ª Parcela", value: excecoesPctParcela, unit: "percent" as const, baseline: mk(excecoesPctParcela, excecoesPctParcelaPrev, "down"), caption: "do valor da 1ª parcela" },
+      { label: "% Exc. s/ Valor Acordos", value: excecoesPct, unit: "percent" as const, baseline: mk(excecoesPct, excecoesPctPrev, "down"), caption: "do valor total de acordos", benchmark: bm(bench?.pct_excecoes) },
+      { label: "Qtd Acordos", value: totals.qtd_acordos, unit: "count" as const, caption: `${diasUteisPeriodo} dias úteis` },
+      { label: "Gap de Performance", value: gapDePerformance, unit: "BRL" as const, caption: "Top agente vs piso da equipe" },
+      { label: "Qtd Acionamentos", value: totals.qtd_acionamentos, unit: "count" as const, baseline: mk(totals.qtd_acionamentos, prevTotals.qtd_acionamentos, "up") },
     ];
-  }, [totals, diasUteisPeriodo, gapDePerformance]);
+  }, [totals, prevTotals, diasUteisPeriodo, gapDePerformance, periodLabel, indiceConversaoCaixa, indiceConversaoCaixaPrev, bench]);
 
   // Insight
   const readout = useMemo(() => generateDailyReadout(rows, projecaoMes), [rows, projecaoMes]);
@@ -135,14 +230,16 @@ export function useHomeViewModel(): HomeViewModel {
   const eficienciaData = useMemo(() => selectEficienciaHandoffData(rows), [rows]);
   const cpcAvg = useMemo(() => calcCpc(totals), [totals]);
   const convAvg = useMemo(() => calcConversao(totals), [totals]);
+  const funnelData = useMemo(() => selectFunnelData(rows), [rows]);
 
   // Portfolio / ranking sub-queries
-  const [qPpAgente, qAcdPort, qExcPort, qRejPort] = useQueries({
+  const [qPpAgente, qAcdPort, qExcPort, qRejPort, qQbrPort] = useQueries({
     queries: [
       { queryKey: ["home", "primeira-parcela-por-agente", selectedDatabase, dateFrom, dateTo] as const, queryFn: () => fetchPrimeiraParcelaPorAgente(selectedDatabase, undefined, dateFrom, dateTo) },
       { queryKey: ["home", "acordos-por-portfolio", selectedDatabase, dateFrom, dateTo] as const, queryFn: () => fetchAcordosPorPortfolio(selectedDatabase, dateFrom, dateTo) },
       { queryKey: ["home", "excecoes-por-portfolio", selectedDatabase, dateFrom, dateTo] as const, queryFn: () => fetchExcecoesPorPortfolio(selectedDatabase, dateFrom, dateTo) },
       { queryKey: ["home", "rejeitados-por-portfolio", selectedDatabase, dateFrom, dateTo] as const, queryFn: () => fetchRejeitadosPorPortfolio(selectedDatabase, dateFrom, dateTo) },
+      { queryKey: ["home", "quebrados-por-portfolio", selectedDatabase, dateFrom, dateTo] as const, queryFn: () => fetchQuebradosPorPortfolio(selectedDatabase, dateFrom, dateTo) },
     ],
   });
 
@@ -150,6 +247,40 @@ export function useHomeViewModel(): HomeViewModel {
   const portfolio1aParcela = useMemo(() => selectTopPortfolioPorValor(qAcdPort.data?.data ?? []), [qAcdPort.data]);
   const excecoesPorPortfolio = useMemo(() => selectTopPortfolioPorExcecoes(qExcPort.data?.data ?? []), [qExcPort.data]);
   const rejeitadosPorPortfolio = useMemo(() => selectTopPortfolioPorRejeitados(qRejPort.data?.data ?? []), [qRejPort.data]);
+  const quebradosPorPortfolio = useMemo(() => selectTopPortfolioPorQuebrados(qQbrPort.data?.data ?? []), [qQbrPort.data]);
+
+  // Portfolio 1ª parcela (rentabilidade + risco)
+  const { data: ppPortfolioEnv, isLoading: loadingPpPortfolio } = useQuery({
+    queryKey: ["home", "primeira-parcela-por-portfolio", selectedDatabase, dateFrom, dateTo] as const,
+    queryFn: () => fetchPrimeiraParcelaPorPortfolio(selectedDatabase, dateFrom, dateTo),
+  });
+  const ppPortfolioRows = ppPortfolioEnv?.data ?? [];
+
+  // Per-BU benchmark map for diagnostic cards
+  const benchByBu = useMemo(() => {
+    const map = new Map<string, { cpc: number | null; conversao: number | null }>();
+    const autosB = benchAutosEnv?.data as BenchmarkData | undefined;
+    const consumerB = benchConsumerEnv?.data as BenchmarkData | undefined;
+    map.set("AUTOS", {
+      cpc: autosB?.taxa_contato?.top10_mean ?? null,
+      conversao: autosB?.taxa_conversao?.top10_mean ?? null,
+    });
+    map.set("CONSUMER", {
+      cpc: consumerB?.taxa_contato?.top10_mean ?? null,
+      conversao: consumerB?.taxa_conversao?.top10_mean ?? null,
+    });
+    return map;
+  }, [benchAutosEnv, benchConsumerEnv]);
+
+  // Risk map: portfolio_name → valor_exceções (from existing excecoes data)
+  const portfolioRiskMap = useMemo(() => {
+    const map = new Map<string, number>();
+    const rawExcecoes = qExcPort.data?.data ?? [];
+    for (const row of rawExcecoes) {
+      map.set(row.portfolio_name, Number(row.valor_excecoes || 0));
+    }
+    return map;
+  }, [qExcPort.data]);
 
   return {
     loading,
@@ -158,18 +289,26 @@ export function useHomeViewModel(): HomeViewModel {
     refresh,
     kpiPrimary,
     kpiSecondary,
+    indiceConversaoCaixa,
     insight,
     financeiroData,
     eficienciaData,
+    funnelData,
     cpcAvg,
     convAvg,
     top10PrimeiraParcela,
     portfolio1aParcela,
     excecoesPorPortfolio,
     rejeitadosPorPortfolio,
+    quebradosPorPortfolio,
     loadingPpAgente: qPpAgente.isLoading,
     loadingAcdPort: qAcdPort.isLoading,
     loadingExcPort: qExcPort.isLoading,
     loadingRejPort: qRejPort.isLoading,
+    loadingQbrPort: qQbrPort.isLoading,
+    ppPortfolioRows,
+    portfolioRiskMap,
+    loadingPpPortfolio,
+    benchByBu,
   };
 }

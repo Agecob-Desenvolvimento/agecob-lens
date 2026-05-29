@@ -1,119 +1,53 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatBRLCompact } from "@/lib/metrics";
+import { linearRegression, type Point } from "@/lib/regression";
 import {
-  linearRegression,
-  multipleRegression,
-  polynomialRegression,
-  logLogRegression,
-  crossValidate,
-  cleanRegressionData,
-  type Point,
-  type MultipleRegressionResult,
-  type CrossValidationResult,
-} from "@/lib/regression";
+  fetchRegressionModels,
+  type RegressionModelResult,
+  type RegressionCleaningMeta,
+} from "@/services/api";
 import type { ScatterPoint } from "./regressionMocks";
 
-// ── Model definitions ──────────────────────────────────────────────────────
+// ── Types ──────────────────────────────────────────────────────────────────
 
 type ModelId = "simple" | "loglog" | "poly2" | "volume" | "full";
 
-interface ModelDef {
-  id: ModelId;
-  label: string;
-  description: string;
-  /** Whether this model projects onto the eficiencia axis (can draw a 2D line) */
-  drawable: boolean;
-}
-
-const MODELS: ModelDef[] = [
-  { id: "simple", label: "Simples", description: "valor ~ eficiência", drawable: true },
-  { id: "loglog", label: "Log-Log", description: "ln(valor) ~ ln(eficiência)", drawable: true },
-  { id: "poly2", label: "Polinomial", description: "valor ~ eficiência + eficiência²", drawable: true },
-  { id: "volume", label: "Volume", description: "valor ~ acionamentos + contatos", drawable: false },
-  { id: "full", label: "Completo", description: "valor ~ acionam. + contatos + cpc + conv.", drawable: false },
-];
-
-// ── Fit a single model and its CV ──────────────────────────────────────────
-
-interface ModelResult {
-  def: ModelDef;
-  fit: MultipleRegressionResult;
-  cv: { trainR2: number; testR2: number; trainN: number; testN: number };
-}
-
-function fitModel(def: ModelDef, points: ScatterPoint[]): ModelResult {
-  const X: number[][] = [];
-  const y: number[] = [];
-  const names: string[] = [];
-
-  switch (def.id) {
-    case "simple": {
-      names.push("x");
-      for (const p of points) { X.push([p.eficiencia]); y.push(p.valor); }
-      break;
-    }
-    case "loglog": {
-      names.push("ln(x)");
-      const eps = 1e-9;
-      for (const p of points) {
-        X.push([Math.log(Math.max(p.eficiencia, eps))]);
-        y.push(Math.log(Math.max(p.valor, eps)));
-      }
-      break;
-    }
-    case "poly2": {
-      names.push("x"); names.push("x²");
-      for (const p of points) {
-        X.push([p.eficiencia, p.eficiencia * p.eficiencia]);
-        y.push(p.valor);
-      }
-      break;
-    }
-    case "volume": {
-      names.push("acionamentos"); names.push("contatos");
-      for (const p of points) {
-        X.push([p.acionamentos, p.contatos]);
-        y.push(p.valor);
-      }
-      break;
-    }
-    case "full": {
-      names.push("acionamentos"); names.push("contatos"); names.push("cpc"); names.push("conversao");
-      for (const p of points) {
-        X.push([p.acionamentos, p.contatos, p.cpc, p.conversao]);
-        y.push(p.valor);
-      }
-      break;
-    }
-  }
-
-  const fit = multipleRegression(X, y, names);
-  const cv = crossValidate(X, y, names, 0.7, 42);
-
-  return { def, fit, cv };
+interface ApiResult {
+  meta: RegressionCleaningMeta;
+  modelos: RegressionModelResult[];
 }
 
 // ── Predict y from eficiencia for drawable models ──────────────────────────
 
 function predictAtEfficiencia(
   modelId: ModelId,
-  fit: MultipleRegressionResult,
+  modelo: RegressionModelResult,
   eff: number,
 ): number {
+  const coef = (name: string) => modelo.coefficients.find((c) => c.name === name)?.value ?? 0;
   switch (modelId) {
     case "simple":
-      return fit.predict({ x: eff });
+      return modelo.intercept + coef("x") * eff;
     case "loglog": {
       const eps = 1e-9;
-      const lnY = fit.predict({ "ln(x)": Math.log(Math.max(eff, eps)) });
+      const lnY = modelo.intercept + coef("ln(x)") * Math.log(Math.max(eff, eps));
       return Math.exp(lnY);
     }
     case "poly2":
-      return fit.predict({ x: eff, "x²": eff * eff });
+      return modelo.intercept + coef("x") * eff + coef("x²") * (eff * eff);
     default:
       return 0;
   }
+}
+
+// ── R² strength label ─────────────────────────────────────────────────────
+
+function r2Label(r2: number): { text: string; color: string } {
+  if (r2 >= 0.70) return { text: "forte", color: "text-emerald-600" };
+  if (r2 >= 0.40) return { text: "moderada", color: "text-amber-600" };
+  if (r2 >= 0.15) return { text: "fraca", color: "text-amber-700" };
+  return { text: "muito fraca", color: "text-rose-600" };
 }
 
 // ── Chart constants ────────────────────────────────────────────────────────
@@ -140,41 +74,92 @@ export interface RegressionViewProps {
 
 // ── Component ──────────────────────────────────────────────────────────────
 
-export function RegressionView({ points, highlightId, periodLabel = "período atual" }: RegressionViewProps) {
-  const [selectedModel, setSelectedModel] = useState<ModelId>("simple");
+export function RegressionView({ points, highlightId, periodLabel = "periodo atual" }: RegressionViewProps) {
+  const [selectedModel, setSelectedModel] = useState<ModelId>("volume");
   const [hov, setHov] = useState<number | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [apiError, setApiError] = useState<string | null>(null);
+  const [apiResult, setApiResult] = useState<ApiResult | null>(null);
+  const [showDetails, setShowDetails] = useState(false);
 
-  // ── Data cleaning ──────────────────────────────────────────────────────
-  const { cleanPoints, removed } = useMemo(() => {
-    const numericFields: (keyof ScatterPoint)[] = [
-      "eficiencia", "valor", "acionamentos", "contatos", "cpc", "conversao",
-    ];
-    const result = cleanRegressionData(points, numericFields, "id");
-    return { cleanPoints: result.clean, removed: result.removed };
+  // ── Call scikit-learn backend whenever points change ──────────────────
+  useEffect(() => {
+    if (points.length < 2) {
+      setApiResult(null);
+      setApiError(null);
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    setApiError(null);
+
+    const payload = points.map((p) => ({
+      id: p.id,
+      nome: p.nome,
+      eficiencia: p.eficiencia,
+      valor: p.valor,
+      acionamentos: p.acionamentos,
+      contatos: p.contatos,
+      cpc: p.cpc,
+      conversao: p.conversao,
+    }));
+
+    fetchRegressionModels(payload)
+      .then((envelope) => {
+        if (cancelled) return;
+        if (envelope.errors?.length) {
+          setApiError(envelope.errors.map((e) => e.message).join("; "));
+          setApiResult(null);
+        } else if (envelope.data?.length) {
+          setApiResult(envelope.data[0]);
+          setApiError(null);
+        } else {
+          setApiResult(null);
+        }
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setApiError(err instanceof Error ? err.message : "Erro desconhecido");
+        setApiResult(null);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => { cancelled = true; };
   }, [points]);
 
-  // ── Model fitting + CV (all 5 models on clean data) ────────────────────
-  const results = useMemo(() => {
-    if (cleanPoints.length < 3) return [] as ModelResult[];
-    return MODELS.map((def) => fitModel(def, cleanPoints));
-  }, [cleanPoints]);
+  // ── Current model ─────────────────────────────────────────────────────
+  const current = useMemo(
+    () => apiResult?.modelos.find((m) => m.id === selectedModel) ?? null,
+    [apiResult, selectedModel],
+  );
 
-  const current = useMemo(() => results.find((r) => r.def.id === selectedModel), [results, selectedModel]);
+  // ── Find best model by test R² ────────────────────────────────────────
+  const bestByTest = useMemo(
+    () => apiResult?.modelos.reduce((best, m) => (m.r2_test > best.r2_test ? m : best), apiResult.modelos[0]) ?? null,
+    [apiResult],
+  );
 
-  // ── Simple OLS on eficiencia for residual classification (drawing) ─────
+  const cleaningMeta = apiResult?.meta;
+  const totalRemoved = cleaningMeta
+    ? cleaningMeta.removed_nulls + cleaningMeta.removed_duplicates + cleaningMeta.removed_outliers
+    : 0;
+
+  // ── Simple OLS for residual classification (scatter dots) ─────────────
   const simpleFit = useMemo(() => {
-    const pts: Point[] = cleanPoints.map((p) => ({ x: p.eficiencia, y: p.valor }));
+    const pts: Point[] = points.map((p) => ({ x: p.eficiencia, y: p.valor }));
     return linearRegression(pts);
-  }, [cleanPoints]);
+  }, [points]);
 
   // ── Chart bounds ───────────────────────────────────────────────────────
   const { maxEff, maxY } = useMemo(() => {
-    if (!cleanPoints.length) return { maxEff: 1, maxY: 1 };
+    if (!points.length) return { maxEff: 1, maxY: 1 };
     return {
-      maxEff: Math.max(...cleanPoints.map((p) => p.eficiencia)) * 1.1 || 1,
-      maxY: Math.max(...cleanPoints.map((p) => p.valor)) * 1.1 || 1,
+      maxEff: Math.max(...points.map((p) => p.eficiencia)) * 1.1 || 1,
+      maxY: Math.max(...points.map((p) => p.valor)) * 1.1 || 1,
     };
-  }, [cleanPoints]);
+  }, [points]);
 
   const plotW = W - PAD.l - PAD.r;
   const plotH = H - PAD.t - PAD.b;
@@ -191,22 +176,21 @@ export function RegressionView({ points, highlightId, periodLabel = "período at
   };
 
   // ── Drawable model curve ───────────────────────────────────────────────
-  const drawable = current?.def.drawable ?? false;
+  const drawable = current?.drawable ?? false;
   const curvePoints = useMemo(() => {
     if (!drawable || !current) return "";
     const steps = 100;
     const pts: string[] = [];
     for (let i = 0; i <= steps; i++) {
       const eff = (i / steps) * maxEff;
-      const val = predictAtEfficiencia(current.def.id, current.fit, eff);
+      const val = predictAtEfficiencia(current.id as ModelId, current, eff);
       pts.push(`${toX(eff).toFixed(1)},${toY(Math.max(0, val)).toFixed(1)}`);
     }
     return pts.join(" ");
   }, [drawable, current, maxEff, toX, toY]);
 
-  // ── Confidence band (simple model only) ────────────────────────────────
-  const xStart = 0;
-  const xEnd = maxEff;
+  // ── Confidence band ────────────────────────────────────────────────────
+  const xStart = 0, xEnd = maxEff;
   const bandPoly = [
     `${toX(xStart)},${toY(Math.max(0, simpleFit.predict(xStart) + band))}`,
     `${toX(xEnd)},${toY(Math.max(0, simpleFit.predict(xEnd) + band))}`,
@@ -214,97 +198,103 @@ export function RegressionView({ points, highlightId, periodLabel = "período at
     `${toX(xStart)},${toY(Math.max(0, simpleFit.predict(xStart) - band))}`,
   ].join(" ");
 
-  const totalRemoved = removed.nulls + removed.duplicates + removed.outliers;
+  const modeloCount = apiResult?.modelos.length ?? 0;
+
+  // ── Business insight line ─────────────────────────────────────────────
+  const insight = useMemo(() => {
+    if (!current || !bestByTest) return "";
+    const r2 = current.r2_test;
+    const strength = r2Label(r2);
+    const mainPred = current.coefficients
+      .slice()
+      .sort((a, b) => Math.abs(b.value) - Math.abs(a.value))[0];
+
+    if (current.id === "volume" || current.id === "full") {
+      return `Volume de trabalho explica ${(r2 * 100).toFixed(0)}% da variação de resultado entre agentes — relação ${strength.text}.`;
+    }
+    if (current.id === "simple") {
+      return `Eficiência operacional (CPC × conversão) sozinha explica apenas ${(r2 * 100).toFixed(0)}% — use o modelo Volume para ver o fator dominante.`;
+    }
+    return `Modelo "${current.label}" explica ${(r2 * 100).toFixed(0)}% da variação entre agentes — relação ${strength.text}.`;
+  }, [current, bestByTest]);
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Regressão de Desempenho</CardTitle>
+        <CardTitle className="text-base">Regressao de Desempenho</CardTitle>
         <CardDescription className="text-xs">
-          Validação cruzada 70/30 · Seletor de modelo · Dados limpos (IQR)
+          O que explica a diferença de resultado entre agentes?
         </CardDescription>
       </CardHeader>
       <CardContent>
-        {cleanPoints.length < 3 ? (
-          <div className="py-10 text-center text-sm text-muted-foreground">
-            {points.length < 2
-              ? "Dados insuficientes para regressão."
-              : `${removed.nulls + removed.duplicates + removed.outliers} linha(s) removida(s) na limpeza — amostra insuficiente.`}
+        {loading && (
+          <div className="py-6 text-center text-sm text-muted-foreground" data-testid="regression-loading">
+            Calculando modelos...
           </div>
-        ) : (
+        )}
+
+        {apiError && !loading && (
+          <div className="py-4 text-center space-y-2" data-testid="regression-error">
+            <p className="text-sm text-rose-600">{apiError}</p>
+            <p className="text-[11px] text-amber-600 bg-amber-50 rounded px-3 py-1.5 inline-block" data-testid="mock-hint">
+              Backend scikit-learn nao encontrado. Inicie <code className="bg-amber-100 px-1 rounded">uvicorn main:app</code>.
+            </p>
+          </div>
+        )}
+
+        {!loading && !apiError && points.length < 2 && (
+          <div className="py-10 text-center text-sm text-muted-foreground">
+            Dados insuficientes.
+          </div>
+        )}
+
+        {!loading && !apiError && points.length >= 2 && modeloCount === 0 && (
+          <div className="py-10 text-center text-sm text-muted-foreground">
+            {totalRemoved > 0
+              ? `${totalRemoved} linha(s) removida(s) na limpeza — amostra insuficiente.`
+              : "Modelos nao disponiveis."}
+          </div>
+        )}
+
+        {!loading && !apiError && modeloCount > 0 && current && (
           <>
-            {/* ── Model selector + stats bar ─────────────────────────── */}
-            <div className="mb-2 flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
+            {/* ── Insight bar ──────────────────────────────────────────── */}
+            <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-slate-600" data-testid="insight-bar">
               <select
                 data-testid="model-selector"
                 value={selectedModel}
                 onChange={(e) => setSelectedModel(e.target.value as ModelId)}
                 className="rounded border border-slate-300 bg-white px-2 py-1 text-[11px] text-slate-800"
               >
-                {results.map((r) => (
-                  <option key={r.def.id} value={r.def.id}>
-                    {r.def.label} — {r.def.description}
+                {(apiResult?.modelos ?? []).map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.label}: {m.description}
                   </option>
                 ))}
               </select>
 
-              {current && (
-                <span className="tabular-nums flex items-center gap-2 flex-wrap">
-                  <span data-testid="stat-r2">
-                    R² treino: <span className="font-semibold text-foreground">{current.fit.r2.toFixed(2)}</span>
-                  </span>
-                  <span data-testid="stat-testr2">
-                    R² teste: <span className="font-semibold text-foreground">{current.cv.testR2.toFixed(2)}</span>
-                  </span>
-                  <span data-testid="stat-adjr2">
-                    R² ajust: <span className="font-semibold text-foreground">{current.fit.adjR2.toFixed(2)}</span>
-                  </span>
-                  <span data-testid="stat-n">
-                    N: <span className="font-semibold text-foreground">{cleanPoints.length}</span>
-                  </span>
-                  <span data-testid="stat-period">
-                    Período: <span className="font-semibold text-foreground">{periodLabel}</span>
-                  </span>
-                </span>
-              )}
+              <span className={`tabular-nums font-semibold ${r2Label(current.r2_test).color}`}>
+                R² = {current.r2_test.toFixed(2)}
+              </span>
+              <span className="text-[10px] text-slate-400">
+                {cleaningMeta?.clean_count ?? points.length} agentes
+              </span>
 
-              {totalRemoved > 0 && (
+              {totalRemoved > 0 && cleaningMeta && (
                 <span
                   data-testid="clean-badge"
                   className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700 border border-amber-200"
                 >
-                  Limpeza: −{totalRemoved} ({removed.nulls} nulos, {removed.duplicates} dup, {removed.outliers} outliers)
+                  −{totalRemoved} outliers
                 </span>
               )}
             </div>
 
-            {/* ── Coefficients table ─────────────────────────────────── */}
-            {current && current.fit.coefficients.length > 0 && (
-              <div className="mb-2 overflow-x-auto">
-                <table className="w-full text-[10px] border-collapse" data-testid="coef-table">
-                  <thead>
-                    <tr className="border-b border-slate-200 text-muted-foreground">
-                      <th className="text-left py-1 pr-3">Preditor</th>
-                      <th className="text-right py-1 pr-3">Coef</th>
-                      <th className="text-right py-1">SE</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr className="border-b border-slate-100">
-                      <td className="py-0.5 text-slate-500">(intercepto)</td>
-                      <td className="text-right tabular-nums font-medium">{current.fit.intercept.toFixed(2)}</td>
-                      <td className="text-right tabular-nums text-slate-400">{current.fit.interceptSe.toFixed(2)}</td>
-                    </tr>
-                    {current.fit.coefficients.map((c) => (
-                      <tr key={c.name} className="border-b border-slate-100">
-                        <td className="py-0.5">{c.name}</td>
-                        <td className="text-right tabular-nums font-medium">{c.value.toFixed(4)}</td>
-                        <td className="text-right tabular-nums text-slate-400">{c.se.toFixed(4)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+            {/* ── Business insight ────────────────────────────────────── */}
+            {insight && (
+              <p className="mb-3 text-[11px] text-slate-500 leading-relaxed" data-testid="insight-text">
+                {insight}
+              </p>
             )}
 
             {/* ── Scatter plot ───────────────────────────────────────── */}
@@ -313,7 +303,7 @@ export function RegressionView({ points, highlightId, periodLabel = "período at
               width="100%"
               height={H}
               role="img"
-              aria-label="Regressão valor vs eficiência"
+              aria-label="Regressao valor vs eficiencia"
               data-testid="regression-svg"
               style={{ display: "block" }}
             >
@@ -329,7 +319,6 @@ export function RegressionView({ points, highlightId, periodLabel = "período at
                 );
               })}
 
-              {/* Confidence band (always shown for reference) */}
               <polygon
                 data-testid="confidence-band"
                 points={bandPoly}
@@ -337,7 +326,6 @@ export function RegressionView({ points, highlightId, periodLabel = "período at
                 stroke="none"
               />
 
-              {/* Model curve (drawable models only) */}
               {drawable && curvePoints && (
                 <polyline
                   data-testid="regression-line"
@@ -349,7 +337,6 @@ export function RegressionView({ points, highlightId, periodLabel = "período at
                 />
               )}
 
-              {/* Non-drawable note */}
               {!drawable && (
                 <text
                   x={W / 2}
@@ -359,15 +346,15 @@ export function RegressionView({ points, highlightId, periodLabel = "período at
                   fill="#94a3b8"
                   data-testid="non-drawable-note"
                 >
-                  Mapa multidimensional — reta não projetável no eixo eficiência
+                  Mapa multidimensional — reta nao projetavel no eixo eficiencia
                 </text>
               )}
 
               <text x={W / 2} y={H - 4} textAnchor="middle" fontSize={10} fill="#64748b">
-                Eficiência (CPC × Conversão)
+                Eficiencia (CPC x Conversao)
               </text>
 
-              {cleanPoints.map((d, i) => {
+              {points.map((d, i) => {
                 const kind = classify(d);
                 const isHov = hov === i;
                 const isHl = highlightId !== undefined && d.id === highlightId;
@@ -390,8 +377,8 @@ export function RegressionView({ points, highlightId, periodLabel = "período at
                 );
               })}
 
-              {hov !== null && cleanPoints[hov] && (() => {
-                const d = cleanPoints[hov];
+              {hov !== null && points[hov] && (() => {
+                const d = points[hov];
                 const pred = simpleFit.predict(d.eficiencia);
                 const dev = d.valor - pred;
                 const tx = Math.min(toX(d.eficiencia) + 12, W - 210);
@@ -410,6 +397,44 @@ export function RegressionView({ points, highlightId, periodLabel = "período at
                 );
               })()}
             </svg>
+
+            {/* ── Technical details (collapsible) ─────────────────────── */}
+            <div className="mt-2">
+              <button
+                data-testid="toggle-details"
+                onClick={() => setShowDetails((v) => !v)}
+                className="text-[10px] text-slate-400 hover:text-slate-600 underline"
+              >
+                {showDetails ? "Ocultar detalhes tecnicos" : "Detalhes tecnicos"}
+              </button>
+              {showDetails && current.coefficients.length > 0 && (
+                <div className="mt-1 overflow-x-auto">
+                  <table className="w-full text-[10px] border-collapse" data-testid="coef-table">
+                    <thead>
+                      <tr className="border-b border-slate-200 text-muted-foreground">
+                        <th className="text-left py-1 pr-3">Preditor</th>
+                        <th className="text-right py-1 pr-3">Coef</th>
+                        <th className="text-right py-1">SE</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr className="border-b border-slate-100">
+                        <td className="py-0.5 text-slate-500">(intercepto)</td>
+                        <td className="text-right tabular-nums font-medium">{current.intercept.toFixed(2)}</td>
+                        <td className="text-right tabular-nums text-slate-400">{current.intercept_se.toFixed(2)}</td>
+                      </tr>
+                      {current.coefficients.map((c) => (
+                        <tr key={c.name} className="border-b border-slate-100">
+                          <td className="py-0.5">{c.name}</td>
+                          <td className="text-right tabular-nums font-medium">{c.value.toFixed(4)}</td>
+                          <td className="text-right tabular-nums text-slate-400">{c.se.toFixed(4)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </>
         )}
       </CardContent>

@@ -11,9 +11,9 @@ describe("ImprovedScatterPlot", () => {
 
   it("colors dots by exception threshold", () => {
     const points = [
-      { id: "g", nome: "Good", eficiencia: 0.5, valor: 100_000, excPct: 3, acordos: 10 },
-      { id: "y", nome: "Mid", eficiencia: 0.5, valor: 100_000, excPct: 9, acordos: 10 },
-      { id: "r", nome: "Bad", eficiencia: 0.5, valor: 100_000, excPct: 20, acordos: 10 },
+      { id: "g", nome: "Good", eficiencia: 0.5, valor: 100_000, excPct: 3, acordos: 10, acionamentos: 100, contatos: 50, cpc: 50, conversao: 10 },
+      { id: "y", nome: "Mid", eficiencia: 0.5, valor: 100_000, excPct: 9, acordos: 10, acionamentos: 100, contatos: 50, cpc: 50, conversao: 10 },
+      { id: "r", nome: "Bad", eficiencia: 0.5, valor: 100_000, excPct: 20, acordos: 10, acionamentos: 100, contatos: 50, cpc: 50, conversao: 10 },
     ];
     render(<ImprovedScatterPlot points={points} />);
     const colors = screen.getAllByTestId("scatter-dot").map((d) => d.getAttribute("data-color"));

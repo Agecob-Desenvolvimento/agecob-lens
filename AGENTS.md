@@ -1,3 +1,6 @@
+
+
+
 AGENTS.md
 
 Persistent context for the dash relatorio project (AgDash). Automatically loaded in every session.
@@ -18,6 +21,8 @@ Before any action, read in this order:
 @README.md — quickstart, endpoints, .env setup, rollback, SQL indexes.
 
 These rules override alternative interpretations of the code.
+
+MANDATORY DATA-WORK READ: any task touching data — fetching, ViewModels, selectors, metrics, adapters, or the data-layer contract (frontend or backend) — REQUIRES reading @agecob-lens/docs/data-layer.md IN FULL before editing any code. Applies to the main session and every subagent. Do not edit data code without having read the entire file.
 
 Commands
 

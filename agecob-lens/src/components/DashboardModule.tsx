@@ -249,7 +249,7 @@ export default function DashboardModule({ config, db }: DashboardModuleProps) {
                     value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
                   }
                 />
-                <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={32}>
+                <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={32} isAnimationActive={false}>
                   {chartData.map((_, i) => (
                     <Cell key={i} fill={BAR_COLORS[i % BAR_COLORS.length]} />
                   ))}
