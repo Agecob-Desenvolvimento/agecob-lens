@@ -14,7 +14,7 @@ const BU_COLORS: Record<string, { bar: string; text: string }> = {
   CONSUMER: { bar: "#06b6d4", text: "#0e7490" },
 };
 
-const STAGE_LABELS = ["Acionamentos", "Contatos", "Acordos"] as const;
+const STAGE_LABELS = ["Acionamentos", "Contato", "CPC", "Acordos"] as const;
 
 /** Barra de um estágio do funil — largura proporcional ao valor máximo da BU */
 function StageBar({ value, max, color, label, sub }: { value: number; max: number; color: string; label: string; sub: string }) {
@@ -44,7 +44,7 @@ export function HandoffFunnelChart({ data, title = "Funil de Conversão", loadin
   return (
     <ChartShell
       title={title}
-      description="Acionamentos → Contatos → Acordos por unidade de negócio"
+      description="Acionamentos → Contato (atende) → CPC (pessoa certa) → Acordos por unidade de negócio"
       loading={loading}
       empty={isEmpty}
       height={216}
@@ -52,7 +52,8 @@ export function HandoffFunnelChart({ data, title = "Funil de Conversão", loadin
       <div className="space-y-6">
         {data.map((bu) => {
           const max = bu.acionamentos || 1;
-          const taxaContato = bu.acionamentos > 0 ? (bu.contatos / bu.acionamentos) * 100 : 0;
+          const taxaAtend = bu.acionamentos > 0 ? (bu.alo / bu.acionamentos) * 100 : 0;
+          const taxaRpc = bu.alo > 0 ? (bu.contatos / bu.alo) * 100 : 0;
           const taxaConversao = bu.contatos > 0 ? (bu.acordos / bu.contatos) * 100 : 0;
           const colors = BU_COLORS[bu.bu] ?? BU_COLORS.AUTOS;
 
@@ -73,23 +74,30 @@ export function HandoffFunnelChart({ data, title = "Funil de Conversão", loadin
                   sub="100%"
                 />
                 <StageBar
-                  value={bu.contatos}
+                  value={bu.alo}
                   max={max}
                   color={colors.bar}
                   label={STAGE_LABELS[1]}
-                  sub={fmtPct(taxaContato)}
+                  sub={fmtPct(taxaAtend)}
+                />
+                <StageBar
+                  value={bu.contatos}
+                  max={max}
+                  color={colors.bar}
+                  label={STAGE_LABELS[2]}
+                  sub={`${fmtPct(taxaRpc)} do contato`}
                 />
                 <StageBar
                   value={bu.acordos}
                   max={max}
                   color={colors.bar}
-                  label={STAGE_LABELS[2]}
-                  sub={`${fmtPct(taxaConversao)} dos contatos`}
+                  label={STAGE_LABELS[3]}
+                  sub={`${fmtPct(taxaConversao)} do CPC`}
                 />
               </div>
               {/* Drop-off annotation */}
               <p className="text-[10px] text-muted-foreground/70 pl-[84px]">
-                Queda contato→acordo: {fmtPct(Math.max(0, taxaContato - taxaConversao))} pp
+                Queda CPC→acordo: {fmtPct(Math.max(0, taxaRpc - taxaConversao))} pp
               </p>
             </div>
           );

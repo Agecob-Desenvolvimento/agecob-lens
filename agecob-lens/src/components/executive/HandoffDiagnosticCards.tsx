@@ -12,6 +12,9 @@ interface DiagnosticCard {
   bu: string;
   color: string;
   acionamentos: number;
+  /** Contato = Alô (alguém atendeu) */
+  alo: number;
+  /** CPC = pessoa certa (RPC) */
   contatos: number;
   acordos: number;
   cpc: number;
@@ -52,8 +55,8 @@ const DIAGNOSIS_MAP = {
     action: "Consegue falar mas não fecha. Treinar argumentação e revisar ofertas.",
   },
   cpcBelowConvAbove: {
-    diagnosis: "Foco em Contato",
-    action: "Fecha bem quando fala, mas contato é baixo. Melhorar discagem e validar bases de telefone.",
+    diagnosis: "Foco em CPC",
+    action: "Fecha bem quando fala, mas CPC é baixo (alcança poucos titulares). Melhorar discagem e validar bases de telefone.",
   },
   bothBelow: {
     diagnosis: "Revisão Completa",
@@ -87,6 +90,7 @@ function buildCards(
       bu: d.bu,
       color: BU_COLORS[d.bu] ?? "#6b7280",
       acionamentos: funnel?.acionamentos ?? 0,
+      alo: funnel?.alo ?? 0,
       contatos: funnel?.contatos ?? 0,
       acordos: funnel?.acordos ?? 0,
       cpc: d.cpc,
@@ -161,7 +165,8 @@ function DiagnosticCardItem({ card }: { card: DiagnosticCard }) {
         </div>
         <span className="text-xs text-muted-foreground tabular-nums leading-tight text-right">
           <span className="block">{fmtNum(card.acionamentos)} acion.</span>
-          <span className="block">{fmtNum(card.contatos)} contatos</span>
+          <span className="block">{fmtNum(card.alo)} contato</span>
+          <span className="block">{fmtNum(card.contatos)} CPC</span>
           <span className="block">{fmtNum(card.acordos)} acordos</span>
         </span>
       </div>
@@ -170,7 +175,7 @@ function DiagnosticCardItem({ card }: { card: DiagnosticCard }) {
       <div className="grid grid-cols-2 gap-3">
         <MetricBadge
           icon={Phone}
-          label="Taxa de Contato"
+          label="Taxa de CPC"
           value={card.cpc}
           bench={card.cpcBench}
           above={card.cpcAbove}

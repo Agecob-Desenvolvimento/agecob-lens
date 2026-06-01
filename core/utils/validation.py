@@ -30,6 +30,7 @@ def validate_produtividade_rows(
     validated_rows: List[Dict[str, Any]] = []
     numeric_fields = [
         "qtd_acionamentos",
+        "qtd_alo",
         "qtd_contatos",
         "cpc_percentual",
         "qtd_acordos",
@@ -39,6 +40,10 @@ def validate_produtividade_rows(
         "parcelamento_medio",
         "desconto_medio_percentual",
         "valor_primeira_parcela",
+        "qtd_rejeitados",
+        "valor_rejeitados",
+        "idade_media_acordos",
+        "horas_trabalhadas",
     ]
     required_fields_missing_count = 0
     numeric_cast_failures = 0

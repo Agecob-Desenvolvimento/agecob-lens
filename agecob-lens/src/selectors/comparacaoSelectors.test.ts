@@ -17,6 +17,7 @@ function row(
     CHAVE: overrides.NOME,
     NOME: overrides.NOME,
     qtd_acionamentos: 0,
+    qtd_alo: 0,
     qtd_contatos: 0,
     cpc_percentual: 0,
     qtd_acordos: 0,
@@ -34,9 +35,9 @@ function row(
 }
 
 const rows: ProdutividadeRowWithSource[] = [
-  row({ NOME: "Ana", source: "COBwebRCBAUTOS", qtd_acionamentos: 20, qtd_contatos: 10, qtd_acordos: 5, valor_acordos: 5000 }),
-  row({ NOME: "Bruno", source: "COBwebRCBAUTOS", qtd_acionamentos: 10, qtd_contatos: 8, qtd_acordos: 2, valor_acordos: 2000 }),
-  row({ NOME: "Carla", source: "COBwebRCBCONSUMER", qtd_acionamentos: 40, qtd_contatos: 30, qtd_acordos: 8, valor_acordos: 8000 }),
+  row({ NOME: "Ana", source: "COBwebRCBAUTOS", qtd_acionamentos: 20, qtd_alo: 15, qtd_contatos: 10, qtd_acordos: 5, valor_acordos: 5000 }),
+  row({ NOME: "Bruno", source: "COBwebRCBAUTOS", qtd_acionamentos: 10, qtd_alo: 12, qtd_contatos: 8, qtd_acordos: 2, valor_acordos: 2000 }),
+  row({ NOME: "Carla", source: "COBwebRCBCONSUMER", qtd_acionamentos: 40, qtd_alo: 35, qtd_contatos: 30, qtd_acordos: 8, valor_acordos: 8000 }),
 ];
 
 describe("selectAgentRow", () => {
@@ -112,9 +113,9 @@ describe("selectRadarDimensions", () => {
   it("carries raw values and unit per dimension", () => {
     const out = selectRadarDimensions([rows[0]], [rows[1]], rows);
     const cpc = out.find((p) => p.dim === "Taxa contato")!;
-    expect(cpc.unit).toBe("%");
-    // Ana taxa de contato = 10/20*100 = 50; Bruno = 8/10*100 = 80
-    expect(cpc.rawA).toBeCloseTo(50, 5);
-    expect(cpc.rawB).toBeCloseTo(80, 5);
+    expect(cpc.unit).toBe("count");
+    // Ana qtd_contatos = 10; Bruno = 8
+    expect(cpc.rawA).toBe(10);
+    expect(cpc.rawB).toBe(8);
   });
 });

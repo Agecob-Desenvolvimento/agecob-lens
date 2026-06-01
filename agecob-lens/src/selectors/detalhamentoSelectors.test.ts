@@ -34,10 +34,10 @@ function row(
 }
 
 const rows: ProdutividadeRowWithSource[] = [
-  row({ NOME: "Carla", source: "COBwebRCBAUTOS", qtd_acionamentos: 20, qtd_contatos: 10, qtd_acordos: 4, valor_acordos: 1000 }),
-  row({ NOME: "Ana", source: "COBwebRCBAUTOS", qtd_acionamentos: 15, qtd_contatos: 12, qtd_acordos: 6, valor_acordos: 3000 }),
-  row({ NOME: "Bruno", source: "COBwebRCBAUTOS", qtd_acionamentos: 5, qtd_contatos: 4, qtd_acordos: 1, valor_acordos: 200 }),
-  row({ NOME: "Diego", source: "COBwebRCBCONSUMER", qtd_acionamentos: 50, qtd_contatos: 40, qtd_acordos: 10, valor_acordos: 5000 }),
+  row({ NOME: "Carla", source: "COBwebRCBAUTOS", qtd_acionamentos: 20, qtd_alo: 20, qtd_contatos: 10, qtd_acordos: 4, valor_acordos: 1000 }),
+  row({ NOME: "Ana", source: "COBwebRCBAUTOS", qtd_acionamentos: 15, qtd_alo: 15, qtd_contatos: 12, qtd_acordos: 6, valor_acordos: 3000 }),
+  row({ NOME: "Bruno", source: "COBwebRCBAUTOS", qtd_acionamentos: 5, qtd_alo: 5, qtd_contatos: 4, qtd_acordos: 1, valor_acordos: 200 }),
+  row({ NOME: "Diego", source: "COBwebRCBCONSUMER", qtd_acionamentos: 50, qtd_alo: 50, qtd_contatos: 40, qtd_acordos: 10, valor_acordos: 5000 }),
   row({ NOME: "  ", source: "COBwebRCBCONSUMER" }),
 ];
 

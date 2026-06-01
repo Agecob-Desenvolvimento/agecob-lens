@@ -26,10 +26,12 @@ export function selectTopByCpc(
     .filter((r) => Number(r.qtd_acionamentos || 0) >= minAcionamentos)
     .map((row) => {
       const acionamentos = Number(row.qtd_acionamentos || 0);
+      const alo = Number(row.qtd_alo || 0);
       const contatos = Number(row.qtd_contatos || 0);
       const acordos = Number(row.qtd_acordos || 0);
-      const cpc = acionamentos > 0 ? (contatos * 100) / acionamentos : 0;
-      const conversao = acionamentos > 0 ? (acordos * 100) / acionamentos : 0;
+      // Taxa de CPC = pessoa certa (RPC) dentre quem atendeu (alô).
+      const cpc = alo > 0 ? (contatos * 100) / alo : 0;
+      const conversao = contatos > 0 ? (acordos * 100) / contatos : 0;
       return { agente: row.NOME, cpc, conversao };
     })
     .sort((a, b) => b.cpc - a.cpc)

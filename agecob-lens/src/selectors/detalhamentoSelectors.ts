@@ -47,7 +47,7 @@ export function selectAgentPercentile(
       nome: String(r.NOME || "").trim(),
       cpc: calcCpc({
         qtd_contatos: Number(r.qtd_contatos || 0),
-        qtd_acionamentos: Number(r.qtd_acionamentos || 0),
+        qtd_alo: Number(r.qtd_alo || 0),
       }),
     }))
     .sort((a, b) => b.cpc - a.cpc);

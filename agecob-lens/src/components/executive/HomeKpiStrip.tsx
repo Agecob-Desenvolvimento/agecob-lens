@@ -22,8 +22,8 @@ export interface HomeKpiPrimary {
     /** previous-period absolute value, shown as "· R$ 1,44 mi" suffix */
     baselineValue?: number;
   };
-  /** internal benchmark (top-10 historical mean) shown as a reference line */
-  benchmark?: { value: number; label: string };
+  /** internal benchmarks shown as reference lines */
+  benchmarks?: { value: number; label: string }[];
 }
 
 export interface HomeKpiSecondary {
@@ -37,8 +37,8 @@ export interface HomeKpiSecondary {
   };
   /** plain descriptive text shown when there is no comparative baseline */
   caption?: string;
-  /** internal benchmark (top-10 historical mean) shown as a reference line */
-  benchmark?: { value: number; label: string };
+  /** internal benchmarks shown as reference lines */
+  benchmarks?: { value: number; label: string }[];
 }
 
 export interface HomeKpiStripProps {
@@ -89,9 +89,11 @@ export function HomeKpiStrip({ primary, secondary }: HomeKpiStripProps) {
         ))}
       </div>
       <p className="text-[10px] leading-relaxed text-muted-foreground/80">
-        Em alguns KPIs aparece a linha <span className="font-semibold text-foreground">Média dos 10% melhores</span>:
-        é a referência interna — a média histórica dos 10% agentes com melhor desempenho naquela métrica
-        (últimos 9 meses, por banco). Compare o número do KPI com ela —{" "}
+        Em alguns KPIs aparecem as linhas{" "}
+        <span className="font-semibold text-foreground">Média dos 10% melhores</span> e{" "}
+        <span className="font-semibold text-foreground">Média do escritório</span>:
+        referências internas calculadas sobre o histórico de 9 meses por banco.
+        Compare o número do KPI —{" "}
         <span className="text-success-fg font-medium">verde</span> = acima da referência,{" "}
         <span className="text-amber-600 font-medium">âmbar</span> = abaixo.
       </p>
@@ -138,9 +140,11 @@ function PrimaryCard({ kpi }: { kpi: HomeKpiPrimary }) {
           <span className="block text-xs text-muted-foreground/60">—</span>
         )}
       </div>
-      {kpi.benchmark ? (
-        <div className="mt-1">
-          <BenchmarkLine value={kpi.value} benchmark={kpi.benchmark} betterWhen={baseline?.betterWhen} />
+      {kpi.benchmarks?.length ? (
+        <div className="mt-1 space-y-0.5">
+          {kpi.benchmarks.map((b) => (
+            <BenchmarkLine key={b.label} value={kpi.value} benchmark={b} betterWhen={baseline?.betterWhen} />
+          ))}
         </div>
       ) : null}
     </Card>
@@ -179,9 +183,11 @@ function SecondaryCard({ kpi }: { kpi: HomeKpiSecondary }) {
         {kpi.caption ? (
           <div className="text-[10px] text-muted-foreground/70 mt-0.5">{kpi.caption}</div>
         ) : null}
-        {kpi.benchmark ? (
-          <BenchmarkLine value={kpi.value} benchmark={kpi.benchmark} betterWhen={baseline?.betterWhen} />
-        ) : null}
+        {kpi.benchmarks?.length
+          ? kpi.benchmarks.map((b) => (
+              <BenchmarkLine key={b.label} value={kpi.value} benchmark={b} betterWhen={baseline?.betterWhen} />
+            ))
+          : null}
       </div>
     </Card>
   );
@@ -202,7 +208,7 @@ function BenchmarkLine({
       : value != null && value >= benchmark.value;
   return (
     <div
-      title="Referência interna — média histórica dos 10% melhores agentes nos últimos 9 meses (por banco)."
+      title="Referência interna — calculada sobre o histórico de 9 meses por banco."
       className={cn("text-[10px] font-medium", above ? "text-success-fg" : "text-amber-600")}
     >
       {benchmark.label}: {fmtPct(benchmark.value)}

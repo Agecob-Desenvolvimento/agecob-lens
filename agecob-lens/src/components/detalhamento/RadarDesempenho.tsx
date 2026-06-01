@@ -26,6 +26,10 @@ interface RadarDesempenhoProps {
 
 const AGENT_COLOR = "hsl(199, 89%, 48%)"; // sky-500
 const TEAM_COLOR = "hsl(215, 16%, 47%)";  // slate-500
+const GRID_COLOR = "hsl(214, 32%, 64%)";  // border, 30% darker
+
+const GRADE_TICKS = [20, 40, 60, 80, 100];
+const GRADE_LABEL: Record<number, string> = { 20: "D", 40: "C", 60: "B", 80: "A", 100: "S" };
 
 function fmtRaw(v: number, unit: RadarDimension["unit"]): string {
   if (unit === "BRL") return fmtBRL(v);
@@ -55,7 +59,7 @@ export function RadarDesempenho({ data, agentName }: RadarDesempenhoProps) {
         ) : (
           <ResponsiveContainer width="100%" height={340}>
             <RadarChart data={data} outerRadius="75%">
-              <PolarGrid stroke="hsl(var(--border))" />
+              <PolarGrid stroke={GRID_COLOR} />
               <PolarAngleAxis
                 dataKey="dim"
                 tick={{ fontSize: 11, fontWeight: 600, fill: "hsl(var(--foreground))" }}
@@ -63,7 +67,9 @@ export function RadarDesempenho({ data, agentName }: RadarDesempenhoProps) {
               <PolarRadiusAxis
                 angle={90}
                 domain={[0, 100]}
-                tick={{ fontSize: 9 }}
+                ticks={GRADE_TICKS}
+                tickFormatter={(v: number) => GRADE_LABEL[v] ?? ""}
+                tick={{ fontSize: 11, fontWeight: 700, fill: GRID_COLOR }}
                 axisLine={false}
               />
               <Radar

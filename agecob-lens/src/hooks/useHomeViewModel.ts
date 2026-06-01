@@ -108,25 +108,34 @@ export function useHomeViewModel(): HomeViewModel {
   const bench = useMemo(() => {
     const benchAutos = benchAutosEnv?.data as BenchmarkData | undefined;
     const benchConsumer = benchConsumerEnv?.data as BenchmarkData | undefined;
-    const pickBench = (b?: BenchmarkData) =>
-      b
-        ? {
-            taxa_contato: b.taxa_contato?.top10_mean ?? null,
-            taxa_conversao: b.taxa_conversao?.top10_mean ?? null,
-            efetividade_caixa: b.efetividade_caixa?.top10_mean ?? null,
-            pct_excecoes: b.pct_excecoes?.top10_mean ?? null,
-          }
-        : undefined;
+    interface BenchMetric { top10: number | null; mean: number | null }
+    const pickBench = (b?: BenchmarkData): Record<string, BenchMetric> | undefined => {
+      if (!b) return undefined;
+      const pick = (q?: { top10_mean?: number | null; mean?: number | null }): BenchMetric => ({
+        top10: q?.top10_mean ?? null,
+        mean: q?.mean ?? null,
+      });
+      return {
+        taxa_contato: pick(b.taxa_contato),
+        taxa_conversao: pick(b.taxa_conversao),
+        efetividade_caixa: pick(b.efetividade_caixa),
+        pct_excecoes: pick(b.pct_excecoes),
+      };
+    };
     if (selectedDatabase === "COBwebRCBAUTOS") return pickBench(benchAutos);
     if (selectedDatabase === "COBwebRCBCONSUMER") return pickBench(benchConsumer);
     if (!benchAutos || !benchConsumer) return undefined;
     const avg = (a: number | null, b: number | null) =>
       a != null && b != null ? (a + b) / 2 : a ?? b ?? null;
+    const avgMetric = (qA?: { top10_mean?: number | null; mean?: number | null }, qB?: { top10_mean?: number | null; mean?: number | null }): BenchMetric => ({
+      top10: avg(qA?.top10_mean ?? null, qB?.top10_mean ?? null),
+      mean: avg(qA?.mean ?? null, qB?.mean ?? null),
+    });
     return {
-      taxa_contato: avg(benchAutos.taxa_contato?.top10_mean ?? null, benchConsumer.taxa_contato?.top10_mean ?? null),
-      taxa_conversao: avg(benchAutos.taxa_conversao?.top10_mean ?? null, benchConsumer.taxa_conversao?.top10_mean ?? null),
-      efetividade_caixa: avg(benchAutos.efetividade_caixa?.top10_mean ?? null, benchConsumer.efetividade_caixa?.top10_mean ?? null),
-      pct_excecoes: avg(benchAutos.pct_excecoes?.top10_mean ?? null, benchConsumer.pct_excecoes?.top10_mean ?? null),
+      taxa_contato: avgMetric(benchAutos.taxa_contato, benchConsumer.taxa_contato),
+      taxa_conversao: avgMetric(benchAutos.taxa_conversao, benchConsumer.taxa_conversao),
+      efetividade_caixa: avgMetric(benchAutos.efetividade_caixa, benchConsumer.efetividade_caixa),
+      pct_excecoes: avgMetric(benchAutos.pct_excecoes, benchConsumer.pct_excecoes),
     };
   }, [selectedDatabase, benchAutosEnv, benchConsumerEnv]);
 
@@ -197,13 +206,18 @@ export function useHomeViewModel(): HomeViewModel {
       const d = selectPeriodDelta(value, prevValue);
       return d != null ? { value: d, label: periodLabel, betterWhen } : undefined;
     };
-    const bm = (v: number | null | undefined) => (v != null ? { value: v, label: "Média dos 10% melhores" } : undefined);
+    const bm = (b?: { top10: number | null; mean: number | null }) => {
+      const result: { value: number; label: string }[] = [];
+      if (b?.top10 != null) result.push({ value: b.top10, label: "Média dos 10% melhores" });
+      if (b?.mean != null) result.push({ value: b.mean, label: "Média do escritório" });
+      return result.length ? result : undefined;
+    };
     return [
-      { label: "Efetividade de Caixa", value: indiceConversaoCaixa ?? 0, unit: "percent" as const, baseline: mk(indiceConversaoCaixa ?? 0, indiceConversaoCaixaPrev ?? 0, "up"), benchmark: bm(bench?.efetividade_caixa) },
+      { label: "Efetividade de Caixa", value: indiceConversaoCaixa ?? 0, unit: "percent" as const, baseline: mk(indiceConversaoCaixa ?? 0, indiceConversaoCaixaPrev ?? 0, "up"), benchmarks: bm(bench?.efetividade_caixa) },
       { label: "CPC", value: totals.qtd_contatos, unit: "count" as const, baseline: mk(totals.qtd_contatos, prevTotals.qtd_contatos, "up") },
-      { label: "Conversão %", value: conv, unit: "percent" as const, baseline: mk(conv, convPrev, "up"), benchmark: bm(bench?.taxa_conversao) },
+      { label: "Conversão %", value: conv, unit: "percent" as const, baseline: mk(conv, convPrev, "up"), benchmarks: bm(bench?.taxa_conversao) },
       { label: "% Exc. s/ 1ª Parcela", value: excecoesPctParcela, unit: "percent" as const, baseline: mk(excecoesPctParcela, excecoesPctParcelaPrev, "down"), caption: "do valor da 1ª parcela" },
-      { label: "% Exc. s/ Valor Acordos", value: excecoesPct, unit: "percent" as const, baseline: mk(excecoesPct, excecoesPctPrev, "down"), caption: "do valor total de acordos", benchmark: bm(bench?.pct_excecoes) },
+      { label: "% Exc. s/ Valor Acordos", value: excecoesPct, unit: "percent" as const, baseline: mk(excecoesPct, excecoesPctPrev, "down"), caption: "do valor total de acordos", benchmarks: bm(bench?.pct_excecoes) },
       { label: "Qtd Acordos", value: totals.qtd_acordos, unit: "count" as const, caption: `${diasUteisPeriodo} dias úteis` },
       { label: "Gap de Performance", value: gapDePerformance, unit: "BRL" as const, caption: "Top agente vs piso da equipe" },
       { label: "Qtd Acionamentos", value: totals.qtd_acionamentos, unit: "count" as const, baseline: mk(totals.qtd_acionamentos, prevTotals.qtd_acionamentos, "up") },

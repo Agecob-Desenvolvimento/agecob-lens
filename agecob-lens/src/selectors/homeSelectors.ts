@@ -151,6 +151,9 @@ export function selectEficienciaHandoffData(
 export interface FunnelDatum {
   bu: "AUTOS" | "CONSUMER";
   acionamentos: number;
+  /** Alô = alguém atendeu (ALO=1). */
+  alo: number;
+  /** Contato = RPC (pessoa certa). */
   contatos: number;
   acordos: number;
 }
@@ -162,6 +165,7 @@ export function selectFunnelData(rows: ProdutividadeRowWithSource[]): FunnelDatu
     return {
       bu,
       acionamentos: t.qtd_acionamentos,
+      alo: t.qtd_alo,
       contatos: t.qtd_contatos,
       acordos: t.qtd_acordos,
     };

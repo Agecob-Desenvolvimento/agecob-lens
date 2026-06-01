@@ -28,7 +28,7 @@ export default function AnaliseProdutividade() {
   const kpiSecondary = [
     { label: "Ticket Médio", value: vm.kpiTicket, unit: "BRL" as const },
     { label: "Acionamentos", value: vm.kpiAcionamentos, unit: "count" as const },
-    { label: "Contatos", value: vm.kpiContatos, unit: "count" as const },
+    { label: "Contato", value: vm.kpiAlo, unit: "count" as const },
     { label: "Acordos", value: vm.kpiAcordos, unit: "count" as const },
   ];
 
@@ -80,7 +80,7 @@ export default function AnaliseProdutividade() {
                     loading={vm.loading}
                   />
                   <HandoffEficienciaGroupedBar
-                    title="Taxa de contato % e Conversão % por Unidade de Negócio"
+                    title="Taxa de CPC % e Conversão % por Unidade de Negócio"
                     data={vm.eficienciaData}
                     summary={{ cpcAvg: vm.kpiCpc, conversaoAvg: vm.kpiConversao }}
                     empty={vm.eficienciaData.length === 0}
@@ -93,14 +93,14 @@ export default function AnaliseProdutividade() {
               {/* Ranking Taxa de contato */}
               <section className="space-y-3">
                 <SectionHeader
-                  title="Top 10 Agentes por Taxa de contato"
+                  title="Top 10 Agentes por Taxa de CPC"
                   unit="%"
-                  description="Ranking por contato/acionamento. Clique para abrir ficha do agente."
+                  description="Ranking por CPC/alô (pessoa certa dentre quem atendeu). Clique para abrir ficha do agente."
                 />
                 <ExecutiveRankingTable
-                  title="Top 10 Agentes por Taxa de contato"
+                  title="Top 10 Agentes por Taxa de CPC"
                   rows={vm.cpcRanking}
-                  primaryColumnLabel="Taxa de contato %"
+                  primaryColumnLabel="Taxa de CPC %"
                   secondaryColumnLabel="Conversão %"
                   maxRows={10}
                   loading={vm.loading}

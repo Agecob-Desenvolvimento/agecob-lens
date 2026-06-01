@@ -116,16 +116,29 @@ ID_REC_STATUS = 2
 ID_REC_STATUS IN (1, 3, 5, 12)
 ```
 
-## CPC / Contact
+## Funil de contato — Alô vs Contato (RPC) — ADR-006
 
-Contact (CPC) is defined by a JOIN, NOT a hardcoded ID list:
+O `CTO_COMPLEMENTO.CONTATO` (bit) é **largo demais** para RPC: marca disparo de
+WhatsApp, envio de boleto e ligação interrompida como "contato". Catálogo
+auditado no banco (2026-06). Por isso o funil tem **duas camadas distintas**:
 
-```sql
-CTO_COMPLEMENTO.CONTATO = 1
--- JOIN: CTO_MASTER.ID_COMPLEMENTO = CTO_COMPLEMENTO.ID_COMPLEMENTO
-```
+Vocabulário da UI (importante — não inverter):
 
-`CPC` = Σ `qtd_contatos` (count, NOT %). "Taxa de contato %" = Σ contatos / Σ acionamentos. Never label the ratio as "CPC".
+| Rótulo UI | Pergunta | Definição SQL | Coluna |
+|---|---|---|---|
+| **Contato** | "Alguém atende?" (Alô) | `CTO_COMPLEMENTO.ALO = 1` | `qtd_alo` |
+| **CPC** | "Falei com a pessoa certa?" (RPC) | `CTO_MASTER.ID_COMPLEMENTO IN CPC_COMPLEMENTO_IDS` | `qtd_contatos` |
+
+`CPC_COMPLEMENTO_IDS` (curado, `config/settings.py`) = `(95, 105, 108, 109, 110,
+111, 229, 230, 231, 233)` — apenas desfechos de voz com o titular. JOIN:
+`CTO_MASTER.ID_COMPLEMENTO = CTO_COMPLEMENTO.ID_COMPLEMENTO`.
+
+Funil canônico: **Acionamento → Contato (atende) → CPC (pessoa certa) → Acordo →
+1ª Parcela**. Monotônico: `acionamentos ≥ qtd_alo ≥ qtd_contatos ≥ acordos`.
+
+`CPC` = Σ `qtd_contatos` (count = RPC, NOT %). "Taxa de contato" = Σ `qtd_alo` /
+Σ `qtd_acionamentos`. "Taxa de CPC" = Σ `qtd_contatos` / Σ `qtd_alo`. Conversão =
+Σ `qtd_acordos` / Σ `qtd_contatos` (sobre a pessoa certa).
 
 ## First Installment
 

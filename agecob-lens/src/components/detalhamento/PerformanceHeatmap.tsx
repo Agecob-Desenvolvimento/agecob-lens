@@ -8,9 +8,13 @@ export interface AgentRow {
   nome: string;
   mat?: string;
   acionamentos: number;
-  cpc: number;
+  /** Contato = Alô (alguém atendeu, ALO=1) */
+  alo?: number;
+  /** taxa CPC (legado; coluna CPC agora usa `contatos` = RPC count) */
+  cpc?: number;
   conversao: number;
   valorAcordos: number;
+  /** CPC = contato com pessoa certa (RPC) = qtd_contatos */
   contatos: number;
   /** Quantidade de acordos aprovados */
   qtdAcordos: number;
@@ -22,16 +26,16 @@ export interface AgentRow {
   valorExcecoes: number;
   /** 1ª parcela das exceções */
   excPrimeiraParcela: number;
-  /** Quantidade de rejeitados (ID_REC_STATUS = 7) — aguardando endpoint */
+  /** Quantidade de rejeitados (ID_REC_STATUS = 7) */
   qtdRejeitados: number;
-  /** Valor total dos rejeitados — aguardando endpoint */
+  /** Valor total dos rejeitados */
   valorRejeitados: number;
-  /** 1ª parcela dos rejeitados — aguardando endpoint */
+  /** 1ª parcela dos rejeitados (pendente no backend) */
   rejPrimeiraParcela: number;
 }
 
 type MetricKey =
-  | "acionamentos" | "cpc" | "conversao" | "valorAcordos" | "contatos"
+  | "acionamentos" | "alo" | "cpc" | "conversao" | "valorAcordos" | "contatos"
   | "qtdAcordos" | "primeiraParcela"
   | "qtdExcecoes" | "valorExcecoes" | "excPrimeiraParcela"
   | "qtdRejeitados" | "valorRejeitados" | "rejPrimeiraParcela";
@@ -47,8 +51,8 @@ interface MetricDef {
 
 const METRICS: MetricDef[] = [
   { key: "acionamentos", label: "Acionam.", fmt: (v) => fmtNum(v) },
-  { key: "cpc", label: "CPC", fmt: (v) => fmtNum(v) },
-  { key: "contatos", label: "Contato", fmt: (v) => fmtNum(v) },
+  { key: "alo", label: "Contato", fmt: (v) => fmtNum(v) },
+  { key: "contatos", label: "CPC", fmt: (v) => fmtNum(v) },
   { key: "conversao", label: "Conv. %", fmt: (v) => `${v.toFixed(1)}%` },
   { key: "qtdAcordos", label: "Acordos", fmt: (v) => fmtNum(v) },
   { key: "valorAcordos", label: "Vlr Acordos", fmt: (v) => formatBRLCompact(v) },
@@ -155,7 +159,7 @@ export function PerformanceHeatmap({ agents, highlightId }: PerformanceHeatmapPr
           <div>
             <CardTitle className="text-sm font-semibold">Matriz de Performance</CardTitle>
             <CardDescription className="text-xs">
-              Agentes x Metricas. Cor por percentil na distribuicao do periodo. Rejeitados: aguardando endpoint (ID_REC_STATUS = 7).
+              Agentes x Metricas. Cor por percentil na distribuicao do periodo. Rejeitados: ID_REC_STATUS = 7.
             </CardDescription>
           </div>
           {!maximized && (

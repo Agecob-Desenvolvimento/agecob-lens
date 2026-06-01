@@ -71,6 +71,7 @@ export default function DetalhamentoChartsPanel({
     return perfRows.reduce(
       (acc, r) => ({
         qtd_acionamentos: acc.qtd_acionamentos + Number(r.qtd_acionamentos),
+        qtd_alo: acc.qtd_alo + Number(r.qtd_alo),
         qtd_contatos: acc.qtd_contatos + Number(r.qtd_contatos),
         qtd_acordos: acc.qtd_acordos + Number(r.qtd_acordos),
         valor_total: acc.valor_total + Number(r.valor_total),
@@ -79,7 +80,7 @@ export default function DetalhamentoChartsPanel({
         qtd_excecoes: acc.qtd_excecoes + Number(r.qtd_excecoes),
         valor_excecoes: acc.valor_excecoes + Number(r.valor_excecoes),
       }),
-      { qtd_acionamentos: 0, qtd_contatos: 0, qtd_acordos: 0, valor_total: 0, soma_primeira_parcela: 0, qtd_reprovados: 0, qtd_excecoes: 0, valor_excecoes: 0 },
+      { qtd_acionamentos: 0, qtd_alo: 0, qtd_contatos: 0, qtd_acordos: 0, valor_total: 0, soma_primeira_parcela: 0, qtd_reprovados: 0, qtd_excecoes: 0, valor_excecoes: 0 },
     );
   }, [perfRows]);
 
@@ -89,6 +90,7 @@ export default function DetalhamentoChartsPanel({
 
   const volumeData = [
     { name: "Acionamentos", value: totals.qtd_acionamentos },
+    { name: "ALO", value: totals.qtd_alo },
     { name: "Contatos", value: totals.qtd_contatos },
   ];
   const valoresData = [
@@ -121,7 +123,7 @@ export default function DetalhamentoChartsPanel({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card>
           <CardHeader className="pb-2 pt-3 px-4">
-            <CardTitle className="text-base font-semibold leading-snug">Volume — Acionamentos × Contatos</CardTitle>
+            <CardTitle className="text-base font-semibold leading-snug">Volume — Acionamentos → ALO → Contatos (CPC)</CardTitle>
           </CardHeader>
           <CardContent className="px-4 pb-3">
             <ResponsiveContainer width="100%" height={260}>
@@ -188,7 +190,8 @@ export default function DetalhamentoChartsPanel({
                   <TableHead className="text-sm font-semibold whitespace-nowrap">Agente</TableHead>
                   <TableHead className="text-sm font-semibold whitespace-nowrap">Matrícula</TableHead>
                   <TableHead className="text-sm font-semibold text-right whitespace-nowrap">Acionamentos</TableHead>
-                  <TableHead className="text-sm font-semibold text-right whitespace-nowrap">Taxa de contato %</TableHead>
+                  <TableHead className="text-sm font-semibold text-right whitespace-nowrap">ALO</TableHead>
+                  <TableHead className="text-sm font-semibold text-right whitespace-nowrap">CPC %</TableHead>
                   <TableHead className="text-sm font-semibold text-right whitespace-nowrap">Acordos</TableHead>
                   <TableHead className="text-sm font-semibold text-right whitespace-nowrap">Conversão %</TableHead>
                   <TableHead className="text-sm font-semibold text-right whitespace-nowrap">Valor Total</TableHead>
@@ -204,6 +207,7 @@ export default function DetalhamentoChartsPanel({
                     <TableCell className="text-sm max-w-[200px] truncate" title={row.nome_agente}>{row.nome_agente}</TableCell>
                     <TableCell className="text-sm tabular-nums whitespace-nowrap">{row.matricula || "—"}</TableCell>
                     <TableCell className="text-sm text-right tabular-nums whitespace-nowrap">{fmtNum(Number(row.qtd_acionamentos))}</TableCell>
+                    <TableCell className="text-sm text-right tabular-nums whitespace-nowrap">{fmtNum(Number(row.qtd_alo))}</TableCell>
                     <TableCell className="text-sm text-right tabular-nums whitespace-nowrap">{Number(row.cpc_pct).toFixed(1)}%</TableCell>
                     <TableCell className="text-sm text-right tabular-nums whitespace-nowrap">{fmtNum(Number(row.qtd_acordos))}</TableCell>
                     <TableCell className="text-sm text-right tabular-nums whitespace-nowrap">{Number(row.conversao_pct).toFixed(1)}%</TableCell>
@@ -219,9 +223,10 @@ export default function DetalhamentoChartsPanel({
                 <TableRow>
                   <TableCell colSpan={2} className="text-sm font-semibold">{perfRows.length} agente(s)</TableCell>
                   <TableCell className="text-sm text-right font-semibold tabular-nums whitespace-nowrap">{fmtNum(perfTotals.qtd_acionamentos)}</TableCell>
+                  <TableCell className="text-sm text-right font-semibold tabular-nums whitespace-nowrap">{fmtNum(perfTotals.qtd_alo)}</TableCell>
                   <TableCell className="text-sm text-right font-semibold tabular-nums whitespace-nowrap">
-                    {perfTotals.qtd_acionamentos > 0
-                      ? `${(perfTotals.qtd_contatos * 100 / perfTotals.qtd_acionamentos).toFixed(1)}%`
+                    {perfTotals.qtd_alo > 0
+                      ? `${(perfTotals.qtd_contatos * 100 / perfTotals.qtd_alo).toFixed(1)}%`
                       : "—"}
                   </TableCell>
                   <TableCell className="text-sm text-right font-semibold tabular-nums whitespace-nowrap">{fmtNum(perfTotals.qtd_acordos)}</TableCell>

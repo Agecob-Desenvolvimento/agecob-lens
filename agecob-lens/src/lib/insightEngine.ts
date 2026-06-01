@@ -53,22 +53,24 @@ export function generateDailyReadout(
   const insights: CandidateInsight[] = [];
   const actions: CandidateAction[] = [];
 
-  if (cpc > 40) {
+  // CPC = pessoa certa / alô (RPC/ALO). Patamares pelos quartis do benchmark
+  // interno (q1≈5,5% · mediana≈10,7% · q3≈15,4%).
+  if (cpc > 15) {
     insights.push({
       ruleId: "insight_cpc_above_avg",
       category: "cpc",
       severity: "positive",
       headline: fmtPct(cpc),
-      text: "Taxa de contato acima do patamar operacional.",
+      text: "Taxa de CPC acima do patamar operacional.",
       rank: SEVERITY_RANK.positive,
     });
-  } else if (cpc < 20 && totals.qtd_acionamentos > 0) {
+  } else if (cpc < 5 && totals.qtd_alo > 0) {
     insights.push({
       ruleId: "insight_cpc_below_avg",
       category: "cpc",
       severity: "warning",
       headline: fmtPct(cpc),
-      text: "Taxa de contato abaixo do patamar operacional.",
+      text: "Taxa de CPC abaixo do patamar operacional.",
       rank: SEVERITY_RANK.warning,
     });
   }

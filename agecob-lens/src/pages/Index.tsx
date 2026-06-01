@@ -90,7 +90,7 @@ export default function Index() {
             </section>
 
             <section className="space-y-4">
-              <SectionHeader title="Eficiência" unit="%" description="Funil de conversão (Acionamentos → Contatos → Acordos) e diagnóstico por unidade de negócio." />
+              <SectionHeader title="Eficiência" unit="%" description="Funil de conversão (Acionamentos → Contato → CPC → Acordos) e diagnóstico por unidade de negócio." />
               <Suspense fallback={CHART_FALLBACK}>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   <HandoffFunnelChart title="Funil de Conversão" data={vm.funnelData} empty={vm.funnelData.length === 0} loading={vm.loading} />

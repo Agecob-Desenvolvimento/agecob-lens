@@ -199,6 +199,7 @@ def build_tabela_performance_periodo_query(
                 U.NOME    AS nome_agente,
                 U.MATRICULA AS matricula,
                 ISNULL(A.qtd_acionamentos, 0) AS qtd_acionamentos,
+                ISNULL(A.qtd_alo, 0)          AS qtd_alo,
                 ISNULL(A.qtd_contatos, 0)     AS qtd_contatos,
                 ISNULL(AC.qtd_acordos, 0)     AS qtd_acordos,
                 ISNULL(AC.valor_total, 0)     AS valor_total,
@@ -211,7 +212,8 @@ def build_tabela_performance_periodo_query(
                 SELECT
                     CM.ID_USUARIO,
                     COUNT(DISTINCT DM.CPF_CNPJ) AS qtd_acionamentos,
-                    COUNT(DISTINCT CASE WHEN CC.CONTATO = 1 THEN DM.CPF_CNPJ END) AS qtd_contatos
+                    COUNT(DISTINCT CASE WHEN CC.ALO = 1 THEN DM.CPF_CNPJ END) AS qtd_alo,
+                    COUNT(DISTINCT CASE WHEN CC.ALO = 1 AND CM.ID_COMPLEMENTO IN {settings.CPC_IDS_SQL} THEN DM.CPF_CNPJ END) AS qtd_contatos
                 FROM {db}.dbo.CTO_MASTER CM
                 JOIN {db}.dbo.DEV_MASTER DM ON DM.ID_DEV = CM.ID_DEV
                 LEFT JOIN {db}.dbo.CTO_COMPLEMENTO CC (NOLOCK) ON CM.ID_COMPLEMENTO = CC.ID_COMPLEMENTO
@@ -285,10 +287,11 @@ def build_tabela_performance_periodo_query(
                 CAST(SUM(valor_total)            AS DECIMAL(18,2)) AS valor_total,
                 CAST(SUM(soma_primeira_parcela)  AS DECIMAL(18,2)) AS soma_primeira_parcela,
                 SUM(qtd_reprovados) AS qtd_reprovados,
+                SUM(qtd_alo)        AS qtd_alo,
                 SUM(qtd_contatos)   AS qtd_contatos,
                 CAST(
-                    CASE WHEN SUM(qtd_acionamentos) > 0
-                         THEN SUM(qtd_contatos) * 100.0 / SUM(qtd_acionamentos)
+                    CASE WHEN SUM(qtd_alo) > 0
+                         THEN SUM(qtd_contatos) * 100.0 / SUM(qtd_alo)
                          ELSE 0.0
                     END AS DECIMAL(5,1)
                 ) AS cpc_pct,
@@ -318,10 +321,11 @@ def build_tabela_performance_periodo_query(
             CAST(valor_total           AS DECIMAL(18,2)) AS valor_total,
             CAST(soma_primeira_parcela AS DECIMAL(18,2)) AS soma_primeira_parcela,
             qtd_reprovados,
+            qtd_alo,
             qtd_contatos,
             CAST(
-                CASE WHEN qtd_acionamentos > 0
-                     THEN qtd_contatos * 100.0 / qtd_acionamentos
+                CASE WHEN qtd_alo > 0
+                     THEN qtd_contatos * 100.0 / qtd_alo
                      ELSE 0.0
                 END AS DECIMAL(5,1)
             ) AS cpc_pct,

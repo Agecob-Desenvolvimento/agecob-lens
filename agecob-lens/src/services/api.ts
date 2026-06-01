@@ -44,6 +44,7 @@ export interface ProdutividadeRow {
   CHAVE: string;
   NOME: string;
   qtd_acionamentos: number;
+  qtd_alo: number;
   qtd_contatos: number;
   cpc_percentual: number;
   qtd_acordos: number;
@@ -56,6 +57,10 @@ export interface ProdutividadeRow {
   qtd_excecoes: number;
   valor_excecoes: number;
   valor_primeira_parcela_excecoes: number;
+  qtd_rejeitados: number;
+  valor_rejeitados: number;
+  idade_media_acordos: number;
+  horas_trabalhadas: number;
 }
 
 export interface ProdutividadeFilters {
@@ -301,6 +306,7 @@ export interface BenchmarkQuartiles {
   median: number | null;
   q3: number | null;
   top10_mean: number | null;
+  mean: number | null;
 }
 
 export interface BenchmarkData {
@@ -608,6 +614,7 @@ export interface TabelaPerformancePeriodoRow {
   nome_agente: string;
   matricula: string;
   qtd_acionamentos: number;
+  qtd_alo: number;
   qtd_contatos: number;
   qtd_acordos: number;
   conversao_pct: number;

@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useState, useCallback, useMemo } from "react";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import ExecutiveHeader from "@/components/executive/ExecutiveHeader";
@@ -8,6 +8,7 @@ import ApiDebugBanner from "@/components/executive/ApiDebugBanner";
 import { AgentFilterBar } from "@/components/detalhamento/AgentFilterBar";
 import { DetalhamentoKpiStrip } from "@/components/detalhamento/DetalhamentoKpiStrip";
 import { useDetalhamentoViewModel } from "@/hooks/useDetalhamentoViewModel";
+import { MetaEditor, applyCustomMetas, type CustomMetas } from "@/components/detalhamento/MetaEditor";
 
 const FunilConversao = lazy(() => import("@/components/detalhamento/FunilConversao").then((m) => ({ default: m.FunilConversao })));
 const BulletChartsPanel = lazy(() => import("@/components/detalhamento/BulletChartsPanel").then((m) => ({ default: m.BulletChartsPanel })));
@@ -20,8 +21,28 @@ const AgenteDetalheSection = lazy(() => import("@/components/detalhamento/Agente
 
 const CHART_FALLBACK = <div className="h-64 animate-pulse bg-muted rounded-lg" />;
 
+const STORAGE_KEY = "agdash-custom-metas";
+
+function loadCustomMetas(): CustomMetas {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch { /* ignore */ }
+  return { cpc: null, conversao: null, primeiraParcela: null, excecoes: null };
+}
+
 export default function DetalhamentoAgentes() {
   const vm = useDetalhamentoViewModel();
+  const [customMetas, setCustomMetas] = useState<CustomMetas>(loadCustomMetas);
+
+  const metas = useMemo(
+    () => applyCustomMetas(vm.metas, customMetas),
+    [vm.metas, customMetas],
+  );
+
+  const handleMetaChange = useCallback((overrides: CustomMetas) => {
+    setCustomMetas(overrides);
+  }, []);
 
   return (
     <SidebarProvider>
@@ -66,13 +87,15 @@ export default function DetalhamentoAgentes() {
                 <Suspense fallback={CHART_FALLBACK}>
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                     <FunilConversao data={vm.funil} />
-                    <BulletChartsPanel data={vm.metas} />
+                    <BulletChartsPanel data={metas} />
                   </div>
+
+                  <MetaEditor current={vm.metas} onChange={handleMetaChange} />
 
                   <div className="mt-3 max-w-xl mx-auto">
                     <RadarDesempenho
                       data={vm.radarData}
-                      agentName={vm.selectedAgent}
+                      agentName={vm.selectedAgent ?? "Equipe"}
                     />
                   </div>
                 </Suspense>

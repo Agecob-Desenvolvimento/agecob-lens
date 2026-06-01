@@ -2,7 +2,6 @@ import type { ProdutividadeRowWithSource } from "@/hooks/useProdutividadeData";
 import {
   aggregateTotals,
   calcConversao,
-  calcCpc,
   calcTicketMedio,
   type MetricTotals,
 } from "@/lib/metrics";
@@ -57,7 +56,7 @@ export function selectRadarDimensions(
     Math.max(1, ...buRows.map(fn));
   const maxValor = teamMax((r) => Number(r.valor_acordos || 0));
   const maxQtd = teamMax((r) => Number(r.qtd_acordos || 0));
-  const maxCpc = Math.max(1, ...buRows.map((r) => calcCpc(aggregateTotals([r]))));
+  const maxCpc = teamMax((r) => Number(r.qtd_contatos || 0));
   const maxConv = Math.max(1, ...buRows.map((r) => calcConversao(aggregateTotals([r]))));
   const maxTicket = Math.max(1, ...buRows.map((r) => calcTicketMedio(aggregateTotals([r]))));
   const norm = (v: number, m: number) => Math.round((v / m) * 100);
@@ -80,11 +79,11 @@ export function selectRadarDimensions(
     },
     {
       dim: "Taxa contato",
-      agentA: norm(calcCpc(ta), maxCpc),
-      agentB: norm(calcCpc(tb), maxCpc),
-      rawA: calcCpc(ta),
-      rawB: calcCpc(tb),
-      unit: "%",
+      agentA: norm(ta.qtd_contatos, maxCpc),
+      agentB: norm(tb.qtd_contatos, maxCpc),
+      rawA: ta.qtd_contatos,
+      rawB: tb.qtd_contatos,
+      unit: "count",
     },
     {
       dim: "Conversão",

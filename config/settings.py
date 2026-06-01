@@ -51,6 +51,14 @@ STATUS_UNIVERSO_ACORDOS: Tuple[int, ...] = STATUS_APROVADOS + STATUS_EXCECAO  # 
 PRIMEIRA_PARCELA: int = 0
 PORTFOLIO_COLUMN: str = "CAMPO010"
 
+# IDs de complementos que contam como CPC / RPC (Contato com a Pessoa Certa).
+# ADR-006: gerenciado manualmente pelo cientista de dados.
+# Curado a partir do catálogo CTO_COMPLEMENTO: apenas desfechos de voz onde o
+# agente efetivamente falou com o titular (CONTATO=1, RECADO=0). Exclui
+# automáticos (disparo whatsapp, envio boleto), ligação interrompida/ruim,
+# recado com terceiro, transferência e status de workflow/jurídico.
+CPC_COMPLEMENTO_IDS: Tuple[int, ...] = (95, 105, 108, 109, 110, 111, 229, 230, 231, 233)
+
 RECOMMENDED_INDEXES: List[Dict[str, Any]] = [
     {
         "name": "IX_REC_MASTER_DT_EMISSAO",
@@ -118,6 +126,7 @@ STATUS_EXCECAO_SQL: str = _sql_in(STATUS_EXCECAO)
 STATUS_REJEITADO_SQL: str = _sql_in(STATUS_REJEITADO)
 STATUS_QUEBRADO_SQL: str = _sql_in(STATUS_QUEBRADO)
 STATUS_UNIVERSO_SQL: str = _sql_in(STATUS_UNIVERSO_ACORDOS)
+CPC_IDS_SQL: str = _sql_in(CPC_COMPLEMENTO_IDS)
 
 FILTRO_AGENTES_EXCLUIDOS_SQL: str = """
     AND UPPER(LTRIM(RTRIM(U.NOME))) <> 'COBDESANTOS'

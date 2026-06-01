@@ -40,7 +40,7 @@ const CONVERSAO_COLOR = "#a3a300";
 export function HandoffEficienciaGroupedBar({
   data,
   summary,
-  title = "Taxa de contato % e Conversão % por Unidade de Negócio",
+  title = "Taxa de CPC % e Conversão % por Unidade de Negócio",
   loading,
   empty,
   metaConversao = 3,
@@ -92,7 +92,7 @@ export function HandoffEficienciaGroupedBar({
             />
           )}
           <Legend wrapperStyle={{ fontSize: 12 }} />
-          <Bar dataKey="cpc" name="Taxa de contato %" fill={CPC_COLOR} barSize={32} radius={[4, 4, 0, 0]} isAnimationActive={false}>
+          <Bar dataKey="cpc" name="Taxa de CPC %" fill={CPC_COLOR} barSize={32} radius={[4, 4, 0, 0]} isAnimationActive={false}>
             <LabelList
               dataKey="cpc"
               position="top"
@@ -118,7 +118,7 @@ export function HandoffEficienciaGroupedBar({
         </BarChart>
       </ResponsiveContainer>
       <p className="mt-2 text-xs font-medium text-slate-600 tabular-nums">
-        Média taxa de contato: {fmtPct(summary.cpcAvg)} · Média Conv.: {fmtPct(summary.conversaoAvg)}
+        Média taxa de CPC: {fmtPct(summary.cpcAvg)} · Média Conv.: {fmtPct(summary.conversaoAvg)}
       </p>
     </ChartShell>
   );

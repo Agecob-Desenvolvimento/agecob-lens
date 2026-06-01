@@ -34,10 +34,10 @@ function row(
 }
 
 const rows: ProdutividadeRowWithSource[] = [
-  row({ NOME: "A", source: "COBwebRCBAUTOS", qtd_acionamentos: 20, qtd_contatos: 10, qtd_acordos: 4 }),
-  row({ NOME: "B", source: "COBwebRCBAUTOS", qtd_acionamentos: 5, qtd_contatos: 5, qtd_acordos: 2 }),
-  row({ NOME: "C", source: "COBwebRCBCONSUMER", qtd_acionamentos: 50, qtd_contatos: 40, qtd_acordos: 10 }),
-  row({ NOME: "D", source: "COBwebRCBCONSUMER", qtd_acionamentos: 0, qtd_contatos: 0, qtd_acordos: 0 }),
+  row({ NOME: "A", source: "COBwebRCBAUTOS", qtd_acionamentos: 20, qtd_alo: 20, qtd_contatos: 10, qtd_acordos: 4 }),
+  row({ NOME: "B", source: "COBwebRCBAUTOS", qtd_acionamentos: 5, qtd_alo: 5, qtd_contatos: 5, qtd_acordos: 2 }),
+  row({ NOME: "C", source: "COBwebRCBCONSUMER", qtd_acionamentos: 50, qtd_alo: 50, qtd_contatos: 40, qtd_acordos: 10 }),
+  row({ NOME: "D", source: "COBwebRCBCONSUMER", qtd_acionamentos: 0, qtd_alo: 0, qtd_contatos: 0, qtd_acordos: 0 }),
 ];
 
 describe("filterByBu", () => {
@@ -78,7 +78,7 @@ describe("selectTopByCpc", () => {
     expect(out[0].label).toBe("C");
     expect(out[0].primaryValue).toBeCloseTo(80, 5);
     expect(out[0].primaryUnit).toBe("%");
-    expect(out[0].secondaryValue).toBeCloseTo(20, 5);
+    expect(out[0].secondaryValue).toBeCloseTo(25, 5);
     expect(out[0].secondaryUnit).toBe("%");
     expect(out[0].rank).toBe(1);
     expect(out[1].label).toBe("A");

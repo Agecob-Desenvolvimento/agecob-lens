@@ -44,6 +44,9 @@ export interface AnaliseViewModel {
   kpiConversao: number;
   kpiTicket: number;
   kpiAcionamentos: number;
+  /** Contato = Alô (alguém atendeu, ALO=1) */
+  kpiAlo: number;
+  /** CPC = contato com pessoa certa (RPC) = qtd_contatos */
   kpiContatos: number;
   kpiAcordos: number;
   /** Charts */
@@ -100,6 +103,7 @@ export function useAnaliseViewModel(): AnaliseViewModel {
     kpiConversao,
     kpiTicket,
     kpiAcionamentos: totals.qtd_acionamentos,
+    kpiAlo: totals.qtd_alo,
     kpiContatos: totals.qtd_contatos,
     kpiAcordos: totals.qtd_acordos,
     buValueData,

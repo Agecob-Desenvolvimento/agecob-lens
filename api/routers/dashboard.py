@@ -815,7 +815,7 @@ def get_benchmarks(
             if v is not None and not (isinstance(v, float) and np.isnan(v))
         ])
         if arr.size == 0:
-            return {"q1": None, "median": None, "q3": None, "top10_mean": None}
+            return {"q1": None, "median": None, "q3": None, "top10_mean": None, "mean": None}
         n_top10 = max(1, arr.size // 10)
         top10 = np.sort(arr)[-n_top10:]
         return {
@@ -823,6 +823,7 @@ def get_benchmarks(
             "median": round(float(np.percentile(arr, 50)), 2),
             "q3": round(float(np.percentile(arr, 75)), 2),
             "top10_mean": round(float(np.mean(top10)), 2),
+            "mean": round(float(np.mean(arr)), 2),
         }
 
     data = {

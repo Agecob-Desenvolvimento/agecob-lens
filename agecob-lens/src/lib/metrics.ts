@@ -8,6 +8,7 @@ import type { MetricUnit } from "@/types/executive";
 
 export interface MetricTotals {
   qtd_acionamentos: number;
+  qtd_alo: number;
   qtd_contatos: number;
   qtd_acordos: number;
   qtd_excecoes: number;
@@ -15,6 +16,11 @@ export interface MetricTotals {
   valor_primeira_parcela: number;
   valor_excecoes: number;
   valor_primeira_parcela_excecoes: number;
+  qtd_rejeitados: number;
+  valor_rejeitados: number;
+  horas_trabalhadas: number;
+  /** Σ(idade_media_acordos × qtd_acordos) — divide por qtd_acordos para a média ponderada */
+  idade_ponderada: number;
   agentes: number;
 }
 
@@ -22,6 +28,7 @@ export function aggregateTotals(rows: ProdutividadeRowWithSource[]): MetricTotal
   return rows.reduce<MetricTotals>(
     (acc, row) => {
       acc.qtd_acionamentos += Number(row.qtd_acionamentos || 0);
+      acc.qtd_alo += Number(row.qtd_alo || 0);
       acc.qtd_contatos += Number(row.qtd_contatos || 0);
       acc.qtd_acordos += Number(row.qtd_acordos || 0);
       acc.qtd_excecoes += Number(row.qtd_excecoes || 0);
@@ -29,10 +36,15 @@ export function aggregateTotals(rows: ProdutividadeRowWithSource[]): MetricTotal
       acc.valor_primeira_parcela += Number(row.valor_primeira_parcela || 0);
       acc.valor_excecoes += Number(row.valor_excecoes || 0);
       acc.valor_primeira_parcela_excecoes += Number(row.valor_primeira_parcela_excecoes || 0);
+      acc.qtd_rejeitados += Number(row.qtd_rejeitados || 0);
+      acc.valor_rejeitados += Number(row.valor_rejeitados || 0);
+      acc.horas_trabalhadas += Number(row.horas_trabalhadas || 0);
+      acc.idade_ponderada += Number(row.idade_media_acordos || 0) * Number(row.qtd_acordos || 0);
       return acc;
     },
     {
       qtd_acionamentos: 0,
+      qtd_alo: 0,
       qtd_contatos: 0,
       qtd_acordos: 0,
       qtd_excecoes: 0,
@@ -40,15 +52,37 @@ export function aggregateTotals(rows: ProdutividadeRowWithSource[]): MetricTotal
       valor_primeira_parcela: 0,
       valor_excecoes: 0,
       valor_primeira_parcela_excecoes: 0,
+      qtd_rejeitados: 0,
+      valor_rejeitados: 0,
+      horas_trabalhadas: 0,
+      idade_ponderada: 0,
       agentes: rows.length,
     },
   );
 }
 
-/** CPC = qtd_contatos / qtd_acionamentos */
-export function calcCpc(t: Pick<MetricTotals, "qtd_contatos" | "qtd_acionamentos">): number {
+/** Receita por hora trabalhada = valor_acordos / horas_trabalhadas (proxy janela intradiária) */
+export function calcReceitaPorHora(t: Pick<MetricTotals, "valor_acordos" | "horas_trabalhadas">): number {
+  if (t.horas_trabalhadas <= 0) return 0;
+  return t.valor_acordos / t.horas_trabalhadas;
+}
+
+/** Idade média dos acordos (dias de atraso do título) = Σ(idade × qtd) / Σ qtd */
+export function calcIdadeMediaAcordos(t: Pick<MetricTotals, "idade_ponderada" | "qtd_acordos">): number {
+  if (t.qtd_acordos <= 0) return 0;
+  return t.idade_ponderada / t.qtd_acordos;
+}
+
+/** Taxa de CPC = qtd_contatos (RPC) / qtd_alo (alguém atendeu) */
+export function calcCpc(t: Pick<MetricTotals, "qtd_contatos" | "qtd_alo">): number {
+  if (!t.qtd_alo || t.qtd_alo <= 0) return 0;
+  return (t.qtd_contatos * 100) / t.qtd_alo;
+}
+
+/** Taxa de contato = qtd_alo / qtd_acionamentos */
+export function calcTaxaContato(t: Pick<MetricTotals, "qtd_alo" | "qtd_acionamentos">): number {
   if (t.qtd_acionamentos <= 0) return 0;
-  return (t.qtd_contatos * 100) / t.qtd_acionamentos;
+  return ((t.qtd_alo ?? 0) * 100) / t.qtd_acionamentos;
 }
 
 /** Conversão = qtd_acordos / qtd_contatos (sobre quem o agente realmente conversou) */

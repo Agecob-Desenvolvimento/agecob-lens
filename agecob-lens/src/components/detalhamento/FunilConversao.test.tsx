@@ -4,17 +4,18 @@ import { FunilConversao } from "./FunilConversao";
 import { MOCK_FUNIL } from "./diagnosticoMocks";
 
 describe("FunilConversao", () => {
-  it("renders the 4 funnel stages", () => {
+  it("renders the 5 funnel stages", () => {
     render(<FunilConversao data={MOCK_FUNIL} />);
     expect(screen.getByTestId("funil-step-Acionamentos")).toBeInTheDocument();
-    expect(screen.getByTestId("funil-step-Contatos")).toBeInTheDocument();
+    expect(screen.getByTestId("funil-step-Contato")).toBeInTheDocument();
+    expect(screen.getByTestId("funil-step-CPC")).toBeInTheDocument();
     expect(screen.getByTestId("funil-step-Acordos")).toBeInTheDocument();
     expect(screen.getByTestId("funil-step-1ª Parcela")).toBeInTheDocument();
   });
 
-  it("shows contact-rate percentage on the Contatos stage", () => {
+  it("shows CPC-rate percentage on the CPC stage", () => {
     render(<FunilConversao data={MOCK_FUNIL} />);
-    // taxa de contato = 13939 / 31967 = 43.6%
-    expect(screen.getByText(/Taxa contato: 43,6%|Taxa contato: 43\.6%/)).toBeInTheDocument();
+    // taxa CPC = contatos(RPC) / alo = 13939 / 20000 = 69.7%
+    expect(screen.getByText(/Taxa CPC: 69,7%|Taxa CPC: 69\.7%/)).toBeInTheDocument();
   });
 });

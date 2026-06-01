@@ -18,6 +18,8 @@ import {
   calcConversao,
   calcTicketMedio,
   calcExcecoesPctValor,
+  calcReceitaPorHora,
+  calcIdadeMediaAcordos,
 } from "@/lib/metrics";
 import type { ProdutividadeRowWithSource } from "@/hooks/useProdutividadeData";
 import type { KpiDatum } from "@/components/detalhamento/DetalhamentoKpiStrip";
@@ -86,7 +88,7 @@ function rowsToHeatmap(rows: ProdutividadeRowWithSource[]): AgentRow[] {
     nome: r.NOME,
     mat: r.CHAVE,
     acionamentos: r.qtd_acionamentos,
-    cpc: calcCpc({ qtd_contatos: r.qtd_contatos, qtd_acionamentos: r.qtd_acionamentos }),
+    alo: r.qtd_alo,
     conversao: calcConversao({ qtd_acordos: r.qtd_acordos, qtd_contatos: r.qtd_contatos }),
     valorAcordos: Number(r.valor_acordos || 0),
     contatos: r.qtd_contatos,
@@ -95,9 +97,9 @@ function rowsToHeatmap(rows: ProdutividadeRowWithSource[]): AgentRow[] {
     qtdExcecoes: r.qtd_excecoes,
     valorExcecoes: Number(r.valor_excecoes || 0),
     excPrimeiraParcela: Number(r.valor_primeira_parcela_excecoes || 0),
-    qtdRejeitados: 0,
-    valorRejeitados: 0,
-    rejPrimeiraParcela: 0,
+    qtdRejeitados: r.qtd_rejeitados,
+    valorRejeitados: Number(r.valor_rejeitados || 0),
+    rejPrimeiraParcela: 0, // backend ainda não computa 1ª parcela de rejeitados
   }));
 }
 
@@ -105,7 +107,7 @@ function rowsToScatter(rows: ProdutividadeRowWithSource[]): ScatterPoint[] {
   return rows.map((r) => {
     const acionamentos = r.qtd_acionamentos;
     const contatos = r.qtd_contatos;
-    const cpc = calcCpc({ qtd_contatos: contatos, qtd_acionamentos: acionamentos });
+    const cpc = calcCpc({ qtd_contatos: contatos, qtd_alo: r.qtd_alo });
     const conv = calcConversao({ qtd_acordos: r.qtd_acordos, qtd_contatos: contatos });
     const eficiencia = Math.sqrt(cpc * conv) / 100;
     const excecoesPct = Number(r.valor_excecoes && r.valor_acordos ? (r.valor_excecoes * 100) / r.valor_acordos : 0);
@@ -124,7 +126,7 @@ function rowsToScatter(rows: ProdutividadeRowWithSource[]): ScatterPoint[] {
 function rowsToRanking(rows: ProdutividadeRowWithSource[]): RankingEntry[] {
   return [...rows]
     .map((r) => {
-      const cpc = calcCpc({ qtd_contatos: r.qtd_contatos, qtd_acionamentos: r.qtd_acionamentos });
+      const cpc = calcCpc({ qtd_contatos: r.qtd_contatos, qtd_alo: r.qtd_alo });
       const conv = calcConversao({ qtd_acordos: r.qtd_acordos, qtd_contatos: r.qtd_contatos });
       return {
         id: r.CHAVE, nome: r.NOME, mat: r.CHAVE,
@@ -156,7 +158,7 @@ function buildRadarData(
   const agentValor = (r: ProdutividadeRowWithSource) => Number(r.valor_acordos || 0);
   const agentQtd = (r: ProdutividadeRowWithSource) => r.qtd_acordos;
   const agentCpc = (r: ProdutividadeRowWithSource) =>
-    calcCpc({ qtd_contatos: r.qtd_contatos, qtd_acionamentos: r.qtd_acionamentos });
+    calcCpc({ qtd_contatos: r.qtd_contatos, qtd_alo: r.qtd_alo });
   const agentConv = (r: ProdutividadeRowWithSource) =>
     calcConversao({ qtd_acordos: r.qtd_acordos, qtd_contatos: r.qtd_contatos });
   const agentTicket = (r: ProdutividadeRowWithSource) =>
@@ -179,10 +181,22 @@ function buildRadarData(
   return [
     { dim: "Receita", agent: norm(agentTotals.valor_acordos / agentCnt, maxValor), team: norm(teamAvgValor, maxValor), rawAgent: agentTotals.valor_acordos / agentCnt, rawTeam: teamAvgValor, unit: "BRL" },
     { dim: "Acordos Fechados", agent: norm(agentTotals.qtd_acordos / agentCnt, maxQtd), team: norm(teamAvgQtd, maxQtd), rawAgent: agentTotals.qtd_acordos / agentCnt, rawTeam: teamAvgQtd, unit: "count" },
-    { dim: "Taxa contato", agent: norm(calcCpc(agentTotals), maxCpc), team: norm(teamAvgCpc, maxCpc), rawAgent: calcCpc(agentTotals), rawTeam: teamAvgCpc, unit: "%" },
+    { dim: "CPC", agent: norm(calcCpc(agentTotals), maxCpc), team: norm(teamAvgCpc, maxCpc), rawAgent: calcCpc(agentTotals), rawTeam: teamAvgCpc, unit: "%" },
     { dim: "Conversão", agent: norm(calcConversao(agentTotals), maxConv), team: norm(teamAvgConv, maxConv), rawAgent: calcConversao(agentTotals), rawTeam: teamAvgConv, unit: "%" },
     { dim: "Ticket Médio", agent: norm(calcTicketMedio(agentTotals), maxTicket), team: norm(teamAvgTicket, maxTicket), rawAgent: calcTicketMedio(agentTotals), rawTeam: teamAvgTicket, unit: "BRL" },
   ];
+}
+
+/**
+ * Team-wide radar profile (filter = "Todos"). Reuses buildRadarData's team
+ * series (per-agent average vs best agent per dim) as the visible polygon.
+ */
+function buildTeamRadar(rows: ProdutividadeRowWithSource[]): RadarDimension[] {
+  return buildRadarData(rows, []).map((d) => ({
+    ...d,
+    agent: d.team,
+    rawAgent: d.rawTeam,
+  }));
 }
 
 /**
@@ -220,7 +234,7 @@ function buildInsight(
 
   // Compute percentiles for key metrics across all agents
   const allValor = rows.map((r) => Number(r.valor_acordos || 0)).sort((a, b) => a - b);
-  const allCpc = rows.map((r) => calcCpc({ qtd_contatos: r.qtd_contatos, qtd_acionamentos: r.qtd_acionamentos })).sort((a, b) => a - b);
+  const allCpc = rows.map((r) => calcCpc({ qtd_contatos: r.qtd_contatos, qtd_alo: r.qtd_alo })).sort((a, b) => a - b);
   const allConv = rows.map((r) => calcConversao({ qtd_acordos: r.qtd_acordos, qtd_contatos: r.qtd_contatos })).sort((a, b) => a - b);
   const allExc = rows.map((r) => Number(r.valor_excecoes && r.valor_acordos ? (r.valor_excecoes * 100) / r.valor_acordos : 0)).sort((a, b) => a - b);
 
@@ -249,7 +263,7 @@ function buildInsight(
   // Build ranking to find agent position
   const allRanked = [...rows]
     .map((r) => {
-      const cpc = calcCpc({ qtd_contatos: r.qtd_contatos, qtd_acionamentos: r.qtd_acionamentos });
+      const cpc = calcCpc({ qtd_contatos: r.qtd_contatos, qtd_alo: r.qtd_alo });
       const conv = calcConversao({ qtd_acordos: r.qtd_acordos, qtd_contatos: r.qtd_contatos });
       const score = Math.round((1 - Math.min(cpc / 100, 1)) * 50 + (1 - Math.min(conv / 100, 1) / 3) * 35);
       return { id: r.CHAVE, score };
@@ -363,7 +377,9 @@ export function useDetalhamentoViewModel(): DetalhamentoViewModel {
       primeira_parcela: deltaFrac(agentTotals.valor_primeira_parcela, prevAgentTotals.valor_primeira_parcela),
       qtd_acordos: deltaFrac(agentTotals.qtd_acordos, prevAgentTotals.qtd_acordos),
       ticket_medio: deltaFrac(calcTicketMedio(agentTotals), calcTicketMedio(prevAgentTotals)),
-      cpc: deltaFrac(calcCpc(agentTotals), calcCpc(prevAgentTotals)),
+      contato_alo: deltaFrac(agentTotals.qtd_alo, prevAgentTotals.qtd_alo),
+      cpc: deltaFrac(agentTotals.qtd_contatos, prevAgentTotals.qtd_contatos),
+      taxa_cpc: deltaFrac(calcCpc(agentTotals), calcCpc(prevAgentTotals)),
       conversao: deltaFrac(calcConversao(agentTotals), calcConversao(prevAgentTotals)),
       qtd_acionamentos: deltaFrac(agentTotals.qtd_acionamentos, prevAgentTotals.qtd_acionamentos),
     };
@@ -378,15 +394,22 @@ export function useDetalhamentoViewModel(): DetalhamentoViewModel {
   ], [agentTotals]);
 
   const kpiSecondary: KpiDatum[] = useMemo(() => [
-    { id: "cpc", label: "CPC", value: calcCpc(agentTotals), unit: "%" },
+    { id: "contato_alo", label: "Contato", value: agentTotals.qtd_alo, unit: "count" },
+    { id: "cpc", label: "CPC", value: agentTotals.qtd_contatos, unit: "count" },
+    { id: "taxa_cpc", label: "Taxa CPC %", value: calcCpc(agentTotals), unit: "%" },
     { id: "conversao", label: "Conversão %", value: calcConversao(agentTotals), unit: "%" },
     { id: "qtd_acionamentos", label: "Qtd Acionamentos", value: agentTotals.qtd_acionamentos, unit: "count" },
-    { id: "qtd_excecoes", label: "Qtd Exceções", value: 0, unit: "count" },
-    { id: "excecoes_valor", label: "Exceções % (Valor)", value: calcExcecoesPctValor(agentTotals), unit: "%" },
+    { id: "qtd_excecoes", label: "Qtd Exceções", value: agentTotals.qtd_excecoes, unit: "count" },
+    { id: "valor_excecoes", label: "Valor Exceções", value: agentTotals.valor_excecoes, unit: "BRL" },
+    { id: "qtd_rejeitados", label: "Qtd Rejeitados", value: agentTotals.qtd_rejeitados, unit: "count" },
+    { id: "valor_rejeitados", label: "Valor Rejeitados", value: agentTotals.valor_rejeitados, unit: "BRL" },
+    { id: "receita_hora", label: "Receita/Hora", value: calcReceitaPorHora(agentTotals), unit: "BRL" },
+    { id: "idade_media", label: "Idade Média (dias)", value: calcIdadeMediaAcordos(agentTotals), unit: "count" },
   ], [agentTotals]);
 
   const funil: FunilData = useMemo(() => ({
     acionamentos: agentTotals.qtd_acionamentos,
+    alo: agentTotals.qtd_alo,
     contatos: agentTotals.qtd_contatos,
     acordos: agentTotals.qtd_acordos,
     primeiraParcela: agentTotals.valor_primeira_parcela,
@@ -395,8 +418,8 @@ export function useDetalhamentoViewModel(): DetalhamentoViewModel {
 
   const teamTotals = useMemo(() => aggregateTotals(rows), [rows]);
   const metas: BulletPanelData = useMemo(() => ({
-    cpc: { value: calcCpc(agentTotals), meta: Math.max(calcCpc(teamTotals) * 0.9, 10), ranges: { poor: 30, ok: 55, good: 80 }, unit: "%" },
-    conversao: { value: calcConversao(agentTotals), meta: Math.max(calcConversao(teamTotals) * 1.1, 1), ranges: { poor: 1.5, ok: 2.5, good: 4 }, unit: "%" },
+    cpc: { value: calcCpc(agentTotals), meta: Math.max(calcCpc(teamTotals) * 0.9, 8), ranges: { poor: 5, ok: 10, good: 15 }, unit: "%" },
+    conversao: { value: calcConversao(agentTotals), meta: Math.max(calcConversao(teamTotals) * 1.1, 5), ranges: { poor: 4, ok: 7, good: 11 }, unit: "%" },
     primeiraParcela: { value: agentTotals.valor_primeira_parcela, meta: Math.max((teamTotals.valor_primeira_parcela / (rows.length || 1)) * 1.05, 500), ranges: { poor: 2000, ok: 5000, good: 8000 }, unit: "BRL" },
     excecoes: { value: calcExcecoesPctValor(agentTotals), meta: 3.0, ranges: { poor: 6, ok: 8.5, good: 10 }, unit: "%", inverted: true },
   }), [agentTotals, teamTotals]);
@@ -406,10 +429,11 @@ export function useDetalhamentoViewModel(): DetalhamentoViewModel {
   const rankingEntries = useMemo(() => rowsToRanking(rows), [rows]);
   const paretoPoints = useMemo(() => rowsToPareto(rows), [rows]);
 
-  const radarData = useMemo(
-    () => buildRadarData(rows, selectedAgent ? rows.filter((r) => r.NOME === selectedAgent) : []),
-    [rows, selectedAgent],
-  );
+  const radarData = useMemo(() => {
+    if (rows.length === 0) return [];
+    if (selectedAgent) return buildRadarData(rows, rows.filter((r) => r.NOME === selectedAgent));
+    return buildTeamRadar(rows);
+  }, [rows, selectedAgent]);
 
   // ── Valor comparison (was MediaDinamica, now feeds insight card) ──
   const valorComparison = useMemo(() => {
