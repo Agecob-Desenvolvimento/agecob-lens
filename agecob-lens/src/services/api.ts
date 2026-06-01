@@ -248,6 +248,12 @@ export interface PrimeiraParcelaDiaRow {
   total_acordos: number;
 }
 
+export interface RejeitadosTotaisRow {
+  valor_total: number;
+  valor_primeira_parcela: number;
+  qtd_rejeitados: number;
+}
+
 export interface ExcecoesPorPortfolioRow {
   portfolio_name: string;
   qtd_excecoes: number;
@@ -258,6 +264,13 @@ export interface ExcecoesPorAgenteRow {
   agente: string;
   qtd_excecoes: number;
   valor_excecoes: number;
+}
+
+export interface RejeitadosPorAgenteRow {
+  agente: string;
+  qtd_rejeitados: number;
+  valor_rejeitados: number;
+  valor_primeira_parcela_rejeitados: number;
 }
 
 export interface AcordosPorPortfolioRow {
@@ -370,6 +383,18 @@ export async function fetchPrimeiraParcelaDia(
   return request<ApiEnvelope<PrimeiraParcelaDiaRow>>(`/dashboard/primeira-parcela-dia/${db}${suffix}`);
 }
 
+export async function fetchRejeitadosTotais(
+  db: DatabaseOption,
+  dateFrom?: string,
+  dateTo?: string,
+): Promise<ApiEnvelope<RejeitadosTotaisRow>> {
+  const query = new URLSearchParams();
+  if (dateFrom) query.set("dateFrom", dateFrom);
+  if (dateTo) query.set("dateTo", dateTo);
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<ApiEnvelope<RejeitadosTotaisRow>>(`/dashboard/rejeitados-totais/${db}${suffix}`);
+}
+
 export async function fetchExcecoesPorPortfolio(
   db: DatabaseOption,
   dateFrom?: string,
@@ -392,6 +417,18 @@ export async function fetchExcecoesPorAgente(
   if (dateTo) query.set("dateTo", dateTo);
   const suffix = query.toString() ? `?${query.toString()}` : "";
   return request<ApiEnvelope<ExcecoesPorAgenteRow>>(`/dashboard/excecoes-por-agente/${db}${suffix}`);
+}
+
+export async function fetchRejeitadosPorAgente(
+  db: DatabaseOption,
+  dateFrom?: string,
+  dateTo?: string,
+): Promise<ApiEnvelope<RejeitadosPorAgenteRow>> {
+  const query = new URLSearchParams();
+  if (dateFrom) query.set("dateFrom", dateFrom);
+  if (dateTo) query.set("dateTo", dateTo);
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<ApiEnvelope<RejeitadosPorAgenteRow>>(`/dashboard/rejeitados-por-agente/${db}${suffix}`);
 }
 
 export async function fetchAcordosPorPortfolio(
