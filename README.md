@@ -210,6 +210,8 @@ O `atualizar.bat` já força `--workers 4` via `nssm set` antes de reiniciar.
 | Exceções (`ID_REC_STATUS`) | `IN (5)` — enum chama de PENDENTE; negócio chama de "Exceção" |
 | Rejeitados (`ID_REC_STATUS`) | `IN (7)` (REJEITADO — supervisor/banco negou) |
 | Boletos quebrados (`ID_REC_STATUS`) | `IN (2)` |
+| Boleto pago no prazo | `VR_PAGO > 0 AND DT_PAGAMENTO <= DATEADD(DAY, 5, DT_VENCIMENTO)` |
+| Conversão | `Σ boletos_pagos_no_prazo / Σ boletos_vencidos × 100` (vencido = `DT_VENCIMENTO < hoje`, acordo aprovado) |
 | Pré-filtro CTE | `IN (1, 3, 5, 12)` |
 | Portfólio | `DIV_AUX.CAMPO010` |
 | Filtro de data | `DT_EMISSAO >= @Hoje AND DT_EMISSAO < @Amanha` |

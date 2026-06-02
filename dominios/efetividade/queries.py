@@ -3,11 +3,7 @@ from typing import Any, Optional, Tuple
 
 import config.settings as settings
 
-_EF_PAID = (
-    "CASE WHEN VR_PAGO > 0 "
-    "AND DT_PAGAMENTO <= DATEADD(DAY, 5, DT_VENCIMENTO) "
-    "THEN 1 ELSE 0 END"
-)
+_EF_PAID = settings.BOLETO_PAGO_PRAZO_SQL
 _EF_CONV = (
     f"CAST(FLOOR(100.0 * SUM({_EF_PAID}) / NULLIF(COUNT(*), 0) + 0.5) AS INT)"
 )
@@ -193,7 +189,7 @@ def _build_ef_resumo_sql(
 
     def _inner(database: str) -> str:
         return (
-            f"    SELECT R.VALOR, R.VR_PAGO, R.DT_PAGAMENTO, R.DT_VENCIMENTO\n"
+            f"    SELECT R.NR_RECEBIMENTO, R.VALOR, R.VR_PAGO, R.DT_PAGAMENTO, R.DT_VENCIMENTO\n"
             f"    FROM {database}.dbo.REC_MASTER (NOLOCK) R\n"
             f"    INNER JOIN {database}.dbo.USU_MASTER (NOLOCK) U ON R.ID_USUARIO = U.ID_USUARIO\n"
             f"    WHERE R.DT_VENCIMENTO >= CONVERT(DATE, '{date_from_lit}', 112)\n"
@@ -212,6 +208,7 @@ def _build_ef_resumo_sql(
     kpi_sql = f"""
 SELECT
     COUNT(*) AS generated,
+    COUNT(DISTINCT NR_RECEBIMENTO) AS total_acordos,
     SUM({pago_expr}) AS paid_on_time,
     CAST(100.0 * SUM({pago_expr}) / NULLIF(COUNT(*), 0) AS DECIMAL(8, 2)) AS conversion_pct,
     COALESCE(SUM(VALOR), 0) AS amount_maturing,
@@ -248,3 +245,65 @@ def _build_ef_resumo_params(
         return None
     per_db: Tuple[Any, ...] = (id_portfolio,)
     return per_db + per_db if db == "todos" else per_db
+
+
+def _build_ef_curva_quebra_query(db: str, date_from_lit: str, date_to_lit: str) -> str:
+    """Curva de quebra por idade do boleto.
+
+    Classifica cada boleto pela idade atual (dias desde o vencimento até hoje) e,
+    por faixa, calcula o percentual já quebrado. Não usa DT_QUEBRA (data de
+    registro de quebra), que concentrava artificialmente quebras nos dias 9-11
+    por processo batch do COBweb.
+
+    - total   = boletos da faixa (todos, por idade)
+    - quebrados = boletos da faixa com ID_REC_STATUS = 2
+    - taxa    = quebrados / total
+    """
+    def _one(database: str) -> str:
+        return f"""
+    SELECT
+        R.ID_REC_STATUS,
+        DATEDIFF(DAY, R.DT_VENCIMENTO, GETDATE()) AS dias_desde_vencimento
+    FROM {database}.dbo.REC_MASTER R (NOLOCK)
+    WHERE R.PARCELA = 0
+      AND R.DT_VENCIMENTO >= CONVERT(DATE, '{date_from_lit}', 112)
+      AND R.DT_VENCIMENTO <= CONVERT(DATE, '{date_to_lit}', 112)
+      AND R.ID_REC_STATUS IN (1, 3, 12, 2)
+"""
+
+    inner = (
+        f"{_one(_EF_DB_A)}\n    UNION ALL\n{_one(_EF_DB_C)}"
+        if db == "todos"
+        else _one(db)
+    )
+
+    return f"""
+SELECT
+    faixa,
+    COUNT(*)                                                            AS total,
+    SUM(CASE WHEN ID_REC_STATUS = 2 THEN 1 ELSE 0 END)                  AS quebrados,
+    CAST(100.0 * SUM(CASE WHEN ID_REC_STATUS = 2 THEN 1 ELSE 0 END)
+         / NULLIF(COUNT(*), 0) AS DECIMAL(5,1))                         AS taxa_quebra
+FROM (
+    SELECT
+        ID_REC_STATUS,
+        CASE
+            WHEN dias_desde_vencimento BETWEEN 0  AND 5  THEN '0-5 dias'
+            WHEN dias_desde_vencimento BETWEEN 6  AND 15 THEN '6-15 dias'
+            WHEN dias_desde_vencimento BETWEEN 16 AND 30 THEN '16-30 dias'
+            WHEN dias_desde_vencimento BETWEEN 31 AND 60 THEN '31-60 dias'
+            WHEN dias_desde_vencimento >= 61             THEN '60+ dias'
+        END AS faixa,
+        CASE
+            WHEN dias_desde_vencimento BETWEEN 0  AND 5  THEN 0
+            WHEN dias_desde_vencimento BETWEEN 6  AND 15 THEN 1
+            WHEN dias_desde_vencimento BETWEEN 16 AND 30 THEN 2
+            WHEN dias_desde_vencimento BETWEEN 31 AND 60 THEN 3
+            WHEN dias_desde_vencimento >= 61             THEN 4
+        END AS ord
+    FROM ({inner}) AS B
+) AS T
+WHERE faixa IS NOT NULL
+GROUP BY faixa, ord
+ORDER BY ord
+"""

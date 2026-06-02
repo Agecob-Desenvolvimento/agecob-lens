@@ -55,6 +55,8 @@ export interface DetalhamentoViewModel {
   agentList: string[];
   selectedAgent: string | null;
   setSelectedAgent: (v: string | null) => void;
+  selectedPortfolio: string | null;
+  setSelectedPortfolio: (id: string | null) => void;
   kpiPrimary: KpiDatum[];
   kpiSecondary: KpiDatum[];
   funil: FunilData;
@@ -64,6 +66,8 @@ export interface DetalhamentoViewModel {
   rankingEntries: RankingEntry[];
   paretoPoints: Array<{ nome: string; valor: number }>;
   radarData: RadarDimension[];
+  /** True when a portfolio filter is active (affects funil, metas, radarData) */
+  portfolioActive: boolean;
   insight: AgentInsight;
   /** The valor_acordos comparison data (was MediaDinamica, now feeds insight) */
   valorComparison: { agentValor: number; teamMedia: number; teamMax: number; agentCount: number };
@@ -89,7 +93,7 @@ function rowsToHeatmap(rows: ProdutividadeRowWithSource[]): AgentRow[] {
     mat: r.CHAVE,
     acionamentos: r.qtd_acionamentos,
     alo: r.qtd_alo,
-    conversao: calcConversao({ qtd_acordos: r.qtd_acordos, qtd_contatos: r.qtd_contatos }),
+    conversao: calcConversao({ qtd_boletos_pagos: r.qtd_boletos_pagos, qtd_boletos_emitidos: r.qtd_boletos_emitidos }),
     valorAcordos: Number(r.valor_acordos || 0),
     contatos: r.qtd_contatos,
     qtdAcordos: r.qtd_acordos,
@@ -108,7 +112,7 @@ function rowsToScatter(rows: ProdutividadeRowWithSource[]): ScatterPoint[] {
     const acionamentos = r.qtd_acionamentos;
     const contatos = r.qtd_contatos;
     const cpc = calcCpc({ qtd_contatos: contatos, qtd_alo: r.qtd_alo });
-    const conv = calcConversao({ qtd_acordos: r.qtd_acordos, qtd_contatos: contatos });
+    const conv = calcConversao({ qtd_boletos_pagos: r.qtd_boletos_pagos, qtd_boletos_emitidos: r.qtd_boletos_emitidos });
     const eficiencia = Math.sqrt(cpc * conv) / 100;
     const excecoesPct = Number(r.valor_excecoes && r.valor_acordos ? (r.valor_excecoes * 100) / r.valor_acordos : 0);
     return {
@@ -127,7 +131,7 @@ function rowsToRanking(rows: ProdutividadeRowWithSource[]): RankingEntry[] {
   return [...rows]
     .map((r) => {
       const cpc = calcCpc({ qtd_contatos: r.qtd_contatos, qtd_alo: r.qtd_alo });
-      const conv = calcConversao({ qtd_acordos: r.qtd_acordos, qtd_contatos: r.qtd_contatos });
+      const conv = calcConversao({ qtd_boletos_pagos: r.qtd_boletos_pagos, qtd_boletos_emitidos: r.qtd_boletos_emitidos });
       return {
         id: r.CHAVE, nome: r.NOME, mat: r.CHAVE,
         cpc, conversao: conv, reprov: 0, acordos: r.qtd_acordos, trend7d: [],
@@ -160,7 +164,7 @@ function buildRadarData(
   const agentCpc = (r: ProdutividadeRowWithSource) =>
     calcCpc({ qtd_contatos: r.qtd_contatos, qtd_alo: r.qtd_alo });
   const agentConv = (r: ProdutividadeRowWithSource) =>
-    calcConversao({ qtd_acordos: r.qtd_acordos, qtd_contatos: r.qtd_contatos });
+    calcConversao({ qtd_boletos_pagos: r.qtd_boletos_pagos, qtd_boletos_emitidos: r.qtd_boletos_emitidos });
   const agentTicket = (r: ProdutividadeRowWithSource) =>
     calcTicketMedio({ valor_acordos: Number(r.valor_acordos || 0), qtd_acordos: r.qtd_acordos });
 
@@ -235,7 +239,7 @@ function buildInsight(
   // Compute percentiles for key metrics across all agents
   const allValor = rows.map((r) => Number(r.valor_acordos || 0)).sort((a, b) => a - b);
   const allCpc = rows.map((r) => calcCpc({ qtd_contatos: r.qtd_contatos, qtd_alo: r.qtd_alo })).sort((a, b) => a - b);
-  const allConv = rows.map((r) => calcConversao({ qtd_acordos: r.qtd_acordos, qtd_contatos: r.qtd_contatos })).sort((a, b) => a - b);
+  const allConv = rows.map((r) => calcConversao({ qtd_boletos_pagos: r.qtd_boletos_pagos, qtd_boletos_emitidos: r.qtd_boletos_emitidos })).sort((a, b) => a - b);
   const allExc = rows.map((r) => Number(r.valor_excecoes && r.valor_acordos ? (r.valor_excecoes * 100) / r.valor_acordos : 0)).sort((a, b) => a - b);
 
   const pctRank = (sorted: number[], v: number): number => {
@@ -264,7 +268,7 @@ function buildInsight(
   const allRanked = [...rows]
     .map((r) => {
       const cpc = calcCpc({ qtd_contatos: r.qtd_contatos, qtd_alo: r.qtd_alo });
-      const conv = calcConversao({ qtd_acordos: r.qtd_acordos, qtd_contatos: r.qtd_contatos });
+      const conv = calcConversao({ qtd_boletos_pagos: r.qtd_boletos_pagos, qtd_boletos_emitidos: r.qtd_boletos_emitidos });
       const score = Math.round((1 - Math.min(cpc / 100, 1)) * 50 + (1 - Math.min(conv / 100, 1) / 3) * 35);
       return { id: r.CHAVE, score };
     })
@@ -352,6 +356,8 @@ export function useDetalhamentoViewModel(): DetalhamentoViewModel {
   const prevLoading = prevData.loading;
 
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
+  const [selectedPortfolio, setSelectedPortfolio] = useState<string | null>(null);
+  const portfolioActive = selectedPortfolio !== null;
 
   const agentList = useMemo(() => rowsToAgentList(rows), [rows]);
   const totals = useMemo(() => aggregateTotals(rows), [rows]);
@@ -368,6 +374,33 @@ export function useDetalhamentoViewModel(): DetalhamentoViewModel {
     [prevRows, selectedAgent],
   );
   const prevAgentTotals = useMemo(() => aggregateTotals(prevAgentRows), [prevAgentRows]);
+
+  // ── Portfolio-filtered data (secondary fetch; only for funil, radar, metas) ──
+  const portfolioFilters = useMemo(
+    () => ({ dateFrom, dateTo, portfolio: portfolioActive ? selectedPortfolio : undefined }),
+    [portfolioActive, dateFrom, dateTo, selectedPortfolio],
+  );
+  const portfolioData = useProdutividadeData(
+    selectedDatabase,
+    portfolioFilters,
+  );
+  const portfolioRows = portfolioActive ? portfolioData.rows : [];
+
+  const mergedWarnings = useMemo(
+    () => [...warnings, ...portfolioData.warnings],
+    [warnings, portfolioData.warnings],
+  );
+  const mergedError = loadError || portfolioData.error;
+
+  const portfolioAgentRows = useMemo(
+    () => portfolioActive
+      ? (selectedAgent ? portfolioRows.filter((r) => r.NOME === selectedAgent) : portfolioRows)
+      : [],
+    [portfolioActive, portfolioRows, selectedAgent],
+  );
+  const portfolioAgentTotals = useMemo(
+    () => aggregateTotals(portfolioAgentRows), [portfolioAgentRows],
+  );
 
   // ── KPI deltas (Change 4) ──
   const kpiDeltas = useMemo((): Record<string, number> => {
@@ -407,22 +440,30 @@ export function useDetalhamentoViewModel(): DetalhamentoViewModel {
     { id: "idade_media", label: "Idade Média (dias)", value: calcIdadeMediaAcordos(agentTotals), unit: "count" },
   ], [agentTotals]);
 
+  const effectiveTotals = portfolioActive ? portfolioAgentTotals : agentTotals;
   const funil: FunilData = useMemo(() => ({
-    acionamentos: agentTotals.qtd_acionamentos,
-    alo: agentTotals.qtd_alo,
-    contatos: agentTotals.qtd_contatos,
-    acordos: agentTotals.qtd_acordos,
-    primeiraParcela: agentTotals.valor_primeira_parcela,
-    valorAcordos: agentTotals.valor_acordos,
-  }), [agentTotals]);
+    acionamentos: effectiveTotals.qtd_acionamentos,
+    alo: effectiveTotals.qtd_alo,
+    contatos: effectiveTotals.qtd_contatos,
+    acordos: effectiveTotals.qtd_acordos,
+    primeiraParcela: effectiveTotals.valor_primeira_parcela,
+    valorAcordos: effectiveTotals.valor_acordos,
+    primeiraParcelaRecebida: effectiveTotals.valor_primeira_parcela_recebida,
+  }), [effectiveTotals]);
 
   const teamTotals = useMemo(() => aggregateTotals(rows), [rows]);
+  const metaAnchorTotals = portfolioActive && portfolioAgentRows.length > 0
+    ? aggregateTotals(portfolioRows)
+    : teamTotals;
+  const metaAnchorLen = portfolioActive
+    ? (portfolioRows.length || 1)
+    : (rows.length || 1);
   const metas: BulletPanelData = useMemo(() => ({
-    cpc: { value: calcCpc(agentTotals), meta: Math.max(calcCpc(teamTotals) * 0.9, 8), ranges: { poor: 5, ok: 10, good: 15 }, unit: "%" },
-    conversao: { value: calcConversao(agentTotals), meta: Math.max(calcConversao(teamTotals) * 1.1, 5), ranges: { poor: 4, ok: 7, good: 11 }, unit: "%" },
-    primeiraParcela: { value: agentTotals.valor_primeira_parcela, meta: Math.max((teamTotals.valor_primeira_parcela / (rows.length || 1)) * 1.05, 500), ranges: { poor: 2000, ok: 5000, good: 8000 }, unit: "BRL" },
-    excecoes: { value: calcExcecoesPctValor(agentTotals), meta: 3.0, ranges: { poor: 6, ok: 8.5, good: 10 }, unit: "%", inverted: true },
-  }), [agentTotals, teamTotals]);
+    cpc: { value: calcCpc(effectiveTotals), meta: Math.max(calcCpc(metaAnchorTotals) * 0.9, 8), ranges: { poor: 5, ok: 10, good: 15 }, unit: "%" },
+    conversao: { value: calcConversao(effectiveTotals), meta: Math.max(calcConversao(metaAnchorTotals) * 1.1, 5), ranges: { poor: 4, ok: 7, good: 11 }, unit: "%" },
+    primeiraParcela: { value: effectiveTotals.valor_primeira_parcela, meta: Math.max((metaAnchorTotals.valor_primeira_parcela / metaAnchorLen) * 1.05, 500), ranges: { poor: 2000, ok: 5000, good: 8000 }, unit: "BRL" },
+    excecoes: { value: calcExcecoesPctValor(effectiveTotals), meta: 3.0, ranges: { poor: 6, ok: 8.5, good: 10 }, unit: "%", inverted: true },
+  }), [effectiveTotals, metaAnchorTotals, metaAnchorLen]);
 
   const heatmapAgents = useMemo(() => rowsToHeatmap(rows), [rows]);
   const scatterPoints = useMemo(() => rowsToScatter(rows), [rows]);
@@ -430,10 +471,11 @@ export function useDetalhamentoViewModel(): DetalhamentoViewModel {
   const paretoPoints = useMemo(() => rowsToPareto(rows), [rows]);
 
   const radarData = useMemo(() => {
-    if (rows.length === 0) return [];
-    if (selectedAgent) return buildRadarData(rows, rows.filter((r) => r.NOME === selectedAgent));
-    return buildTeamRadar(rows);
-  }, [rows, selectedAgent]);
+    const effectiveRows = portfolioActive ? portfolioRows : rows;
+    if (effectiveRows.length === 0) return [];
+    if (selectedAgent) return buildRadarData(effectiveRows, effectiveRows.filter((r) => r.NOME === selectedAgent));
+    return buildTeamRadar(effectiveRows);
+  }, [rows, portfolioRows, portfolioActive, selectedAgent]);
 
   // ── Valor comparison (was MediaDinamica, now feeds insight card) ──
   const valorComparison = useMemo(() => {
@@ -464,8 +506,9 @@ export function useDetalhamentoViewModel(): DetalhamentoViewModel {
   const loading = (currLoading || prevLoading) && rows.length === 0;
 
   return {
-    loading, error: loadError, warnings, refresh,
+    loading, error: mergedError, warnings: mergedWarnings, refresh,
     agentList, selectedAgent, setSelectedAgent,
+    selectedPortfolio, setSelectedPortfolio, portfolioActive,
     kpiPrimary, kpiSecondary, funil, metas,
     heatmapAgents, scatterPoints, rankingEntries, paretoPoints,
     radarData,

@@ -15,6 +15,7 @@ import {
   fetchEfAgentePrimeira,
   fetchEfAgenteColchao,
   fetchEfAgenteColchaoVencimento,
+  fetchEfCurvaQuebra,
   fetchAcordosPorPortfolio,
   fetchExcecoesPorPortfolio,
   fetchRejeitadosPorPortfolio,
@@ -25,17 +26,21 @@ import {
   type EfAgenteRow,
   type EfAgenteColchaoRow,
   type EfAgenteColchaoVencimentoRow,
+  type EfCurvaQuebraRow,
   type AcordosPorPortfolioRow,
   type ExcecoesPorPortfolioRow,
   type RejeitadosPorPortfolioRow,
 } from "@/services/api";
 import type { BoletoKpi, EfetividadeDiaria, TendenciaMensal, RankingAgenteBoleto } from "@/components/analise/analiseMocks";
+import type { QuebraFaixa } from "@/components/analise/CurvaQuebraAtrasoChart";
 
 export type TipoParcela = "primeira" | "colchao";
 
 export interface EfetividadeViewModel {
   tipo: TipoParcela;
   loading: boolean;
+  /** Raw KPIs from API for chart consumption */
+  resumoKpis: EfResumoKpis | undefined;
   error: string | null;
   /** KPI strip */
   kpis: BoletoKpi[];
@@ -56,6 +61,9 @@ export interface EfetividadeViewModel {
   loadingPortfolio: boolean;
   loadingRanking: boolean;
   loadingQuebrados: boolean;
+  /** Curva de quebra por faixa de atraso */
+  curvaQuebra: QuebraFaixa[];
+  loadingCurvaQuebra: boolean;
 }
 
 const MESES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
@@ -159,10 +167,18 @@ export function useEfetividadeViewModel(tipo: TipoParcela): EfetividadeViewModel
     ],
   });
 
+  // Curva de quebra por faixa de atraso
+  const curvaQuery = useQuery({
+    queryKey: ["efetividade", "curva-quebra", selectedDatabase, dateFrom, dateTo] as const,
+    queryFn: () => fetchEfCurvaQuebra(dateFrom, dateTo, dbParam).then((e) => e.data as EfCurvaQuebraRow[]),
+    staleTime: 300_000,
+  });
+
   const loading = resumoQuery.isLoading;
   const loadingPortfolio = portfolioQ.isLoading || excecoesQ.isLoading || rejeitadosQ.isLoading;
   const loadingRanking = agenteQuery.isLoading;
   const loadingQuebrados = quebradosQuery.isLoading;
+  const loadingCurvaQuebra = curvaQuery.isLoading;
 
   const resumoData = resumoQuery.data?.data;
 
@@ -219,14 +235,27 @@ export function useEfetividadeViewModel(tipo: TipoParcela): EfetividadeViewModel
       .map((r) => ({ nome: r.portfolio_name, qtd: Number(r.qtd_rejeitados || 0) }));
   }, [rejeitadosQ.data]);
 
+  const curvaQuebra = useMemo(() => {
+    if (!curvaQuery.data) return [];
+    return curvaQuery.data
+      .map((r) => ({ faixa: r.faixa, taxaQuebra: Number(r.taxa_quebra) || 0, total: Number(r.total) || 0 }))
+      .sort((a, b) => {
+        const order: Record<string, number> = { "0-5 dias": 0, "6-15 dias": 1, "16-30 dias": 2, "31-60 dias": 3, "60+ dias": 4 };
+        return (order[a.faixa] ?? 99) - (order[b.faixa] ?? 99);
+      });
+  }, [curvaQuery.data]);
+
   const error = resumoQuery.isError ? (resumoQuery.error as Error)?.message ?? "Erro ao carregar efetividade" : null;
 
   return {
     tipo,
     loading,
     error,
+    resumoKpis: resumoData?.kpis,
     kpis,
     diaria,
+    curvaQuebra,
+    loadingCurvaQuebra,
     tendencia,
     rankingAgentes,
     portfolioValor,

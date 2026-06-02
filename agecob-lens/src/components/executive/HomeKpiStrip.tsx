@@ -39,6 +39,12 @@ export interface HomeKpiSecondary {
   caption?: string;
   /** internal benchmarks shown as reference lines */
   benchmarks?: { value: number; label: string }[];
+  /**
+   * Fração-base do indicador (num/den) no tooltip. `unit` "count" (default) mostra
+   * inteiros e dispara aviso de base reduzida quando den < 30; "value" mostra BRL
+   * e não dispara aviso (base reduzida é conceito de amostra/contagem).
+   */
+  base?: { num: number; den: number; noun: string; unit?: "count" | "value" };
 }
 
 export interface HomeKpiStripProps {
@@ -89,10 +95,9 @@ export function HomeKpiStrip({ primary, secondary }: HomeKpiStripProps) {
         ))}
       </div>
       <p className="text-[10px] leading-relaxed text-muted-foreground/80">
-        Em alguns KPIs aparecem as linhas{" "}
-        <span className="font-semibold text-foreground">Média dos 10% melhores</span> e{" "}
+        Em alguns KPIs aparece a linha{" "}
         <span className="font-semibold text-foreground">Média do escritório</span>:
-        referências internas calculadas sobre o histórico de 9 meses por banco.
+        referência interna calculada sobre o histórico de 9 meses por banco.
         Compare o número do KPI —{" "}
         <span className="text-success-fg font-medium">verde</span> = acima da referência,{" "}
         <span className="text-amber-600 font-medium">âmbar</span> = abaixo.
@@ -156,9 +161,14 @@ function SecondaryCard({ kpi }: { kpi: HomeKpiSecondary }) {
   const direction = baseline ? deriveDirection(baseline.value) : null;
   const tone = baseline && direction ? deltaTone(direction, baseline.betterWhen) : "muted";
   const Icon = direction ? ICON[direction] : null;
+  const base = kpi.base;
+  const baseIsValue = base?.unit === "value";
+  const fmtBase = (v: number) => (baseIsValue ? formatBRLCompact(v) : fmtNum(v));
+  const baseTooltip = base ? `Base: ${fmtBase(base.num)} / ${fmtBase(base.den)} ${base.noun}` : undefined;
+  const baseReduzida = base != null && !baseIsValue && base.den > 0 && base.den < 30;
 
   return (
-    <Card className="xl:col-span-1 min-w-0 rounded-lg border-border bg-card p-4">
+    <Card className="xl:col-span-1 min-w-0 rounded-lg border-border bg-card p-4" title={baseTooltip}>
       <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
         {kpi.label}
       </div>
@@ -182,6 +192,11 @@ function SecondaryCard({ kpi }: { kpi: HomeKpiSecondary }) {
         ) : null}
         {kpi.caption ? (
           <div className="text-[10px] text-muted-foreground/70 mt-0.5">{kpi.caption}</div>
+        ) : null}
+        {baseReduzida ? (
+          <div className="text-[10px] font-medium text-amber-600 mt-0.5">
+            ⚠ Base reduzida ({fmtNum(base!.den)} {base!.noun})
+          </div>
         ) : null}
         {kpi.benchmarks?.length
           ? kpi.benchmarks.map((b) => (

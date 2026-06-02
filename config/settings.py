@@ -128,6 +128,13 @@ STATUS_QUEBRADO_SQL: str = _sql_in(STATUS_QUEBRADO)
 STATUS_UNIVERSO_SQL: str = _sql_in(STATUS_UNIVERSO_ACORDOS)
 CPC_IDS_SQL: str = _sql_in(CPC_COMPLEMENTO_IDS)
 
+# Boleto pago no prazo (5 dias após vencimento) — base da Conversão (pagos/emitidos)
+BOLETO_PAGO_PRAZO_SQL: str = (
+    "CASE WHEN VR_PAGO > 0 "
+    "AND DT_PAGAMENTO <= DATEADD(DAY, 5, DT_VENCIMENTO) "
+    "THEN 1 ELSE 0 END"
+)
+
 FILTRO_AGENTES_EXCLUIDOS_SQL: str = """
     AND UPPER(LTRIM(RTRIM(U.NOME))) <> 'COBDESANTOS'
     AND UPPER(LTRIM(RTRIM(U.NOME))) <> 'FT5SYSTEM'

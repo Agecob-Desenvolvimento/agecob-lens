@@ -184,21 +184,22 @@ export function useHomeViewModel(): HomeViewModel {
     ];
   }, [totals, prevTotals, primeiraParcelaDia, primeiraParcelaDiaPrev, periodLabel]);
 
-  // Cash conversion index: 1ª Parcela / Valor de Acordos
-  const ppValor = primeiraParcelaDia?.total_valor ?? totals.valor_primeira_parcela;
-  const ppValorPrev = primeiraParcelaDiaPrev ?? prevTotals.valor_primeira_parcela;
+  // Cash conversion index: 1ª Parcela Recebida (VR_PAGO) / 1ª Parcela Emitida (VALOR) * 100
+  const ppValorEmitida = primeiraParcelaDia?.total_valor ?? totals.valor_primeira_parcela;
+  const ppValorRecebida = totals.valor_primeira_parcela_recebida;
+  const ppValorEmitidaPrev = primeiraParcelaDiaPrev ?? prevTotals.valor_primeira_parcela;
+  const ppValorRecebidaPrev = prevTotals.valor_primeira_parcela_recebida;
   const indiceConversaoCaixa = useMemo(() =>
-    totals.valor_acordos > 0 ? (ppValor * 100) / totals.valor_acordos : null,
-  [totals.valor_acordos, ppValor]);
+    ppValorEmitida > 0 ? (ppValorRecebida * 100) / ppValorEmitida : null,
+  [totals.valor_primeira_parcela_recebida, ppValorEmitida]);
   const indiceConversaoCaixaPrev = useMemo(() =>
-    prevTotals.valor_acordos > 0 ? (ppValorPrev * 100) / prevTotals.valor_acordos : null,
-  [prevTotals.valor_acordos, ppValorPrev]);
+    ppValorEmitidaPrev > 0 ? (ppValorRecebidaPrev * 100) / ppValorEmitidaPrev : null,
+  [prevTotals.valor_primeira_parcela_recebida, ppValorEmitidaPrev]);
 
   // KPI secondaries
   const kpiSecondary = useMemo(() => {
     const conv = calcConversao(totals);
     const excecoesPct = totals.valor_acordos > 0 ? (totals.valor_excecoes * 100) / totals.valor_acordos : 0;
-    const convPrev = calcConversao(prevTotals);
     const excecoesPctPrev = prevTotals.valor_acordos > 0 ? (prevTotals.valor_excecoes * 100) / prevTotals.valor_acordos : 0;
     const excecoesPctParcela = totals.valor_primeira_parcela > 0 ? (totals.valor_excecoes * 100) / totals.valor_primeira_parcela : 0;
     const excecoesPctParcelaPrev = prevTotals.valor_primeira_parcela > 0 ? (prevTotals.valor_excecoes * 100) / prevTotals.valor_primeira_parcela : 0;
@@ -206,23 +207,28 @@ export function useHomeViewModel(): HomeViewModel {
       const d = selectPeriodDelta(value, prevValue);
       return d != null ? { value: d, label: periodLabel, betterWhen } : undefined;
     };
+    // Conversão (pagos/emitidos) é ~0% no grão diário (boletos de hoje ainda não
+    // venceram); comparar período-a-período não faz sentido. Baseline vs benchmark.
+    const mkBench = (value: number, mean: number | null | undefined, betterWhen: "up" | "down") => {
+      if (mean == null || mean <= 0) return undefined;
+      return { value: (value - mean) / mean, label: "média do escritório", betterWhen };
+    };
     const bm = (b?: { top10: number | null; mean: number | null }) => {
       const result: { value: number; label: string }[] = [];
-      if (b?.top10 != null) result.push({ value: b.top10, label: "Média dos 10% melhores" });
       if (b?.mean != null) result.push({ value: b.mean, label: "Média do escritório" });
       return result.length ? result : undefined;
     };
     return [
-      { label: "Efetividade de Caixa", value: indiceConversaoCaixa ?? 0, unit: "percent" as const, baseline: mk(indiceConversaoCaixa ?? 0, indiceConversaoCaixaPrev ?? 0, "up"), benchmarks: bm(bench?.efetividade_caixa) },
-      { label: "CPC", value: totals.qtd_contatos, unit: "count" as const, baseline: mk(totals.qtd_contatos, prevTotals.qtd_contatos, "up") },
-      { label: "Conversão %", value: conv, unit: "percent" as const, baseline: mk(conv, convPrev, "up"), benchmarks: bm(bench?.taxa_conversao) },
+      { label: "Efetividade de Caixa", value: indiceConversaoCaixa ?? 0, unit: "percent" as const, baseline: mk(indiceConversaoCaixa ?? 0, indiceConversaoCaixaPrev ?? 0, "up"), benchmarks: bm(bench?.efetividade_caixa), base: { num: ppValorRecebida, den: ppValorEmitida, noun: "1ª parcela", unit: "value" } },
+      { label: "CPC", value: totals.qtd_contatos, unit: "count" as const, baseline: mk(totals.qtd_contatos, prevTotals.qtd_contatos, "up"), base: { num: totals.qtd_contatos, den: totals.qtd_alo, noun: "alôs" } },
+      { label: "Conversão %", value: conv, unit: "percent" as const, baseline: mkBench(conv, bench?.taxa_conversao?.mean, "up"), base: { num: totals.qtd_boletos_pagos, den: totals.qtd_boletos_emitidos, noun: "boletos" } },
       { label: "% Exc. s/ 1ª Parcela", value: excecoesPctParcela, unit: "percent" as const, baseline: mk(excecoesPctParcela, excecoesPctParcelaPrev, "down"), caption: "do valor da 1ª parcela" },
       { label: "% Exc. s/ Valor Acordos", value: excecoesPct, unit: "percent" as const, baseline: mk(excecoesPct, excecoesPctPrev, "down"), caption: "do valor total de acordos", benchmarks: bm(bench?.pct_excecoes) },
       { label: "Qtd Acordos", value: totals.qtd_acordos, unit: "count" as const, caption: `${diasUteisPeriodo} dias úteis` },
       { label: "Gap de Performance", value: gapDePerformance, unit: "BRL" as const, caption: "Top agente vs piso da equipe" },
       { label: "Qtd Acionamentos", value: totals.qtd_acionamentos, unit: "count" as const, baseline: mk(totals.qtd_acionamentos, prevTotals.qtd_acionamentos, "up") },
     ];
-  }, [totals, prevTotals, diasUteisPeriodo, gapDePerformance, periodLabel, indiceConversaoCaixa, indiceConversaoCaixaPrev, bench]);
+  }, [totals, prevTotals, diasUteisPeriodo, gapDePerformance, periodLabel, indiceConversaoCaixa, indiceConversaoCaixaPrev, bench, ppValorRecebida, ppValorEmitida]);
 
   // Insight
   const readout = useMemo(() => generateDailyReadout(rows, projecaoMes), [rows, projecaoMes]);

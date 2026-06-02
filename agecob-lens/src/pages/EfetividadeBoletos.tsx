@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense, useMemo, useState } from "react";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import ExecutiveHeader from "@/components/executive/ExecutiveHeader";
@@ -9,10 +9,14 @@ import { BoletosKpiStrip } from "@/components/analise/BoletosKpiStrip";
 import { useEfetividadeViewModel, type TipoParcela } from "@/hooks/useEfetividadeViewModel";
 
 const EfetividadeDiariaChart = lazy(() => import("@/components/analise/EfetividadeDiariaChart").then((m) => ({ default: m.EfetividadeDiariaChart })));
-const TendenciaMensalChart = lazy(() => import("@/components/analise/TendenciaMensalChart").then((m) => ({ default: m.TendenciaMensalChart })));
-const RankingAgentesBoletos = lazy(() => import("@/components/analise/RankingAgentesBoletos").then((m) => ({ default: m.RankingAgentesBoletos })));
 const PortfolioSection = lazy(() => import("@/components/analise/PortfolioSection").then((m) => ({ default: m.PortfolioSection })));
 const BoletosQuebradosChart = lazy(() => import("@/components/analise/BoletosQuebradosChart").then((m) => ({ default: m.BoletosQuebradosChart })));
+const FunilConversaoFinanceira = lazy(() => import("@/components/analise/FunilConversaoFinanceira").then((m) => ({ default: m.FunilConversaoFinanceira })));
+// FunilFinanceiroBoleto aparcado — reativar quando necessário
+// const FunilFinanceiroBoleto = lazy(() => import("@/components/analise/FunilFinanceiroBoleto").then((m) => ({ default: m.FunilFinanceiroBoleto })));
+const EfetividadeHistoricaChart = lazy(() => import("@/components/analise/EfetividadeHistoricaChart").then((m) => ({ default: m.EfetividadeHistoricaChart })));
+const WaterfallPerdasChart = lazy(() => import("@/components/analise/WaterfallPerdasChart").then((m) => ({ default: m.WaterfallPerdasChart })));
+const CurvaQuebraAtrasoChart = lazy(() => import("@/components/analise/CurvaQuebraAtrasoChart").then((m) => ({ default: m.CurvaQuebraAtrasoChart })));
 
 const CHART_FALLBACK = <div className="h-64 animate-pulse bg-muted rounded-lg" />;
 
@@ -25,6 +29,20 @@ function tipoToApi(t: (typeof TIPOS)[number]): TipoParcela {
 export default function EfetividadeBoletos() {
   const [tipoLabel, setTipoLabel] = useState<(typeof TIPOS)[number]>("Primeira Parcela");
   const vm = useEfetividadeViewModel(tipoToApi(tipoLabel));
+
+  // Derived waterfall stages from KPI data
+  const waterfallStages = useMemo(() => {
+    const k = vm.resumoKpis;
+    if (!k) return [];
+    const perdido = k.amount_maturing - k.amount_received;
+    return [
+      { label: "Acordado", value: k.amount_maturing, color: "#0284c7" },
+      { label: "Não Pago", value: -perdido, color: "#f43f5e" },
+      { label: "= Pago", value: 0, color: "#059669" },
+    ];
+  }, [vm.resumoKpis]);
+
+
 
   return (
     <SidebarProvider>
@@ -79,13 +97,33 @@ export default function EfetividadeBoletos() {
                 />
               </Suspense>
 
-              {/* Tendência + Ranking */}
+              {/* Série Histórica */}
               <Suspense fallback={CHART_FALLBACK}>
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                  <TendenciaMensalChart data={vm.tendencia} />
-                  <RankingAgentesBoletos data={vm.rankingAgentes} />
-                </div>
+                <EfetividadeHistoricaChart data={vm.tendencia} />
               </Suspense>
+
+              {/* Funil Operacional */}
+              <Suspense fallback={CHART_FALLBACK}>
+                <FunilConversaoFinanceira
+                  acordos={vm.resumoKpis?.total_acordos ?? 0}
+                  boletosEmitidos={vm.resumoKpis?.generated ?? 0}
+                  boletosPagos={vm.resumoKpis?.paid_on_time ?? 0}
+                />
+              </Suspense>
+
+              {/* Análise Avançada: Waterfall + Curva de Quebra */}
+              <section className="space-y-3">
+                <SectionHeader
+                  title="Análise Avançada"
+                  description="Diagnóstico de perdas financeiras e curva de quebra por faixa de atraso."
+                />
+                <Suspense fallback={CHART_FALLBACK}>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                    <WaterfallPerdasChart stages={waterfallStages} />
+                    <CurvaQuebraAtrasoChart data={vm.curvaQuebra} />
+                  </div>
+                </Suspense>
+              </section>
 
               {/* Portfólio */}
               <section className="space-y-3">

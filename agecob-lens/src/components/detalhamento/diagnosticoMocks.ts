@@ -8,6 +8,7 @@ export const MOCK_FUNIL: FunilData = {
   acordos: 372,
   primeiraParcela: 333560.16,
   valorAcordos: 1675038.91,
+  primeiraParcelaRecebida: 250000,
 };
 
 export const MOCK_METAS: BulletPanelData = {

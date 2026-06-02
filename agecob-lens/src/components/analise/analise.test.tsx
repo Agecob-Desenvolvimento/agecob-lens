@@ -6,6 +6,7 @@ import { TendenciaMensalChart } from "./TendenciaMensalChart";
 import { RankingAgentesBoletos } from "./RankingAgentesBoletos";
 import { PortfolioSection } from "./PortfolioSection";
 import { BoletosQuebradosChart } from "./BoletosQuebradosChart";
+import { CurvaQuebraAtrasoChart } from "./CurvaQuebraAtrasoChart";
 import {
   MOCK_BOLETOS_KPIS,
   MOCK_EFETIVIDADE_DIARIA,
@@ -15,6 +16,7 @@ import {
   MOCK_EXCECOES_PORTFOLIO,
   MOCK_REJEITADOS_PORTFOLIO,
   MOCK_BOLETOS_QUEBRADOS,
+  MOCK_CURVA_QUEBRA_ATRASO,
 } from "./analiseMocks";
 
 describe("BoletosKpiStrip", () => {
@@ -96,5 +98,26 @@ describe("BoletosQuebradosChart", () => {
   it("shows empty state when no data", () => {
     render(<BoletosQuebradosChart portfolioRows={[]} />);
     expect(screen.getByText(/Sem boletos quebrados/i)).toBeInTheDocument();
+  });
+});
+
+describe("CurvaQuebraAtrasoChart", () => {
+  it("renders one bar per faixa plus a reference line", () => {
+    render(<CurvaQuebraAtrasoChart data={MOCK_CURVA_QUEBRA_ATRASO} />);
+    const bars = screen.getAllByTestId("curva-quebra-bar");
+    expect(bars).toHaveLength(MOCK_CURVA_QUEBRA_ATRASO.length);
+    expect(screen.getByTestId("curva-quebra-svg")).toBeInTheDocument();
+    expect(screen.getByTestId("curva-quebra-ref")).toBeInTheDocument();
+  });
+
+  it("displays the correct title and description", () => {
+    render(<CurvaQuebraAtrasoChart data={MOCK_CURVA_QUEBRA_ATRASO} />);
+    expect(screen.getByText("Curva de Quebra por Atraso")).toBeInTheDocument();
+    expect(screen.getByText(/Probabilidade de quebra em cada faixa/)).toBeInTheDocument();
+  });
+
+  it("renders empty state", () => {
+    render(<CurvaQuebraAtrasoChart data={[]} />);
+    expect(screen.getByText(/Sem dados no período/i)).toBeInTheDocument();
   });
 });

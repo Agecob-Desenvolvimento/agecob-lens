@@ -20,7 +20,7 @@ export interface HomeViewModel {
   refresh: () => Promise<void>;
   kpiPrimary: HomeKpiPrimary[];
   kpiSecondary: HomeKpiSecondary[];
-  /** Cash conversion index: 1ª Parcela / Valor de Acordos * 100 */
+  /** Cash conversion index: 1ª Parcela Recebida / 1ª Parcela Emitida * 100 */
   indiceConversaoCaixa: number | null;
   insight:
     | { variant: "critical"; metric?: { value: string; label: string }; description: string; cta?: { label: string } }

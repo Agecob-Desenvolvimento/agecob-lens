@@ -138,7 +138,8 @@ Funil canônico: **Acionamento → Contato (atende) → CPC (pessoa certa) → A
 
 `CPC` = Σ `qtd_contatos` (count = RPC, NOT %). "Taxa de contato" = Σ `qtd_alo` /
 Σ `qtd_acionamentos`. "Taxa de CPC" = Σ `qtd_contatos` / Σ `qtd_alo`. Conversão =
-Σ `qtd_acordos` / Σ `qtd_contatos` (sobre a pessoa certa).
+Σ `qtd_boletos_pagos` / Σ `qtd_boletos_emitidos` (boleto pago no prazo /
+boleto **vencido**, `DT_VENCIMENTO < hoje`).
 
 ## First Installment
 
@@ -351,7 +352,7 @@ Frontend lazy-loads via `AgenteDetalheSection` component (in DetalhamentoAgentes
 
 | Metric | Old Formula | New Formula |
 |---|---|---|
-| **Conversão %** | `qtd_acordos / qtd_acionamentos` | `qtd_acordos / qtd_contatos` (sobre quem realmente conversou) |
+| **Conversão %** | `qtd_acordos / qtd_contatos` | `qtd_boletos_pagos / qtd_boletos_emitidos × 100` (pago em ≤5d do venc. / boleto vencido `DT_VENCIMENTO < hoje`) |
 | **Efetividade de Caixa** | — (new) | `valor_1ª_parcela / valor_acordos × 100` |
 | **% Exc. s/ 1ª Parcela** | — (new) | `valor_exceções / valor_1ª_parcela × 100` |
 | **% Exc. s/ Valor Acordos** | `valor_exceções / valor_acordos × 100` (unchanged, renamed) | same |

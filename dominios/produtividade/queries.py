@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Any, Optional, Tuple
 
 import config.settings as settings
 
@@ -17,6 +17,7 @@ def build_produtividade_query(
     use_distinct_esforco: bool,
     date_from: Optional[str] = None,
     date_to_exclusive: Optional[str] = None,
+    portfolio: Optional[str] = None,
 ) -> str:
     """
     Single source of truth para produtividade-por-agente de hoje.
@@ -40,6 +41,14 @@ def build_produtividade_query(
                  Usado por /comparacao-agentes, /detalhamento-agentes e
                  /produtividade.
     """
+    # Filtro por portfólio (DIV_AUX.CAMPO010) via REC_DIVIDAS. EXISTS preserva a
+    # cardinalidade (não multiplica linhas) — apropriado p/ filtro, ADR-004.
+    cart_filter = (
+        "AND EXISTS (SELECT 1 FROM REC_DIVIDAS RD2 (NOLOCK) "
+        "JOIN DIV_AUX DA2 (NOLOCK) ON RD2.ID_DIVIDA = DA2.ID_DIVIDA "
+        "WHERE RD2.NR_RECEBIMENTO = RM.NR_RECEBIMENTO AND DA2.CAMPO010 = ?)"
+    ) if portfolio else ""
+
     if use_distinct_esforco:
         return f"""
 {_date_decl(date_from, date_to_exclusive)}
@@ -51,12 +60,14 @@ WITH CTE_Acordos AS (
         RM.ID_REC_STATUS,
         SUM(RM.VALOR) AS VALOR_TOTAL_ACORDO,
         MAX(CASE WHEN RM.PARCELA = {settings.PRIMEIRA_PARCELA} THEN RM.VALOR ELSE 0 END) AS VALOR_P1,
+        MAX(CASE WHEN RM.PARCELA = {settings.PRIMEIRA_PARCELA} THEN RM.VR_PAGO ELSE 0 END) AS VR_PAGO_P1,
         MAX(RM.PLANO) AS PLANO
     FROM REC_MASTER RM (NOLOCK)
-    WHERE RM.DT_EMISSAO >= @Hoje AND RM.DT_EMISSAO < @Amanha
-      AND (RM.ID_REC_STATUS IN {settings.STATUS_UNIVERSO_SQL}
-           OR RM.ID_REC_STATUS IN {settings.STATUS_REJEITADO_SQL})
-    GROUP BY RM.ID_USUARIO, RM.NR_RECEBIMENTO, RM.ID_REC_STATUS
+     WHERE RM.DT_EMISSAO >= @Hoje AND RM.DT_EMISSAO < @Amanha
+       AND (RM.ID_REC_STATUS IN {settings.STATUS_UNIVERSO_SQL}
+            OR RM.ID_REC_STATUS IN {settings.STATUS_REJEITADO_SQL})
+       {cart_filter}
+     GROUP BY RM.ID_USUARIO, RM.NR_RECEBIMENTO, RM.ID_REC_STATUS
 ),
 CTE_Saldo_Original AS (
     SELECT
@@ -65,11 +76,12 @@ CTE_Saldo_Original AS (
         MIN(DM.DT_VENCIMENTO) AS DT_VENC_DIV
     FROM REC_DIVIDAS RD (NOLOCK)
     JOIN DIV_MASTER DM (NOLOCK) ON RD.ID_DIVIDA = DM.ID_DIVIDA
-    WHERE RD.NR_RECEBIMENTO IN (
-        SELECT NR_RECEBIMENTO
-        FROM REC_MASTER (NOLOCK)
-        WHERE DT_EMISSAO >= @Hoje AND DT_EMISSAO < @Amanha
-    )
+     WHERE RD.NR_RECEBIMENTO IN (
+         SELECT RM.NR_RECEBIMENTO
+         FROM REC_MASTER RM (NOLOCK)
+         WHERE RM.DT_EMISSAO >= @Hoje AND RM.DT_EMISSAO < @Amanha
+           {cart_filter}
+     )
     GROUP BY RD.NR_RECEBIMENTO
 ),
 -- Pré-agrega valores financeiros por agente para evitar multiplicação de linhas
@@ -84,6 +96,7 @@ CTE_Financeiro_Agente AS (
         AVG(CASE WHEN A.ID_REC_STATUS IN {settings.STATUS_APROVADOS_SQL} AND S.VR_ORIGINAL > 0
             THEN A.VALOR_TOTAL_ACORDO / S.VR_ORIGINAL * 100 END)                                                AS desconto_medio_percentual,
         SUM(CASE WHEN A.ID_REC_STATUS IN {settings.STATUS_APROVADOS_SQL} THEN A.VALOR_P1 ELSE 0 END)                    AS valor_primeira_parcela,
+        SUM(CASE WHEN A.ID_REC_STATUS IN {settings.STATUS_APROVADOS_SQL} THEN A.VR_PAGO_P1 ELSE 0 END)                  AS valor_p1_recebido,
         COUNT(CASE WHEN A.ID_REC_STATUS IN {settings.STATUS_EXCECAO_SQL} THEN 1 END)                                     AS qtd_excecoes,
         SUM(CASE WHEN A.ID_REC_STATUS IN {settings.STATUS_EXCECAO_SQL} THEN A.VALOR_TOTAL_ACORDO ELSE 0 END)             AS valor_excecoes,
         SUM(CASE WHEN A.ID_REC_STATUS IN {settings.STATUS_EXCECAO_SQL} THEN A.VALOR_P1 ELSE 0 END)                       AS valor_primeira_parcela_excecoes,
@@ -108,12 +121,28 @@ CTE_Horas_Agente AS (
             CAST(RM.DT_EMISSAO AS DATE) AS dia,
             MIN(RM.DT_EMISSAO) AS dia_min,
             MAX(RM.DT_EMISSAO) AS dia_max
-        FROM REC_MASTER RM (NOLOCK)
-        WHERE RM.DT_EMISSAO >= @Hoje AND RM.DT_EMISSAO < @Amanha
-          AND RM.ID_REC_STATUS IN {settings.STATUS_APROVADOS_SQL}
-        GROUP BY RM.ID_USUARIO, CAST(RM.DT_EMISSAO AS DATE)
+         FROM REC_MASTER RM (NOLOCK)
+         WHERE RM.DT_EMISSAO >= @Hoje AND RM.DT_EMISSAO < @Amanha
+           AND RM.ID_REC_STATUS IN {settings.STATUS_APROVADOS_SQL}
+           {cart_filter}
+         GROUP BY RM.ID_USUARIO, CAST(RM.DT_EMISSAO AS DATE)
     ) d
     GROUP BY ID_USUARIO
+),
+-- Boletos emitidos vs pagos no prazo (5d do venc.) por agente — base da Conversão.
+-- "Emitido" = boleto vencido (DT_VENCIMENTO < hoje) de acordo aprovado. Parcelas
+-- ainda não vencidas não entram: não há como ter sido pagas no prazo ainda.
+CTE_Boletos_Agente AS (
+    SELECT
+        RM.ID_USUARIO,
+        COUNT(*) AS qtd_boletos_emitidos,
+        SUM({settings.BOLETO_PAGO_PRAZO_SQL}) AS qtd_boletos_pagos
+     FROM REC_MASTER RM (NOLOCK)
+     WHERE RM.DT_EMISSAO >= @Hoje AND RM.DT_EMISSAO < @Amanha
+       AND RM.ID_REC_STATUS IN {settings.STATUS_APROVADOS_SQL}
+       AND RM.DT_VENCIMENTO < CAST(GETDATE() AS DATE)
+       {cart_filter}
+     GROUP BY RM.ID_USUARIO
 )
 SELECT
     U.CHAVE,
@@ -132,6 +161,8 @@ SELECT
         )
     AS INT) AS cpc_percentual,
     ISNULL(MAX(F.qtd_acordos), 0) AS qtd_acordos,
+    ISNULL(MAX(BA.qtd_boletos_emitidos), 0) AS qtd_boletos_emitidos,
+    ISNULL(MAX(BA.qtd_boletos_pagos), 0) AS qtd_boletos_pagos,
     CAST(
         ISNULL(MAX(F.qtd_acordos), 0) * 100.0
         / NULLIF(COUNT(DISTINCT CM.ID_DEV), 0)
@@ -141,6 +172,7 @@ SELECT
     CAST(ISNULL(MAX(F.parcelamento_medio), 0) AS DECIMAL(10,2)) AS parcelamento_medio,
     CAST(ISNULL(MAX(F.desconto_medio_percentual), 0) AS DECIMAL(10,2)) AS desconto_medio_percentual,
     CAST(ISNULL(MAX(F.valor_primeira_parcela), 0) AS DECIMAL(18,2)) AS valor_primeira_parcela,
+    CAST(ISNULL(MAX(F.valor_p1_recebido), 0) AS DECIMAL(18,2)) AS valor_p1_recebido,
     ISNULL(MAX(F.qtd_excecoes), 0) AS qtd_excecoes,
     CAST(ISNULL(MAX(F.valor_excecoes), 0) AS DECIMAL(18,2)) AS valor_excecoes,
     CAST(ISNULL(MAX(F.valor_primeira_parcela_excecoes), 0) AS DECIMAL(18,2)) AS valor_primeira_parcela_excecoes,
@@ -157,6 +189,8 @@ LEFT JOIN CTE_Financeiro_Agente F
     ON U.ID_USUARIO = F.ID_USUARIO
 LEFT JOIN CTE_Horas_Agente H
     ON U.ID_USUARIO = H.ID_USUARIO
+LEFT JOIN CTE_Boletos_Agente BA
+    ON U.ID_USUARIO = BA.ID_USUARIO
 WHERE
     CM.DATA >= @Hoje AND CM.DATA < @Amanha
     {settings.FILTRO_AGENTES_EXCLUIDOS_SQL}
@@ -172,13 +206,13 @@ OPTION (USE HINT('ENABLE_PARALLEL_PLAN_PREFERENCE'), MAXDOP 0);
     if normalized == "cobwebrcbconsumer":
         usu_master = "SELECT ID_USUARIO, CHAVE, NOME, 'CONSUMER' AS origem FROM COBwebRCBCONSUMER.dbo.USU_MASTER (NOLOCK)"
         cto_master = f"SELECT CM2.ID_USUARIO, CM2.ID_CTO_MASTER, CM2.ID_COMPLEMENTO, CM2.ID_DEV, CM2.DATA, CASE WHEN CC.ALO = 1 AND CM2.ID_COMPLEMENTO IN {settings.CPC_IDS_SQL} THEN 1 ELSE 0 END AS contato, CASE WHEN CC.ALO = 1 THEN 1 ELSE 0 END AS alo, 'CONSUMER' AS origem FROM COBwebRCBCONSUMER.dbo.CTO_MASTER CM2 (NOLOCK) LEFT JOIN COBwebRCBCONSUMER.dbo.CTO_COMPLEMENTO CC (NOLOCK) ON CM2.ID_COMPLEMENTO = CC.ID_COMPLEMENTO WHERE CM2.DATA >= @Hoje AND CM2.DATA < @Amanha"
-        rec_master = "SELECT ID_USUARIO, NR_RECEBIMENTO, VALOR, PARCELA, ID_REC_STATUS, PLANO, ID_CARTEIRA, 'CONSUMER' AS origem FROM COBwebRCBCONSUMER.dbo.REC_MASTER (NOLOCK) WHERE DT_EMISSAO >= @Hoje AND DT_EMISSAO < @Amanha"
+        rec_master = "SELECT ID_USUARIO, NR_RECEBIMENTO, VALOR, PARCELA, ID_REC_STATUS, PLANO, ID_CARTEIRA, VR_PAGO, DT_PAGAMENTO, DT_VENCIMENTO, 'CONSUMER' AS origem FROM COBwebRCBCONSUMER.dbo.REC_MASTER (NOLOCK) WHERE DT_EMISSAO >= @Hoje AND DT_EMISSAO < @Amanha"
         rec_dividas = "SELECT NR_RECEBIMENTO, ID_DIVIDA, 'CONSUMER' AS origem FROM COBwebRCBCONSUMER.dbo.REC_DIVIDAS (NOLOCK)"
         div_master = "SELECT ID_DIVIDA, VR_SALDO, 'CONSUMER' AS origem FROM COBwebRCBCONSUMER.dbo.DIV_MASTER (NOLOCK)"
     elif normalized == "cobwebrcbautos":
         usu_master = "SELECT ID_USUARIO, CHAVE, NOME, 'AUTOS' AS origem FROM COBwebRCBAUTOS.dbo.USU_MASTER (NOLOCK)"
         cto_master = f"SELECT CM2.ID_USUARIO, CM2.ID_CTO_MASTER, CM2.ID_COMPLEMENTO, CM2.ID_DEV, CM2.DATA, CASE WHEN CC.ALO = 1 AND CM2.ID_COMPLEMENTO IN {settings.CPC_IDS_SQL} THEN 1 ELSE 0 END AS contato, CASE WHEN CC.ALO = 1 THEN 1 ELSE 0 END AS alo, 'AUTOS' AS origem FROM COBwebRCBAUTOS.dbo.CTO_MASTER CM2 (NOLOCK) LEFT JOIN COBwebRCBAUTOS.dbo.CTO_COMPLEMENTO CC (NOLOCK) ON CM2.ID_COMPLEMENTO = CC.ID_COMPLEMENTO WHERE CM2.DATA >= @Hoje AND CM2.DATA < @Amanha"
-        rec_master = "SELECT ID_USUARIO, NR_RECEBIMENTO, VALOR, PARCELA, ID_REC_STATUS, PLANO, ID_CARTEIRA, 'AUTOS' AS origem FROM COBwebRCBAUTOS.dbo.REC_MASTER (NOLOCK) WHERE DT_EMISSAO >= @Hoje AND DT_EMISSAO < @Amanha"
+        rec_master = "SELECT ID_USUARIO, NR_RECEBIMENTO, VALOR, PARCELA, ID_REC_STATUS, PLANO, ID_CARTEIRA, VR_PAGO, DT_PAGAMENTO, DT_VENCIMENTO, 'AUTOS' AS origem FROM COBwebRCBAUTOS.dbo.REC_MASTER (NOLOCK) WHERE DT_EMISSAO >= @Hoje AND DT_EMISSAO < @Amanha"
         rec_dividas = "SELECT NR_RECEBIMENTO, ID_DIVIDA, 'AUTOS' AS origem FROM COBwebRCBAUTOS.dbo.REC_DIVIDAS (NOLOCK)"
         div_master = "SELECT ID_DIVIDA, VR_SALDO, 'AUTOS' AS origem FROM COBwebRCBAUTOS.dbo.DIV_MASTER (NOLOCK)"
     else:
@@ -193,9 +227,9 @@ OPTION (USE HINT('ENABLE_PARALLEL_PLAN_PREFERENCE'), MAXDOP 0);
             SELECT CM2.ID_USUARIO, CM2.ID_CTO_MASTER, CM2.ID_COMPLEMENTO, CM2.ID_DEV, CM2.DATA, CASE WHEN CC.ALO = 1 AND CM2.ID_COMPLEMENTO IN {settings.CPC_IDS_SQL} THEN 1 ELSE 0 END AS contato, CASE WHEN CC.ALO = 1 THEN 1 ELSE 0 END AS alo, 'AUTOS' AS origem FROM COBwebRCBAUTOS.dbo.CTO_MASTER CM2 (NOLOCK) LEFT JOIN COBwebRCBAUTOS.dbo.CTO_COMPLEMENTO CC (NOLOCK) ON CM2.ID_COMPLEMENTO = CC.ID_COMPLEMENTO WHERE CM2.DATA >= @Hoje AND CM2.DATA < @Amanha
         """
         rec_master = """
-            SELECT ID_USUARIO, NR_RECEBIMENTO, VALOR, PARCELA, ID_REC_STATUS, PLANO, ID_CARTEIRA, 'CONSUMER' AS origem FROM COBwebRCBCONSUMER.dbo.REC_MASTER (NOLOCK) WHERE DT_EMISSAO >= @Hoje AND DT_EMISSAO < @Amanha
+            SELECT ID_USUARIO, NR_RECEBIMENTO, VALOR, PARCELA, ID_REC_STATUS, PLANO, ID_CARTEIRA, VR_PAGO, DT_PAGAMENTO, DT_VENCIMENTO, 'CONSUMER' AS origem FROM COBwebRCBCONSUMER.dbo.REC_MASTER (NOLOCK) WHERE DT_EMISSAO >= @Hoje AND DT_EMISSAO < @Amanha
             UNION ALL
-            SELECT ID_USUARIO, NR_RECEBIMENTO, VALOR, PARCELA, ID_REC_STATUS, PLANO, ID_CARTEIRA, 'AUTOS' AS origem FROM COBwebRCBAUTOS.dbo.REC_MASTER (NOLOCK) WHERE DT_EMISSAO >= @Hoje AND DT_EMISSAO < @Amanha
+            SELECT ID_USUARIO, NR_RECEBIMENTO, VALOR, PARCELA, ID_REC_STATUS, PLANO, ID_CARTEIRA, VR_PAGO, DT_PAGAMENTO, DT_VENCIMENTO, 'AUTOS' AS origem FROM COBwebRCBAUTOS.dbo.REC_MASTER (NOLOCK) WHERE DT_EMISSAO >= @Hoje AND DT_EMISSAO < @Amanha
         """
         rec_dividas = """
             SELECT NR_RECEBIMENTO, ID_DIVIDA, 'CONSUMER' AS origem FROM COBwebRCBCONSUMER.dbo.REC_DIVIDAS (NOLOCK)
@@ -242,6 +276,7 @@ CTE_Acordos_Unicos AS (
         R.ID_USUARIO, R.origem, R.NR_RECEBIMENTO, R.ID_REC_STATUS,
         SUM(R.VALOR) AS VALOR_TOTAL_ACORDO,
         MAX(CASE WHEN R.PARCELA = {settings.PRIMEIRA_PARCELA} THEN R.VALOR ELSE 0 END) AS VALOR_P1,
+        MAX(CASE WHEN R.PARCELA = {settings.PRIMEIRA_PARCELA} THEN R.VR_PAGO ELSE 0 END) AS VR_PAGO_P1,
         MAX(R.PLANO) AS PLANO
     FROM ({rec_master}) R
     WHERE R.ID_REC_STATUS IN {settings.STATUS_UNIVERSO_SQL}
@@ -269,6 +304,7 @@ CTE_Financeiro_Final AS (
         SUM(CASE WHEN A.ID_REC_STATUS IN {settings.STATUS_APROVADOS_SQL} THEN A.VALOR_TOTAL_ACORDO ELSE 0 END) AS valor_total_acordos,
         AVG(CASE WHEN A.ID_REC_STATUS IN {settings.STATUS_APROVADOS_SQL} THEN A.VALOR_TOTAL_ACORDO END) AS acordo_medio,
         SUM(CASE WHEN A.ID_REC_STATUS IN {settings.STATUS_APROVADOS_SQL} THEN A.VALOR_P1 ELSE 0 END) AS valor_total_p1,
+        SUM(CASE WHEN A.ID_REC_STATUS IN {settings.STATUS_APROVADOS_SQL} THEN A.VR_PAGO_P1 ELSE 0 END) AS valor_p1_recebido,
         AVG(CASE WHEN A.ID_REC_STATUS IN {settings.STATUS_APROVADOS_SQL} THEN CAST(A.PLANO AS DECIMAL(10,2)) END) AS parcelamento_medio,
         AVG(CASE WHEN A.ID_REC_STATUS IN {settings.STATUS_APROVADOS_SQL} AND S.VR_ORIGINAL > 0
             THEN A.VALOR_TOTAL_ACORDO / S.VR_ORIGINAL * 100
@@ -279,6 +315,20 @@ CTE_Financeiro_Final AS (
     FROM CTE_Acordos_Unicos A
     LEFT JOIN CTE_Saldo_Original S ON A.NR_RECEBIMENTO = S.NR_RECEBIMENTO AND A.origem = S.origem
     GROUP BY A.ID_USUARIO, A.origem
+),
+
+-- Boletos emitidos vs pagos no prazo (5d do venc.) por agente — base da Conversão.
+-- "Emitido" = boleto vencido (DT_VENCIMENTO < hoje) de acordo aprovado. Parcelas
+-- ainda não vencidas não entram: não há como ter sido pagas no prazo ainda.
+CTE_Boletos AS (
+    SELECT
+        R.ID_USUARIO, R.origem,
+        COUNT(*) AS qtd_boletos_emitidos,
+        SUM({settings.BOLETO_PAGO_PRAZO_SQL}) AS qtd_boletos_pagos
+    FROM ({rec_master}) R
+    WHERE R.ID_REC_STATUS IN {settings.STATUS_APROVADOS_SQL}
+      AND R.DT_VENCIMENTO < CAST(GETDATE() AS DATE)
+    GROUP BY R.ID_USUARIO, R.origem
 )
 
 SELECT
@@ -289,11 +339,14 @@ SELECT
     E.qtd_alo,
     E.qtd_contatos,
     ISNULL(F.qtd_acordos, 0) AS qtd_acordos,
+    ISNULL(B.qtd_boletos_emitidos, 0) AS qtd_boletos_emitidos,
+    ISNULL(B.qtd_boletos_pagos, 0) AS qtd_boletos_pagos,
     CAST(ISNULL(F.valor_total_acordos, 0) AS DECIMAL(18,2)) AS valor_total_acordos,
     CAST(ISNULL(F.acordo_medio, 0) AS DECIMAL(18,2)) AS acordo_medio,
     CAST(ISNULL(F.parcelamento_medio, 0) AS DECIMAL(10,2)) AS parcelamento_medio,
     CAST(ISNULL(F.valor_total_p1, 0) AS DECIMAL(18,2)) AS valor_primeira_parcela,
-    CAST(ISNULL(F.qtd_acordos, 0) * 100.0 / NULLIF(E.qtd_acionamentos, 0) AS DECIMAL(18,2)) AS taxa_conversao,
+    CAST(ISNULL(F.valor_p1_recebido, 0) AS DECIMAL(18,2)) AS valor_p1_recebido,
+    CAST(100.0 * ISNULL(B.qtd_boletos_pagos, 0) / NULLIF(B.qtd_boletos_emitidos, 0) AS DECIMAL(18,2)) AS taxa_conversao,
     CAST(CEILING(ISNULL(E.qtd_contatos, 0) * 100.0 / NULLIF(E.qtd_alo, 0)) AS INT) AS cpc_percentual,
     CAST(ISNULL(F.desconto_medio, 0) AS DECIMAL(10,2)) AS desconto_medio_percentual,
     ISNULL(F.qtd_excecoes, 0) AS qtd_excecoes,
@@ -302,6 +355,7 @@ SELECT
 FROM CTE_Esforco E
 JOIN CTE_Usuarios U ON E.ID_USUARIO = U.ID_USUARIO AND E.origem = U.origem
 LEFT JOIN CTE_Financeiro_Final F ON E.ID_USUARIO = F.ID_USUARIO AND E.origem = F.origem
+LEFT JOIN CTE_Boletos B ON E.ID_USUARIO = B.ID_USUARIO AND E.origem = B.origem
 WHERE
     E.qtd_acionamentos > 0
     {settings.FILTRO_AGENTES_EXCLUIDOS_SQL}
@@ -309,6 +363,14 @@ WHERE
     AND U.CHAVE NOT LIKE 'SISTEMA%'
 ORDER BY E.qtd_acionamentos DESC;
 """
+
+
+def build_produtividade_hoje_params(portfolio: Optional[str]) -> Optional[Tuple[Any, ...]]:
+    """Params tuple for build_produtividade_query with use_distinct_esforco=True."""
+    if portfolio:
+        # One `?` per REC_MASTER reference → 4 placeholders
+        return (portfolio, portfolio, portfolio, portfolio)
+    return None
 
 
 def build_produtividade_agentes_query() -> str:
@@ -382,6 +444,15 @@ CTE_Acordos_Diario AS (
         SUM(CASE WHEN R.ID_REC_STATUS IN {settings.STATUS_APROVADOS_SQL}
                  AND R.PARCELA = {settings.PRIMEIRA_PARCELA}
             THEN R.VALOR ELSE 0 END) AS valor_p1,
+        SUM(CASE WHEN R.ID_REC_STATUS IN {settings.STATUS_APROVADOS_SQL}
+                 AND R.PARCELA = {settings.PRIMEIRA_PARCELA}
+            THEN R.VR_PAGO ELSE 0 END) AS valor_p1_recebido,
+        SUM(CASE WHEN R.ID_REC_STATUS IN {settings.STATUS_APROVADOS_SQL}
+                 AND R.DT_VENCIMENTO < @Hoje
+            THEN 1 ELSE 0 END) AS qtd_boletos_emitidos,
+        SUM(CASE WHEN R.ID_REC_STATUS IN {settings.STATUS_APROVADOS_SQL}
+                 AND R.DT_VENCIMENTO < @Hoje
+            THEN {settings.BOLETO_PAGO_PRAZO_SQL} ELSE 0 END) AS qtd_boletos_pagos,
         SUM(CASE WHEN R.ID_REC_STATUS IN {settings.STATUS_EXCECAO_SQL}
             THEN R.VALOR ELSE 0 END) AS valor_excecoes
     FROM dbo.REC_MASTER R (NOLOCK)
@@ -393,10 +464,10 @@ SELECT
     U.CHAVE,
     U.NOME,
     SUM(E.qtd_contatos) * 100.0 / NULLIF(SUM(E.qtd_alo), 0) AS avg_taxa_contato,
-    ISNULL(SUM(A.qtd_acordos), 0) * 100.0
-        / NULLIF(SUM(E.qtd_contatos), 0) AS avg_taxa_conversao,
-    ISNULL(SUM(A.valor_p1), 0) * 100.0
-        / NULLIF(SUM(A.valor_total_acordos), 0) AS avg_efetividade_caixa,
+    ISNULL(SUM(A.qtd_boletos_pagos), 0) * 100.0
+        / NULLIF(SUM(A.qtd_boletos_emitidos), 0) AS avg_taxa_conversao,
+    ISNULL(SUM(A.valor_p1_recebido), 0) * 100.0
+        / NULLIF(SUM(A.valor_p1), 0) AS avg_efetividade_caixa,
     ISNULL(SUM(A.valor_excecoes), 0) * 100.0
         / NULLIF(SUM(A.valor_total_acordos), 0) AS avg_pct_excecoes,
     COUNT(DISTINCT E.dia) AS dias_ativos

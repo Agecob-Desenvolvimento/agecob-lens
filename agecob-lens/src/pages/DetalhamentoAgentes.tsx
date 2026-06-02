@@ -7,7 +7,10 @@ import ExecutiveInsightCard from "@/components/executive/ExecutiveInsightCard";
 import ApiDebugBanner from "@/components/executive/ApiDebugBanner";
 import { AgentFilterBar } from "@/components/detalhamento/AgentFilterBar";
 import { DetalhamentoKpiStrip } from "@/components/detalhamento/DetalhamentoKpiStrip";
+import { PortfolioFilter } from "@/components/detalhamento/PortfolioFilter";
 import { useDetalhamentoViewModel } from "@/hooks/useDetalhamentoViewModel";
+import { usePortfolioList } from "@/hooks/usePortfolioList";
+import { useGlobalFilters } from "@/contexts/GlobalFiltersContext";
 import { MetaEditor, applyCustomMetas, type CustomMetas } from "@/components/detalhamento/MetaEditor";
 
 const FunilConversao = lazy(() => import("@/components/detalhamento/FunilConversao").then((m) => ({ default: m.FunilConversao })));
@@ -33,6 +36,8 @@ function loadCustomMetas(): CustomMetas {
 
 export default function DetalhamentoAgentes() {
   const vm = useDetalhamentoViewModel();
+  const { selectedDatabase } = useGlobalFilters();
+  const { portfolios, loading: portfolioLoading } = usePortfolioList(selectedDatabase);
   const [customMetas, setCustomMetas] = useState<CustomMetas>(loadCustomMetas);
 
   const metas = useMemo(
@@ -56,11 +61,19 @@ export default function DetalhamentoAgentes() {
             <div className="mx-auto max-w-[1600px] w-full p-6 space-y-7">
               <ApiDebugBanner error={vm.error} warnings={vm.warnings} />
 
-              <AgentFilterBar
-                agents={vm.agentList}
-                selected={vm.selectedAgent}
-                onSelect={vm.setSelectedAgent}
-              />
+              <div className="flex items-center gap-3">
+                <AgentFilterBar
+                  agents={vm.agentList}
+                  selected={vm.selectedAgent}
+                  onSelect={vm.setSelectedAgent}
+                />
+                <PortfolioFilter
+                  portfolios={portfolios}
+                  selected={vm.selectedPortfolio}
+                  onSelect={vm.setSelectedPortfolio}
+                  loading={portfolioLoading}
+                />
+              </div>
 
               <DetalhamentoKpiStrip
                 primary={vm.kpiPrimary}

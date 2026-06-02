@@ -135,6 +135,16 @@ export interface AcordoQuebrado {
   motivo: string;
 }
 
+export { type QuebraFaixa } from "./CurvaQuebraAtrasoChart";
+
+export const MOCK_CURVA_QUEBRA_ATRASO: QuebraFaixa[] = [
+  { faixa: "0-5 dias", taxaQuebra: 5, total: 1200 },
+  { faixa: "6-15 dias", taxaQuebra: 11, total: 980 },
+  { faixa: "16-30 dias", taxaQuebra: 23, total: 750 },
+  { faixa: "31-60 dias", taxaQuebra: 38, total: 520 },
+  { faixa: "60+ dias", taxaQuebra: 57, total: 310 },
+];
+
 export const MOCK_BOLETOS_QUEBRADOS_DETALHE: AcordoQuebrado[] = [
   {
     id: "QBR-001",

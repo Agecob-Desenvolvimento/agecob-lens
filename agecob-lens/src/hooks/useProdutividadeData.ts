@@ -31,15 +31,17 @@ export function useProdutividadeData(
 ): UseProdutividadeDataResult {
   const dateFrom = filters?.dateFrom ?? "";
   const dateTo = filters?.dateTo ?? "";
+  const portfolio = filters?.portfolio;
   const targets = useMemo(() => dbTargets(db), [db]);
 
   const prodQueries = useQueries({
     queries: targets.map((target) => ({
-      queryKey: ["produtividade", target, dateFrom, dateTo] as const,
+      queryKey: ["produtividade", target, dateFrom, dateTo, portfolio] as const,
       queryFn: () => {
         const f: ProdutividadeFilters = {};
         if (dateFrom) f.dateFrom = dateFrom;
         if (dateTo) f.dateTo = dateTo;
+        if (portfolio) f.portfolio = portfolio;
         return fetchProdutividade(target, Object.keys(f).length ? f : undefined);
       },
     })),

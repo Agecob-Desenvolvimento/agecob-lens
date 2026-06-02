@@ -202,6 +202,8 @@ def build_tabela_performance_periodo_query(
                 ISNULL(A.qtd_alo, 0)          AS qtd_alo,
                 ISNULL(A.qtd_contatos, 0)     AS qtd_contatos,
                 ISNULL(AC.qtd_acordos, 0)     AS qtd_acordos,
+                ISNULL(AC.qtd_boletos_emitidos, 0) AS qtd_boletos_emitidos,
+                ISNULL(AC.qtd_boletos_pagos, 0)    AS qtd_boletos_pagos,
                 ISNULL(AC.valor_total, 0)     AS valor_total,
                 ISNULL(AC.soma_primeira_parcela, 0) AS soma_primeira_parcela,
                 ISNULL(R.qtd_reprovados, 0)   AS qtd_reprovados,
@@ -225,6 +227,8 @@ def build_tabela_performance_periodo_query(
                 SELECT
                     ID_USUARIO,
                     COUNT(DISTINCT NR_RECEBIMENTO) AS qtd_acordos,
+                    SUM(CASE WHEN DT_VENCIMENTO < CAST(GETDATE() AS DATE) THEN 1 ELSE 0 END) AS qtd_boletos_emitidos,
+                    SUM(CASE WHEN DT_VENCIMENTO < CAST(GETDATE() AS DATE) THEN ({settings.BOLETO_PAGO_PRAZO_SQL}) ELSE 0 END) AS qtd_boletos_pagos,
                     SUM(VALOR) AS valor_total,
                     SUM(CASE WHEN PARCELA = 0 THEN VALOR ELSE 0 END) AS soma_primeira_parcela
                 FROM {db}.dbo.REC_MASTER
@@ -278,9 +282,11 @@ def build_tabela_performance_periodo_query(
                 MAX(matricula) AS matricula,
                 SUM(qtd_acionamentos) AS qtd_acionamentos,
                 SUM(qtd_acordos)      AS qtd_acordos,
+                SUM(qtd_boletos_emitidos) AS qtd_boletos_emitidos,
+                SUM(qtd_boletos_pagos)    AS qtd_boletos_pagos,
                 CAST(
-                    CASE WHEN SUM(qtd_acionamentos) > 0
-                         THEN SUM(qtd_acordos) * 100.0 / SUM(qtd_acionamentos)
+                    CASE WHEN SUM(qtd_boletos_emitidos) > 0
+                         THEN SUM(qtd_boletos_pagos) * 100.0 / SUM(qtd_boletos_emitidos)
                          ELSE 0.0
                     END AS DECIMAL(6,1)
                 ) AS conversao_pct,
@@ -312,9 +318,11 @@ def build_tabela_performance_periodo_query(
             matricula,
             qtd_acionamentos,
             qtd_acordos,
+            qtd_boletos_emitidos,
+            qtd_boletos_pagos,
             CAST(
-                CASE WHEN qtd_acionamentos > 0
-                     THEN qtd_acordos * 100.0 / qtd_acionamentos
+                CASE WHEN qtd_boletos_emitidos > 0
+                     THEN qtd_boletos_pagos * 100.0 / qtd_boletos_emitidos
                      ELSE 0.0
                 END AS DECIMAL(6,1)
             ) AS conversao_pct,

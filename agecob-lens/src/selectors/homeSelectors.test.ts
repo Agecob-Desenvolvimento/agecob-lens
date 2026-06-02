@@ -19,6 +19,8 @@ function row(overrides: Partial<ProdutividadeRowWithSource> & { NOME: string; so
     qtd_contatos: 0,
     cpc_percentual: 0,
     qtd_acordos: 0,
+    qtd_boletos_emitidos: 0,
+    qtd_boletos_pagos: 0,
     acordos_percentual: 0,
     valor_acordos: 0,
     acordo_medio: 0,
@@ -68,9 +70,9 @@ describe("selectTopByValor", () => {
 
 describe("selectBuValueData / selectBuEfficiencyData", () => {
   const rows: ProdutividadeRowWithSource[] = [
-    row({ NOME: "A", source: "COBwebRCBAUTOS", valor_acordos: 1000, valor_primeira_parcela: 100, qtd_acionamentos: 10, qtd_alo: 10, qtd_contatos: 4, qtd_acordos: 2 }),
-    row({ NOME: "B", source: "COBwebRCBAUTOS", valor_acordos: 2000, valor_primeira_parcela: 200, qtd_acionamentos: 20, qtd_alo: 20, qtd_contatos: 8, qtd_acordos: 4 }),
-    row({ NOME: "C", source: "COBwebRCBCONSUMER", valor_acordos: 5000, valor_primeira_parcela: 500, qtd_acionamentos: 50, qtd_alo: 50, qtd_contatos: 25, qtd_acordos: 10 }),
+    row({ NOME: "A", source: "COBwebRCBAUTOS", valor_acordos: 1000, valor_primeira_parcela: 100, qtd_acionamentos: 10, qtd_alo: 10, qtd_contatos: 4, qtd_acordos: 2, qtd_boletos_emitidos: 4, qtd_boletos_pagos: 2 }),
+    row({ NOME: "B", source: "COBwebRCBAUTOS", valor_acordos: 2000, valor_primeira_parcela: 200, qtd_acionamentos: 20, qtd_alo: 20, qtd_contatos: 8, qtd_acordos: 4, qtd_boletos_emitidos: 8, qtd_boletos_pagos: 4 }),
+    row({ NOME: "C", source: "COBwebRCBCONSUMER", valor_acordos: 5000, valor_primeira_parcela: 500, qtd_acionamentos: 50, qtd_alo: 50, qtd_contatos: 25, qtd_acordos: 10, qtd_boletos_emitidos: 25, qtd_boletos_pagos: 10 }),
   ];
 
   it("groups by BU with AUTOS before CONSUMER", () => {

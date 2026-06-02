@@ -48,11 +48,14 @@ export interface ProdutividadeRow {
   qtd_contatos: number;
   cpc_percentual: number;
   qtd_acordos: number;
+  qtd_boletos_emitidos: number;
+  qtd_boletos_pagos: number;
   acordos_percentual: number;
   valor_acordos: number;
   acordo_medio: number;
   parcelamento_medio: number;
   desconto_medio_percentual: number;
+  valor_p1_recebido: number;
   valor_primeira_parcela: number;
   qtd_excecoes: number;
   valor_excecoes: number;
@@ -67,6 +70,14 @@ export interface ProdutividadeFilters {
   assessoria?: string;
   dateFrom?: string;
   dateTo?: string;
+  /** Portfólio = DIV_AUX.CAMPO010 (string) */
+  portfolio?: string;
+}
+
+export interface PortfolioRow {
+  /** = CAMPO010 (o próprio nome do portfólio é o id) */
+  id: string;
+  nome: string;
 }
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "").trim();
@@ -239,8 +250,15 @@ export async function fetchProdutividade(
   if (filters?.assessoria && filters.assessoria !== "Todas") query.set("assessoria", filters.assessoria);
   if (filters?.dateFrom) query.set("date_from", filters.dateFrom);
   if (filters?.dateTo) query.set("date_to", filters.dateTo);
+  if (filters?.portfolio) query.set("portfolio", filters.portfolio);
   const suffix = query.toString() ? `?${query.toString()}` : "";
   return request<ApiEnvelope<ProdutividadeRow>>(`/dashboard/produtividade-hoje/${db}${suffix}`);
+}
+
+export async function fetchPortfolios(
+  db: Exclude<DatabaseOption, "todos">,
+): Promise<ApiEnvelope<PortfolioRow>> {
+  return request<ApiEnvelope<PortfolioRow>>(`/dashboard/portfolios/${db}`);
 }
 
 export interface PrimeiraParcelaDiaRow {
@@ -657,6 +675,7 @@ export interface TabelaPerformancePeriodoRow {
   conversao_pct: number;
   valor_total: number;
   soma_primeira_parcela: number;
+  valor_p1_recebido: number;
   qtd_reprovados: number;
   cpc_pct: number;
   qtd_excecoes: number;
@@ -890,6 +909,7 @@ export interface EfResumoDayRow {
 
 export interface EfResumoKpis {
   generated: number;
+  total_acordos: number;
   paid_on_time: number;
   conversion_pct: number;
   amount_maturing: number;
@@ -921,6 +941,25 @@ export async function fetchEfResumo(
   if (db && db !== "todos") params.set("db", db);
   if (idPortfolio != null) params.set("id_portfolio", String(idPortfolio));
   return request<EfResumoEnvelope>(`/efetividade/resumo?${params.toString()}`);
+}
+
+// ── Curva de Quebra por Atraso ──────────────────────────────────────────
+
+export interface EfCurvaQuebraRow {
+  faixa: string;
+  total: number;
+  quebrados: number;
+  taxa_quebra: number;
+}
+
+export async function fetchEfCurvaQuebra(
+  dateFrom: string,
+  dateTo: string,
+  db?: string,
+): Promise<ApiEnvelope<EfCurvaQuebraRow>> {
+  const params = new URLSearchParams({ date_from: dateFrom, date_to: dateTo });
+  if (db && db !== "todos") params.set("db", db);
+  return request<ApiEnvelope<EfCurvaQuebraRow>>(`/efetividade/curva-quebra?${params.toString()}`);
 }
 
 export interface RitmoDiaBanda {

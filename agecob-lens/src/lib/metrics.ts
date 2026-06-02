@@ -11,9 +11,12 @@ export interface MetricTotals {
   qtd_alo: number;
   qtd_contatos: number;
   qtd_acordos: number;
+  qtd_boletos_emitidos: number;
+  qtd_boletos_pagos: number;
   qtd_excecoes: number;
   valor_acordos: number;
   valor_primeira_parcela: number;
+  valor_primeira_parcela_recebida: number;
   valor_excecoes: number;
   valor_primeira_parcela_excecoes: number;
   qtd_rejeitados: number;
@@ -31,9 +34,12 @@ export function aggregateTotals(rows: ProdutividadeRowWithSource[]): MetricTotal
       acc.qtd_alo += Number(row.qtd_alo || 0);
       acc.qtd_contatos += Number(row.qtd_contatos || 0);
       acc.qtd_acordos += Number(row.qtd_acordos || 0);
+      acc.qtd_boletos_emitidos += Number(row.qtd_boletos_emitidos || 0);
+      acc.qtd_boletos_pagos += Number(row.qtd_boletos_pagos || 0);
       acc.qtd_excecoes += Number(row.qtd_excecoes || 0);
       acc.valor_acordos += Number(row.valor_acordos || 0);
       acc.valor_primeira_parcela += Number(row.valor_primeira_parcela || 0);
+      acc.valor_primeira_parcela_recebida += Number(row.valor_p1_recebido || 0);
       acc.valor_excecoes += Number(row.valor_excecoes || 0);
       acc.valor_primeira_parcela_excecoes += Number(row.valor_primeira_parcela_excecoes || 0);
       acc.qtd_rejeitados += Number(row.qtd_rejeitados || 0);
@@ -47,9 +53,12 @@ export function aggregateTotals(rows: ProdutividadeRowWithSource[]): MetricTotal
       qtd_alo: 0,
       qtd_contatos: 0,
       qtd_acordos: 0,
+      qtd_boletos_emitidos: 0,
+      qtd_boletos_pagos: 0,
       qtd_excecoes: 0,
       valor_acordos: 0,
       valor_primeira_parcela: 0,
+      valor_primeira_parcela_recebida: 0,
       valor_excecoes: 0,
       valor_primeira_parcela_excecoes: 0,
       qtd_rejeitados: 0,
@@ -85,10 +94,10 @@ export function calcTaxaContato(t: Pick<MetricTotals, "qtd_alo" | "qtd_acionamen
   return ((t.qtd_alo ?? 0) * 100) / t.qtd_acionamentos;
 }
 
-/** Conversão = qtd_acordos / qtd_contatos (sobre quem o agente realmente conversou) */
-export function calcConversao(t: Pick<MetricTotals, "qtd_acordos" | "qtd_contatos">): number {
-  if (t.qtd_contatos <= 0) return 0;
-  return (t.qtd_acordos * 100) / t.qtd_contatos;
+/** Conversão = boletos pagos no prazo (5d do venc.) / boletos emitidos */
+export function calcConversao(t: Pick<MetricTotals, "qtd_boletos_pagos" | "qtd_boletos_emitidos">): number {
+  if (t.qtd_boletos_emitidos <= 0) return 0;
+  return (t.qtd_boletos_pagos * 100) / t.qtd_boletos_emitidos;
 }
 
 /** Ticket médio = valor_acordos / qtd_acordos */

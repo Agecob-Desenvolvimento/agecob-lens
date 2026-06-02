@@ -44,7 +44,7 @@ from dominios.graficos.queries import (
     build_rejeitados_detalhe_agente_query,
     build_quebrados_detalhe_agente_query,
 )
-from dominios.produtividade.queries import build_benchmark_query, build_produtividade_query
+from dominios.produtividade.queries import build_benchmark_query, build_produtividade_query, build_produtividade_hoje_params
 from dominios.produtividade.servico import produtividade_servico
 
 router = APIRouter(prefix="/dashboard")
@@ -296,6 +296,25 @@ def get_tabela_performance_periodo(
 
 
 # ─────────────────────────────────────────────────────────────────
+# ENDPOINTS: PORTFOLIO LIST
+# ─────────────────────────────────────────────────────────────────
+@router.get("/portfolios/{database_name}")
+def get_portfolios(database_name: str, request: Request = None) -> Dict[str, Any]:
+    run_id = getattr(request.state, "run_id", f"srv-{uuid4().hex[:12]}") if request else f"srv-{uuid4().hex[:12]}"
+    validated_db = validate_database(database_name)
+    rows = run_query(
+        "SELECT DISTINCT CAMPO010 AS id, CAMPO010 AS nome FROM DIV_AUX (NOLOCK) "
+        "WHERE CAMPO010 IS NOT NULL AND LTRIM(RTRIM(CAMPO010)) <> '' ORDER BY CAMPO010",
+        validated_db,
+        run_id=run_id,
+        context="dashboard/portfolios",
+    )
+    return build_response_envelope(
+        rows, [validated_db], filters={}, run_id=run_id,
+    )
+
+
+# ─────────────────────────────────────────────────────────────────
 # ENDPOINTS: PRODUTIVIDADE
 # ─────────────────────────────────────────────────────────────────
 @router.get("/produtividade-hoje/{database_name}")
@@ -304,20 +323,24 @@ def get_dashboard_produtividade_hoje(
     assessoria: Optional[str] = Query(default=None),
     date_from: Optional[str] = Query(default=None),
     date_to: Optional[str] = Query(default=None),
+    portfolio: Optional[str] = Query(default=None),
     request: Request = None,
 ) -> Dict[str, Any]:
     endpoint_started_at = time.perf_counter()
     run_id = getattr(request.state, "run_id", f"srv-{uuid4().hex[:12]}") if request else f"srv-{uuid4().hex[:12]}"
     database_name = validate_database(database_name)
     parsed_from, parsed_to_excl = _parse_period(date_from, date_to)
+    prod_params = build_produtividade_hoje_params(portfolio)
     rows = run_query(
         build_produtividade_query(
             database_name,
             use_distinct_esforco=True,
             date_from=parsed_from,
             date_to_exclusive=parsed_to_excl,
+            portfolio=portfolio,
         ),
         database_name,
+        params=prod_params,
         run_id=run_id,
         context="dashboard/produtividade-hoje",
     )
