@@ -402,6 +402,10 @@ export function useDetalhamentoViewModel(): DetalhamentoViewModel {
     () => aggregateTotals(portfolioAgentRows), [portfolioAgentRows],
   );
 
+  // Totais efetivos: respeitam o filtro de portfólio quando ativo. KPIs, funil,
+  // metas e radar usam isto para refletir o portfólio selecionado.
+  const effectiveTotals = portfolioActive ? portfolioAgentTotals : agentTotals;
+
   // ── KPI deltas (Change 4) ──
   const kpiDeltas = useMemo((): Record<string, number> => {
     if (!selectedAgent || prevAgentRows.length === 0) return {};
@@ -420,27 +424,26 @@ export function useDetalhamentoViewModel(): DetalhamentoViewModel {
 
   // ── KPIs ──
   const kpiPrimary: KpiDatum[] = useMemo(() => [
-    { id: "valor_acordos", label: "Receita", value: agentTotals.valor_acordos, unit: "BRL" },
-    { id: "primeira_parcela", label: "1ª Parcela", value: agentTotals.valor_primeira_parcela, unit: "BRL" },
-    { id: "qtd_acordos", label: "Acordos Fechados", value: agentTotals.qtd_acordos, unit: "count" },
-    { id: "ticket_medio", label: "Ticket Médio", value: calcTicketMedio(agentTotals), unit: "BRL" },
-  ], [agentTotals]);
+    { id: "valor_acordos", label: "Receita", value: effectiveTotals.valor_acordos, unit: "BRL" },
+    { id: "primeira_parcela", label: "1ª Parcela", value: effectiveTotals.valor_primeira_parcela, unit: "BRL" },
+    { id: "qtd_acordos", label: "Acordos Fechados", value: effectiveTotals.qtd_acordos, unit: "count" },
+    { id: "ticket_medio", label: "Ticket Médio", value: calcTicketMedio(effectiveTotals), unit: "BRL" },
+  ], [effectiveTotals]);
 
   const kpiSecondary: KpiDatum[] = useMemo(() => [
-    { id: "contato_alo", label: "Contato", value: agentTotals.qtd_alo, unit: "count" },
-    { id: "cpc", label: "CPC", value: agentTotals.qtd_contatos, unit: "count" },
-    { id: "taxa_cpc", label: "Taxa CPC %", value: calcCpc(agentTotals), unit: "%" },
-    { id: "conversao", label: "Conversão %", value: calcConversao(agentTotals), unit: "%" },
-    { id: "qtd_acionamentos", label: "Qtd Acionamentos", value: agentTotals.qtd_acionamentos, unit: "count" },
-    { id: "qtd_excecoes", label: "Qtd Exceções", value: agentTotals.qtd_excecoes, unit: "count" },
-    { id: "valor_excecoes", label: "Valor Exceções", value: agentTotals.valor_excecoes, unit: "BRL" },
-    { id: "qtd_rejeitados", label: "Qtd Rejeitados", value: agentTotals.qtd_rejeitados, unit: "count" },
-    { id: "valor_rejeitados", label: "Valor Rejeitados", value: agentTotals.valor_rejeitados, unit: "BRL" },
-    { id: "receita_hora", label: "Receita/Hora", value: calcReceitaPorHora(agentTotals), unit: "BRL" },
-    { id: "idade_media", label: "Idade Média (dias)", value: calcIdadeMediaAcordos(agentTotals), unit: "count" },
-  ], [agentTotals]);
+    { id: "contato_alo", label: "Contato", value: effectiveTotals.qtd_alo, unit: "count" },
+    { id: "cpc", label: "CPC", value: effectiveTotals.qtd_contatos, unit: "count" },
+    { id: "taxa_cpc", label: "Taxa CPC %", value: calcCpc(effectiveTotals), unit: "%" },
+    { id: "conversao", label: "Conversão %", value: calcConversao(effectiveTotals), unit: "%" },
+    { id: "qtd_acionamentos", label: "Qtd Acionamentos", value: effectiveTotals.qtd_acionamentos, unit: "count" },
+    { id: "qtd_excecoes", label: "Qtd Exceções", value: effectiveTotals.qtd_excecoes, unit: "count" },
+    { id: "valor_excecoes", label: "Valor Exceções", value: effectiveTotals.valor_excecoes, unit: "BRL" },
+    { id: "qtd_rejeitados", label: "Qtd Rejeitados", value: effectiveTotals.qtd_rejeitados, unit: "count" },
+    { id: "valor_rejeitados", label: "Valor Rejeitados", value: effectiveTotals.valor_rejeitados, unit: "BRL" },
+    { id: "receita_hora", label: "Receita/Hora", value: calcReceitaPorHora(effectiveTotals), unit: "BRL" },
+    { id: "idade_media", label: "Idade Média (dias)", value: calcIdadeMediaAcordos(effectiveTotals), unit: "count" },
+  ], [effectiveTotals]);
 
-  const effectiveTotals = portfolioActive ? portfolioAgentTotals : agentTotals;
   const funil: FunilData = useMemo(() => ({
     acionamentos: effectiveTotals.qtd_acionamentos,
     alo: effectiveTotals.qtd_alo,
