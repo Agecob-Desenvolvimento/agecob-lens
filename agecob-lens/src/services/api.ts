@@ -461,6 +461,28 @@ export async function fetchAcordosPorPortfolio(
   return request<ApiEnvelope<AcordosPorPortfolioRow>>(`/dashboard/acordos-por-portfolio/${db}${suffix}`);
 }
 
+// ── Cluster A consolidated (Phase 2) ─────────────────────────────
+/** One row per (portfolio, ID_REC_STATUS). Slice by status to rebuild the
+ *  5 legacy por-portfolio shapes — see lib/portfolioRollup.ts. */
+export interface PortfolioRollupRow {
+  portfolio_name: string;
+  id_rec_status: number;
+  qtd: number;
+  valor: number;
+}
+
+export async function fetchPortfolioRollup(
+  db: DatabaseOption,
+  dateFrom?: string,
+  dateTo?: string,
+): Promise<ApiEnvelope<PortfolioRollupRow>> {
+  const query = new URLSearchParams();
+  if (dateFrom) query.set("dateFrom", dateFrom);
+  if (dateTo) query.set("dateTo", dateTo);
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<ApiEnvelope<PortfolioRollupRow>>(`/dashboard/portfolio-rollup/${db}${suffix}`);
+}
+
 export async function fetchExcecoesSemPortfolio(
   db: DatabaseOption,
   dateFrom?: string,

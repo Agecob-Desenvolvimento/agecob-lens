@@ -33,6 +33,7 @@ from dominios.graficos.queries import (
     build_excecoes_por_agente_query,
     build_excecoes_por_portfolio_query,
     build_excecoes_sem_portfolio_query,
+    build_portfolio_rollup_query,
     build_primeira_parcela_dia_query,
     build_primeira_parcela_por_agente_query,
     build_primeira_parcela_por_portfolio_query,
@@ -590,6 +591,30 @@ def get_excecoes_por_agente(
     return _run_dashboard_chart(
         db, build_excecoes_por_agente_query,
         "dashboard/excecoes-por-agente", request,
+        query_args=(parsed_from, parsed_to_excl),
+        filters_extra={"date": f"{parsed_from}/{parsed_to_excl}" if parsed_from else "today"},
+        cache_key_suffix=period_suffix,
+    )
+
+
+@router.get("/portfolio-rollup/{db}")
+def get_portfolio_rollup(
+    db: str,
+    dateFrom: Optional[str] = Query(default=None),
+    dateTo: Optional[str] = Query(default=None),
+    request: Request = None,
+) -> Dict[str, Any]:
+    """Cluster A consolidado (Phase 2): um scan agregando por portfólio + status.
+
+    Slices de status reconstroem client-side os 5 endpoints por-portfólio:
+    acordos/1ª parcela (1,3,12), exceções (5), rejeitados (7), quebrados (2).
+    Reusa o mesmo cache TTL/envelope dos demais charts via _run_dashboard_chart.
+    """
+    parsed_from, parsed_to_excl = _parse_period(dateFrom, dateTo)
+    period_suffix = f"|period:{parsed_from or 'hoje'}-{parsed_to_excl or 'hoje'}"
+    return _run_dashboard_chart(
+        db, build_portfolio_rollup_query,
+        "dashboard/portfolio-rollup", request,
         query_args=(parsed_from, parsed_to_excl),
         filters_extra={"date": f"{parsed_from}/{parsed_to_excl}" if parsed_from else "today"},
         cache_key_suffix=period_suffix,

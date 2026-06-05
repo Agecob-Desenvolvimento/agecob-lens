@@ -295,6 +295,68 @@ def build_quebrados_por_portfolio_query(db: str, date_from: str = None, date_to_
     return wrap_todos_or_single(db, _base, agg, order_by=order, date_from=date_from, date_to_exclusive=date_to_exclusive)
 
 
+def build_portfolio_rollup_query(db: str, date_from: str = None, date_to_exclusive: str = None) -> str:
+    """
+    Cluster A consolidado (Phase 2). UM único scan de REC_MASTER agrupado por
+    portfólio (CAMPO010) E ID_REC_STATUS. Reproduz client-side, por fatiamento
+    de status, os 5 endpoints por-portfólio:
+
+        acordos-por-portfolio              -> id_rec_status IN (1, 3, 12)
+        primeira-parcela-por-portfolio     -> id_rec_status IN (1, 3, 12)
+        excecoes-por-portfolio             -> id_rec_status = 5
+        rejeitados-por-portfolio           -> id_rec_status = 7
+        quebrados-por-portfolio            -> id_rec_status = 2
+
+    JOIN graph, CROSS APPLY TOP 1, resolução de portfólio, PARCELA = 0, filtro
+    de agentes e janela de data são IDÊNTICOS aos 5 builders originais — apenas
+    o filtro de status é a união (STATUS_PORTFOLIO_ROLLUP_SQL) e a grade ganha
+    R.ID_REC_STATUS. Medidas: COUNT(DISTINCT NR_RECEBIMENTO) e SUM(VALOR),
+    exatamente como nos builders originais.
+
+    Paridade de `qtd` para os slices multi-status (acordos / 1ª parcela, que
+    somam 1,3,12) só é exata se nenhum NR_RECEBIMENTO aparecer sob mais de um
+    status aprovado no mesmo portfólio — verificado pelo harness de paridade
+    (scripts/parity_portfolio_rollup.py). `valor` é aditivo: paridade incondicional.
+    """
+    def _base(database: str) -> str:
+        return f"""
+            SELECT
+                DA.{settings.PORTFOLIO_COLUMN} AS portfolio_name,
+                R.ID_REC_STATUS AS id_rec_status,
+                COUNT(DISTINCT R.NR_RECEBIMENTO) AS qtd,
+                SUM(R.VALOR) AS valor
+            FROM {database}.dbo.REC_MASTER R (NOLOCK)
+            JOIN {database}.dbo.USU_MASTER U (NOLOCK) ON R.ID_USUARIO = U.ID_USUARIO
+            CROSS APPLY (
+                SELECT TOP 1 DA2.{settings.PORTFOLIO_COLUMN}
+                FROM {database}.dbo.REC_DIVIDAS RD (NOLOCK)
+                JOIN {database}.dbo.DIV_AUX DA2 (NOLOCK) ON RD.ID_DIVIDA = DA2.ID_DIVIDA
+                WHERE RD.NR_RECEBIMENTO = R.NR_RECEBIMENTO
+                  AND RD.ID_CARTEIRA = R.ID_CARTEIRA
+                  AND DA2.{settings.PORTFOLIO_COLUMN} IS NOT NULL
+            ) DA
+            WHERE R.DT_EMISSAO >= @Hoje AND R.DT_EMISSAO < @Amanha
+              AND R.PARCELA = {settings.PRIMEIRA_PARCELA}
+              AND R.ID_REC_STATUS IN {settings.STATUS_PORTFOLIO_ROLLUP_SQL}
+              {settings.FILTRO_AGENTES_EXCLUIDOS_SQL}
+            GROUP BY DA.{settings.PORTFOLIO_COLUMN}, R.ID_REC_STATUS
+        """
+
+    agg = """
+        SELECT
+            portfolio_name,
+            id_rec_status,
+            SUM(qtd) AS qtd,
+            SUM(valor) AS valor
+    """
+    order = (
+        "GROUP BY portfolio_name, id_rec_status ORDER BY portfolio_name, id_rec_status"
+        if db == "todos"
+        else "ORDER BY portfolio_name, id_rec_status"
+    )
+    return wrap_todos_or_single(db, _base, agg, order_by=order, date_from=date_from, date_to_exclusive=date_to_exclusive)
+
+
 def _build_detalhe_por_portfolio(db: str, status_sql: str, date_from: str = None, date_to_exclusive: str = None) -> str:
     """
     Lista detalhe (1 linha por acordo) de um portfólio específico, filtrado por

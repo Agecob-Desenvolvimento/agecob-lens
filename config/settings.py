@@ -47,6 +47,11 @@ STATUS_EXCECAO: Tuple[int, ...] = (5,)
 STATUS_REJEITADO: Tuple[int, ...] = (7,)
 STATUS_QUEBRADO: Tuple[int, ...] = (2,)
 STATUS_UNIVERSO_ACORDOS: Tuple[int, ...] = STATUS_APROVADOS + STATUS_EXCECAO  # (1, 3, 5, 12)
+# Cluster A (portfolio-rollup): união exata dos 5 conjuntos de status por-portfólio.
+# Derivado dos constantes existentes — não inferir literais. Ordenado p/ leitura.
+STATUS_PORTFOLIO_ROLLUP: Tuple[int, ...] = tuple(sorted(set(
+    STATUS_APROVADOS + STATUS_EXCECAO + STATUS_REJEITADO + STATUS_QUEBRADO
+)))  # (1, 2, 3, 5, 7, 12)
 
 PRIMEIRA_PARCELA: int = 0
 PORTFOLIO_COLUMN: str = "CAMPO010"
@@ -126,6 +131,7 @@ STATUS_EXCECAO_SQL: str = _sql_in(STATUS_EXCECAO)
 STATUS_REJEITADO_SQL: str = _sql_in(STATUS_REJEITADO)
 STATUS_QUEBRADO_SQL: str = _sql_in(STATUS_QUEBRADO)
 STATUS_UNIVERSO_SQL: str = _sql_in(STATUS_UNIVERSO_ACORDOS)
+STATUS_PORTFOLIO_ROLLUP_SQL: str = _sql_in(STATUS_PORTFOLIO_ROLLUP)
 CPC_IDS_SQL: str = _sql_in(CPC_COMPLEMENTO_IDS)
 
 # Boleto pago no prazo (5 dias após vencimento) — base da Conversão (pagos/emitidos)

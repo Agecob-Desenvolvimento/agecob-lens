@@ -19,17 +19,26 @@ const STAGE_LABELS = ["Acionamentos", "Contato", "CPC", "Acordos"] as const;
 /** Barra de um estágio do funil — largura proporcional ao valor máximo da BU */
 function StageBar({ value, max, color, label, sub }: { value: number; max: number; color: string; label: string; sub: string }) {
   const pct = max > 0 ? Math.max(2, (value / max) * 100) : 0;
+  // Barra estreita não comporta o número inteiro: mostra ao lado, fora da barra.
+  const labelInside = pct >= 18;
   return (
     <div className="flex items-center gap-2 min-w-0">
       <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground w-[72px] shrink-0 text-right">
         {label}
       </span>
-      <div className="flex-1 min-w-0">
-        <div className="h-5 rounded-sm transition-all duration-500 flex items-center px-2 min-w-[24px]" style={{ width: `${pct}%`, backgroundColor: color }}>
-          <span className="text-[11px] font-semibold text-white tabular-nums truncate drop-shadow-sm">
+      <div className="flex-1 min-w-0 flex items-center gap-1">
+        <div className="h-5 rounded-sm transition-all duration-500 flex items-center px-2 min-w-[24px] shrink-0" style={{ width: `${pct}%`, backgroundColor: color }}>
+          {labelInside && (
+            <span className="text-[11px] font-semibold text-white tabular-nums truncate drop-shadow-sm">
+              {fmtNum(value)}
+            </span>
+          )}
+        </div>
+        {!labelInside && (
+          <span className="text-[11px] font-semibold tabular-nums shrink-0" style={{ color }}>
             {fmtNum(value)}
           </span>
-        </div>
+        )}
       </div>
       <span className="text-[10px] text-muted-foreground w-[72px] shrink-0 tabular-nums">
         {sub}
