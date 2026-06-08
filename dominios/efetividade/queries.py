@@ -20,7 +20,7 @@ _EF_AGENT_FILTER = (
 )
 _EF_DB_A = "COBwebRCBAUTOS"
 _EF_DB_C = "COBwebRCBCONSUMER"
-_EF_STATUS = settings.STATUS_APROVADOS_SQL  # (1, 3, 12)
+_EF_STATUS = settings.STATUS_GERADOS_SQL  # (1, 2, 3, 10, 12) — valores gerados
 _EF_DB_VARIANTS = ["todos", _EF_DB_A, _EF_DB_C]
 
 
@@ -194,7 +194,7 @@ def _build_ef_resumo_sql(
             f"    INNER JOIN {database}.dbo.USU_MASTER (NOLOCK) U ON R.ID_USUARIO = U.ID_USUARIO\n"
             f"    WHERE R.DT_VENCIMENTO >= CONVERT(DATE, '{date_from_lit}', 112)\n"
             f"      AND R.DT_VENCIMENTO <= CONVERT(DATE, '{date_to_lit}', 112)\n"
-            f"      AND R.ID_REC_STATUS IN {settings.STATUS_APROVADOS_SQL}\n"
+            f"      AND R.ID_REC_STATUS IN {settings.STATUS_GERADOS_SQL}\n"
             f"      AND R.PARCELA {parcela_cond}{portfolio_filter}\n"
             f"      {_EF_AGENT_FILTER}"
         )
@@ -209,6 +209,10 @@ def _build_ef_resumo_sql(
 SELECT
     COUNT(*) AS generated,
     COUNT(DISTINCT NR_RECEBIMENTO) AS total_acordos,
+    SUM(CASE WHEN DT_VENCIMENTO >= CAST(GETDATE() AS DATE)
+             AND (DT_PAGAMENTO IS NULL OR VR_PAGO = 0) THEN 1 ELSE 0 END) AS to_mature,
+    SUM(CASE WHEN DT_VENCIMENTO < CAST(GETDATE() AS DATE)
+             AND ({pago_expr}) = 0 THEN 1 ELSE 0 END) AS overdue_unpaid,
     SUM({pago_expr}) AS paid_on_time,
     CAST(100.0 * SUM({pago_expr}) / NULLIF(COUNT(*), 0) AS DECIMAL(8, 2)) AS conversion_pct,
     COALESCE(SUM(VALOR), 0) AS amount_maturing,

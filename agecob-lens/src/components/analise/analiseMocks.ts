@@ -96,17 +96,17 @@ export interface PortfolioQtd {
   qtd: number;
 }
 
-export const MOCK_EXCECOES_PORTFOLIO: PortfolioQtd[] = [
-  { nome: "Santander Financeira", qtd: 4 },
-  { nome: "BV Financeira", qtd: 2 },
-  { nome: "Omni", qtd: 1 },
+export const MOCK_EXCECOES_PORTFOLIO: PortfolioValor[] = [
+  { nome: "Santander Financeira", valor: 48000 },
+  { nome: "BV Financeira", valor: 22000 },
+  { nome: "Omni", valor: 9000 },
 ];
 
-export const MOCK_REJEITADOS_PORTFOLIO: PortfolioQtd[] = [
-  { nome: "Santander Financeira", qtd: 9 },
-  { nome: "BV Financeira", qtd: 6 },
-  { nome: "Omni", qtd: 4 },
-  { nome: "Pan", qtd: 2 },
+export const MOCK_REJEITADOS_PORTFOLIO: PortfolioValor[] = [
+  { nome: "Santander Financeira", valor: 91000 },
+  { nome: "BV Financeira", valor: 63000 },
+  { nome: "Omni", valor: 40000 },
+  { nome: "Pan", valor: 18000 },
 ];
 
 export const MOCK_BOLETOS_QUEBRADOS: PortfolioQtd[] = [

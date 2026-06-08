@@ -112,6 +112,12 @@ export function calcExcecoesPctValor(t: Pick<MetricTotals, "valor_excecoes" | "v
   return (t.valor_excecoes * 100) / t.valor_acordos;
 }
 
+/** Efetividade de caixa = valor_primeira_parcela / valor_acordos * 100 */
+export function calcEfetividadeCaixa(t: Pick<MetricTotals, "valor_primeira_parcela" | "valor_acordos">): number {
+  if (t.valor_acordos <= 0) return 0;
+  return (t.valor_primeira_parcela * 100) / t.valor_acordos;
+}
+
 /** Taxa de exceções (sobre quantidade) = qtd_excecoes / qtd_acordos * 100 */
 export function calcExcecoesPctQtd(t: Pick<MetricTotals, "qtd_excecoes" | "qtd_acordos">): number {
   if (t.qtd_acordos <= 0) return 0;
@@ -189,14 +195,14 @@ export function formatBRLCompact(
 }
 
 /**
- * Delta com seta + magnitude inteira. Espera fração (0.124 = 12,4%).
- *   formatDelta(0.124, "up")  → "↑ 12%"
- *   formatDelta(0.041, "down") → "↓ 4%"
- *   formatDelta(0.003, "flat") → "→ 0%"
+ * Delta magnitude inteira (sem seta — o ícone é renderizado pelo componente).
+ * Espera fração (0.124 = 12,4%).
+ *   formatDelta(0.124, "up")   → "12%"
+ *   formatDelta(0.041, "down") → "4%"
+ *   formatDelta(0.003, "flat") → "0%"
  */
-export function formatDelta(value: number, direction: "up" | "down" | "flat"): string {
-  const arrow = direction === "up" ? "↑" : direction === "down" ? "↓" : "→";
-  return `${arrow} ${Math.round(Math.abs(value) * 100)}%`;
+export function formatDelta(value: number, _direction: "up" | "down" | "flat"): string {
+  return `${Math.round(Math.abs(value) * 100)}%`;
 }
 
 export function fmtBRL(v: number, options?: { compact?: boolean }): string {

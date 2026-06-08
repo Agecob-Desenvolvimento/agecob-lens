@@ -14,15 +14,18 @@ import { useProdutividadeData } from "@/hooks/useProdutividadeData";
 import { previousPeriod } from "@/lib/dates";
 import {
   aggregateTotals,
+  type MetricTotals,
   calcCpc,
   calcConversao,
   calcTicketMedio,
+  calcTaxaContato,
+  calcEfetividadeCaixa,
   calcExcecoesPctValor,
   calcReceitaPorHora,
   calcIdadeMediaAcordos,
 } from "@/lib/metrics";
 import type { ProdutividadeRowWithSource } from "@/hooks/useProdutividadeData";
-import type { KpiDatum } from "@/components/detalhamento/DetalhamentoKpiStrip";
+import type { KpiDatum, KpiBenchmark } from "@/components/detalhamento/DetalhamentoKpiStrip";
 import type { FunilData } from "@/components/detalhamento/FunilConversao";
 import type { BulletPanelData } from "@/components/detalhamento/BulletChartsPanel";
 import type { AgentRow } from "@/components/detalhamento/PerformanceHeatmap";
@@ -59,6 +62,8 @@ export interface DetalhamentoViewModel {
   setSelectedPortfolio: (id: string | null) => void;
   kpiPrimary: KpiDatum[];
   kpiSecondary: KpiDatum[];
+  /** Office-average reference per KPI id (only when an agent is selected). */
+  kpiBenchmarks: Record<string, KpiBenchmark>;
   funil: FunilData;
   metas: BulletPanelData;
   heatmapAgents: AgentRow[];
@@ -151,6 +156,49 @@ function rowsToPareto(rows: ProdutividadeRowWithSource[]): Array<{ nome: string;
     .map((r) => ({ nome: r.NOME, valor: Number(r.valor_acordos || 0) }));
 }
 
+interface RadarDimSpec {
+  dim: string;
+  unit: RadarDimension["unit"];
+  agg: (t: MetricTotals, cnt: number) => number;
+  row: (r: ProdutividadeRowWithSource) => number;
+}
+
+const RADAR_DIMS: RadarDimSpec[] = [
+  {
+    dim: "Taxa de Contato", unit: "%",
+    agg: (t) => calcTaxaContato(t),
+    row: (r) => calcTaxaContato({ qtd_alo: r.qtd_alo, qtd_acionamentos: r.qtd_acionamentos }),
+  },
+  {
+    dim: "Acordos Fechados", unit: "count",
+    agg: (t, cnt) => t.qtd_acordos / cnt,
+    row: (r) => r.qtd_acordos,
+  },
+  {
+    dim: "CPC", unit: "%",
+    agg: (t) => calcCpc(t),
+    row: (r) => calcCpc({ qtd_contatos: r.qtd_contatos, qtd_alo: r.qtd_alo }),
+  },
+  {
+    dim: "Conversão", unit: "%",
+    agg: (t) => calcConversao(t),
+    row: (r) => calcConversao({ qtd_boletos_pagos: r.qtd_boletos_pagos, qtd_boletos_emitidos: r.qtd_boletos_emitidos }),
+  },
+  {
+    dim: "Efetividade", unit: "%",
+    agg: (t) => calcEfetividadeCaixa(t),
+    row: (r) => calcEfetividadeCaixa({ valor_primeira_parcela: Number(r.valor_primeira_parcela || 0), valor_acordos: Number(r.valor_acordos || 0) }),
+  },
+];
+
+const radarScore = (v: number, ceil: number) =>
+  ceil > 0 ? Math.round(Math.min(100, (v / ceil) * 100)) : 0;
+
+/**
+ * Agent radar: absolute 0–100% scale. Ceiling (S grade) = internal benchmark
+ * (team average) per dim — no peer-max normalization. Agent scored vs benchmark;
+ * the team polygon sits on the S ring (100) as the reference.
+ */
 function buildRadarData(
   rows: ProdutividadeRowWithSource[],
   agentRows: ProdutividadeRowWithSource[],
@@ -159,48 +207,32 @@ function buildRadarData(
   const agentTotals = aggregateTotals(agentRows);
   const agentCnt = agentRows.length || 1;
 
-  const agentValor = (r: ProdutividadeRowWithSource) => Number(r.valor_acordos || 0);
-  const agentQtd = (r: ProdutividadeRowWithSource) => r.qtd_acordos;
-  const agentCpc = (r: ProdutividadeRowWithSource) =>
-    calcCpc({ qtd_contatos: r.qtd_contatos, qtd_alo: r.qtd_alo });
-  const agentConv = (r: ProdutividadeRowWithSource) =>
-    calcConversao({ qtd_boletos_pagos: r.qtd_boletos_pagos, qtd_boletos_emitidos: r.qtd_boletos_emitidos });
-  const agentTicket = (r: ProdutividadeRowWithSource) =>
-    calcTicketMedio({ valor_acordos: Number(r.valor_acordos || 0), qtd_acordos: r.qtd_acordos });
-
-  const maxValor = Math.max(1, ...rows.map(agentValor));
-  const maxQtd = Math.max(1, ...rows.map(agentQtd));
-  const maxCpc = Math.max(1, ...rows.map(agentCpc));
-  const maxConv = Math.max(1, ...rows.map(agentConv));
-  const maxTicket = Math.max(1, ...rows.map(agentTicket));
-
-  const norm = (v: number, m: number) => Math.round(Math.min(100, (v / m) * 100));
-
-  const teamAvgValor = rows.reduce((a, r) => a + agentValor(r), 0) / rows.length;
-  const teamAvgQtd = rows.reduce((a, r) => a + agentQtd(r), 0) / rows.length;
-  const teamAvgCpc = rows.reduce((a, r) => a + agentCpc(r), 0) / rows.length;
-  const teamAvgConv = rows.reduce((a, r) => a + agentConv(r), 0) / rows.length;
-  const teamAvgTicket = rows.reduce((a, r) => a + agentTicket(r), 0) / rows.length;
-
-  return [
-    { dim: "Receita", agent: norm(agentTotals.valor_acordos / agentCnt, maxValor), team: norm(teamAvgValor, maxValor), rawAgent: agentTotals.valor_acordos / agentCnt, rawTeam: teamAvgValor, unit: "BRL" },
-    { dim: "Acordos Fechados", agent: norm(agentTotals.qtd_acordos / agentCnt, maxQtd), team: norm(teamAvgQtd, maxQtd), rawAgent: agentTotals.qtd_acordos / agentCnt, rawTeam: teamAvgQtd, unit: "count" },
-    { dim: "CPC", agent: norm(calcCpc(agentTotals), maxCpc), team: norm(teamAvgCpc, maxCpc), rawAgent: calcCpc(agentTotals), rawTeam: teamAvgCpc, unit: "%" },
-    { dim: "Conversão", agent: norm(calcConversao(agentTotals), maxConv), team: norm(teamAvgConv, maxConv), rawAgent: calcConversao(agentTotals), rawTeam: teamAvgConv, unit: "%" },
-    { dim: "Ticket Médio", agent: norm(calcTicketMedio(agentTotals), maxTicket), team: norm(teamAvgTicket, maxTicket), rawAgent: calcTicketMedio(agentTotals), rawTeam: teamAvgTicket, unit: "BRL" },
-  ];
+  return RADAR_DIMS.map((s) => {
+    const benchmark = rows.reduce((a, r) => a + s.row(r), 0) / rows.length;
+    const agentVal = s.agg(agentTotals, agentCnt);
+    return {
+      dim: s.dim,
+      unit: s.unit,
+      agent: radarScore(agentVal, benchmark),
+      team: benchmark > 0 ? 100 : 0,
+      rawAgent: agentVal,
+      rawTeam: benchmark,
+    };
+  });
 }
 
 /**
- * Team-wide radar profile (filter = "Todos"). Reuses buildRadarData's team
- * series (per-agent average vs best agent per dim) as the visible polygon.
+ * Team-wide radar profile (filter = "Todos"). No agent subject, so the polygon
+ * shows team average as % of the best agent per dim (relative strengths).
  */
 function buildTeamRadar(rows: ProdutividadeRowWithSource[]): RadarDimension[] {
-  return buildRadarData(rows, []).map((d) => ({
-    ...d,
-    agent: d.team,
-    rawAgent: d.rawTeam,
-  }));
+  if (rows.length === 0) return [];
+  return RADAR_DIMS.map((s) => {
+    const teamAvg = rows.reduce((a, r) => a + s.row(r), 0) / rows.length;
+    const peak = Math.max(1, ...rows.map(s.row));
+    const score = radarScore(teamAvg, peak);
+    return { dim: s.dim, unit: s.unit, agent: score, team: score, rawAgent: teamAvg, rawTeam: teamAvg };
+  });
 }
 
 /**
@@ -407,20 +439,25 @@ export function useDetalhamentoViewModel(): DetalhamentoViewModel {
   const effectiveTotals = portfolioActive ? portfolioAgentTotals : agentTotals;
 
   // ── KPI deltas (Change 4) ──
+  // Vale para a visão time (totals vs prevTotals) e para o agente selecionado
+  // (agentTotals vs prevAgentTotals). Sem agente, usa os totais da equipe.
   const kpiDeltas = useMemo((): Record<string, number> => {
-    if (!selectedAgent || prevAgentRows.length === 0) return {};
+    const cur = selectedAgent ? agentTotals : totals;
+    const prv = selectedAgent ? prevAgentTotals : prevTotals;
+    const prevAvailable = selectedAgent ? prevAgentRows.length > 0 : prevRows.length > 0;
+    if (!prevAvailable) return {};
     return {
-      valor_acordos: deltaFrac(agentTotals.valor_acordos, prevAgentTotals.valor_acordos),
-      primeira_parcela: deltaFrac(agentTotals.valor_primeira_parcela, prevAgentTotals.valor_primeira_parcela),
-      qtd_acordos: deltaFrac(agentTotals.qtd_acordos, prevAgentTotals.qtd_acordos),
-      ticket_medio: deltaFrac(calcTicketMedio(agentTotals), calcTicketMedio(prevAgentTotals)),
-      contato_alo: deltaFrac(agentTotals.qtd_alo, prevAgentTotals.qtd_alo),
-      cpc: deltaFrac(agentTotals.qtd_contatos, prevAgentTotals.qtd_contatos),
-      taxa_cpc: deltaFrac(calcCpc(agentTotals), calcCpc(prevAgentTotals)),
-      conversao: deltaFrac(calcConversao(agentTotals), calcConversao(prevAgentTotals)),
-      qtd_acionamentos: deltaFrac(agentTotals.qtd_acionamentos, prevAgentTotals.qtd_acionamentos),
+      valor_acordos: deltaFrac(cur.valor_acordos, prv.valor_acordos),
+      primeira_parcela: deltaFrac(cur.valor_primeira_parcela, prv.valor_primeira_parcela),
+      qtd_acordos: deltaFrac(cur.qtd_acordos, prv.qtd_acordos),
+      ticket_medio: deltaFrac(calcTicketMedio(cur), calcTicketMedio(prv)),
+      contato_alo: deltaFrac(cur.qtd_alo, prv.qtd_alo),
+      cpc: deltaFrac(cur.qtd_contatos, prv.qtd_contatos),
+      taxa_cpc: deltaFrac(calcCpc(cur), calcCpc(prv)),
+      conversao: deltaFrac(calcConversao(cur), calcConversao(prv)),
+      qtd_acionamentos: deltaFrac(cur.qtd_acionamentos, prv.qtd_acionamentos),
     };
-  }, [selectedAgent, agentTotals, prevAgentTotals]);
+  }, [selectedAgent, agentTotals, prevAgentTotals, totals, prevTotals, prevAgentRows.length, prevRows.length]);
 
   // ── KPIs ──
   const kpiPrimary: KpiDatum[] = useMemo(() => [
@@ -468,6 +505,32 @@ export function useDetalhamentoViewModel(): DetalhamentoViewModel {
     excecoes: { value: calcExcecoesPctValor(effectiveTotals), meta: 3.0, ranges: { poor: 6, ok: 8.5, good: 10 }, unit: "%", inverted: true },
   }), [effectiveTotals, metaAnchorTotals, metaAnchorLen]);
 
+  // Office-average reference per KPI. Shown only when an agent is selected, so the
+  // agent's value can be compared against the team. Rates use ratio-of-sums; totals
+  // divide by distinct agent count.
+  const kpiBenchmarks = useMemo((): Record<string, KpiBenchmark> => {
+    if (!selectedAgent || rows.length === 0) return {};
+    const n = new Set(rows.map((r) => r.NOME)).size || 1;
+    const avg = (v: number) => v / n;
+    return {
+      valor_acordos: { ref: avg(teamTotals.valor_acordos), betterWhen: "up" },
+      primeira_parcela: { ref: avg(teamTotals.valor_primeira_parcela), betterWhen: "up" },
+      qtd_acordos: { ref: avg(teamTotals.qtd_acordos), betterWhen: "up" },
+      ticket_medio: { ref: calcTicketMedio(teamTotals), betterWhen: "up" },
+      contato_alo: { ref: avg(teamTotals.qtd_alo), betterWhen: "up" },
+      cpc: { ref: avg(teamTotals.qtd_contatos), betterWhen: "up" },
+      taxa_cpc: { ref: calcCpc(teamTotals), betterWhen: "up" },
+      conversao: { ref: calcConversao(teamTotals), betterWhen: "up" },
+      qtd_acionamentos: { ref: avg(teamTotals.qtd_acionamentos), betterWhen: "up" },
+      qtd_excecoes: { ref: avg(teamTotals.qtd_excecoes), betterWhen: "down" },
+      valor_excecoes: { ref: avg(teamTotals.valor_excecoes), betterWhen: "down" },
+      qtd_rejeitados: { ref: avg(teamTotals.qtd_rejeitados), betterWhen: "down" },
+      valor_rejeitados: { ref: avg(teamTotals.valor_rejeitados), betterWhen: "down" },
+      receita_hora: { ref: calcReceitaPorHora(teamTotals), betterWhen: "up" },
+      idade_media: { ref: calcIdadeMediaAcordos(teamTotals), betterWhen: "down" },
+    };
+  }, [selectedAgent, teamTotals, rows]);
+
   const heatmapAgents = useMemo(() => rowsToHeatmap(rows), [rows]);
   const scatterPoints = useMemo(() => rowsToScatter(rows), [rows]);
   const rankingEntries = useMemo(() => rowsToRanking(rows), [rows]);
@@ -512,7 +575,7 @@ export function useDetalhamentoViewModel(): DetalhamentoViewModel {
     loading, error: mergedError, warnings: mergedWarnings, refresh,
     agentList, selectedAgent, setSelectedAgent,
     selectedPortfolio, setSelectedPortfolio, portfolioActive,
-    kpiPrimary, kpiSecondary, funil, metas,
+    kpiPrimary, kpiSecondary, kpiBenchmarks, funil, metas,
     heatmapAgents, scatterPoints, rankingEntries, paretoPoints,
     radarData,
     insight,

@@ -105,7 +105,7 @@ def _obter_acordos_hoje(db: str) -> Dict[int, int]:
         FROM {db}..REC_MASTER R WITH (NOLOCK)
         JOIN {db}..USU_MASTER U WITH (NOLOCK) ON R.ID_USUARIO = U.ID_USUARIO
         WHERE CAST(R.DT_EMISSAO AS DATE) = CAST(GETDATE() AS DATE)
-          AND R.ID_REC_STATUS IN {settings.STATUS_APROVADOS_SQL}
+          AND R.ID_REC_STATUS IN {settings.STATUS_GERADOS_SQL}
           AND R.PARCELA = 0
           AND DATEPART(HOUR, R.DT_EMISSAO) BETWEEN 8 AND 19
           {settings.FILTRO_AGENTES_EXCLUIDOS_SQL}

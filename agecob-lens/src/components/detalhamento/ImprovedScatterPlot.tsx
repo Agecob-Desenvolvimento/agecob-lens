@@ -19,6 +19,13 @@ function median(values: number[]): number {
   return s.length % 2 === 0 ? (s[mid - 1] + s[mid]) / 2 : s[mid];
 }
 
+// Decision boundary: median over active (>0) agents so it doesn't collapse to the
+// axis when most agents have zero conversion (≈0 efficiency at daily grain).
+function boundary(values: number[], axisMax: number): number {
+  const positive = values.filter((v) => v > 0);
+  return positive.length ? median(positive) : axisMax / 2;
+}
+
 function dotColor(excPct: number): string {
   if (excPct > 15) return "#ef4444";
   if (excPct >= 5) return "#f59e0b";
@@ -38,11 +45,13 @@ export function ImprovedScatterPlot({ points, highlightId }: ImprovedScatterPlot
     }
     const effs = points.map((p) => p.eficiencia);
     const vals = points.map((p) => p.valor);
+    const maxEff = Math.max(...effs) * 1.1 || 1;
+    const maxY = Math.max(...vals) * 1.1 || 1;
     return {
-      maxEff: Math.max(...effs) * 1.1 || 1,
-      maxY: Math.max(...vals) * 1.1 || 1,
-      medEff: median(effs),
-      medY: median(vals),
+      maxEff,
+      maxY,
+      medEff: boundary(effs, maxEff),
+      medY: boundary(vals, maxY),
     };
   }, [points]);
 
@@ -161,16 +170,20 @@ export function ImprovedScatterPlot({ points, highlightId }: ImprovedScatterPlot
             })}
             {hov !== null && points[hov] && (() => {
               const d = points[hov];
-              const tx = Math.min(toX(d.eficiencia) + 12, W - 200);
-              const ty = Math.max(toY(d.valor) - 44, PAD.t);
+              const tw = 260;
+              const tx = Math.min(toX(d.eficiencia) + 12, W - tw - 8);
+              const ty = Math.max(toY(d.valor) - 58, PAD.t);
               return (
                 <g data-testid="scatter-tooltip">
-                  <rect x={tx} y={ty} width={188} height={40} rx={4} fill="#0f172a" opacity={0.92} />
-                  <text x={tx + 8} y={ty + 14} fontSize={13} fill="#e2e8f0">
-                    {d.nome.substring(0, 26)}
+                  <rect x={tx} y={ty} width={tw} height={54} rx={4} fill="#0f172a" opacity={0.92} />
+                  <text x={tx + 10} y={ty + 15} fontSize={13} fontWeight="bold" fill="#e2e8f0">
+                    {d.nome.substring(0, 32)}
                   </text>
-                  <text x={tx + 8} y={ty + 28} fontSize={12} fill="#cbd5e1">
-                    eficiência: {d.eficiencia.toFixed(2)} · {formatBRLCompact(d.valor)} · exceções: {d.excPct.toFixed(1)}%
+                  <text x={tx + 10} y={ty + 30} fontSize={12} fill="#cbd5e1">
+                    Eficiência {d.eficiencia.toFixed(2)} · {formatBRLCompact(d.valor)}
+                  </text>
+                  <text x={tx + 10} y={ty + 45} fontSize={12} fill="#cbd5e1">
+                    Exceções {d.excPct.toFixed(1)}% · Acordos {d.acordos}
                   </text>
                 </g>
               );

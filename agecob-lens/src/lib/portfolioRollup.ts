@@ -3,11 +3,13 @@
  * portfolio-rollup payload, WITHOUT changing any metric definition.
  *
  * Status slices (canonical, from settings/business rules — do not alter):
- *   acordos / 1ª parcela -> (1, 3, 12)   exceções -> 5   rejeitados -> 7   quebrados -> 2
+ *   acordos / 1ª parcela -> (1, 2, 3, 10, 12)   exceções -> 5   rejeitados -> 7   quebrados -> 2
+ *   (acordos = valores GERADOS: inclui QUEBRA=2 e QUEBRA AUTOMÁTICA=10; status 2
+ *    alimenta tanto o slice acordos quanto o slice quebrados — baldes distintos.)
  *
  * `valor` is additive (parity unconditional). `qtd` for the multi-status slice
- * (1,3,12) is summed across statuses — exact iff no NR_RECEBIMENTO spans two
- * approved statuses in the same portfolio (gated by the parity harness).
+ * (1,2,3,10,12) is summed across statuses — exact iff no NR_RECEBIMENTO spans two
+ * generated statuses in the same portfolio (gated by the parity harness).
  *
  * Output field names match the legacy interfaces in services/api.ts exactly, so
  * ViewModels/selectors consume the derived arrays unchanged. Ordering is NOT
@@ -22,7 +24,7 @@ import type {
   QuebradosPorPortfolioRow,
 } from "@/services/api";
 
-const STATUS_APROVADOS = [1, 3, 12];
+const STATUS_GERADOS = [1, 2, 3, 10, 12];
 const STATUS_EXCECAO = 5;
 const STATUS_REJEITADO = 7;
 const STATUS_QUEBRADO = 2;
@@ -49,7 +51,7 @@ function groupByPortfolio(
 }
 
 export function deriveAcordosPorPortfolio(rows: PortfolioRollupRow[]): AcordosPorPortfolioRow[] {
-  const g = groupByPortfolio(rows, (s) => STATUS_APROVADOS.includes(s));
+  const g = groupByPortfolio(rows, (s) => STATUS_GERADOS.includes(s));
   return [...g.entries()].map(([portfolio_name, a]) => ({
     portfolio_name,
     qtd_acordos: a.qtd,
@@ -60,7 +62,7 @@ export function deriveAcordosPorPortfolio(rows: PortfolioRollupRow[]): AcordosPo
 export function derivePrimeiraParcelaPorPortfolio(
   rows: PortfolioRollupRow[],
 ): PrimeiraParcelaPorPortfolioRow[] {
-  const g = groupByPortfolio(rows, (s) => STATUS_APROVADOS.includes(s));
+  const g = groupByPortfolio(rows, (s) => STATUS_GERADOS.includes(s));
   return [...g.entries()].map(([portfolio_name, a]) => ({
     portfolio_name,
     qtd_acordos: a.qtd,

@@ -9,14 +9,12 @@ import { BoletosKpiStrip } from "@/components/analise/BoletosKpiStrip";
 import { useEfetividadeViewModel, type TipoParcela } from "@/hooks/useEfetividadeViewModel";
 
 const EfetividadeDiariaChart = lazy(() => import("@/components/analise/EfetividadeDiariaChart").then((m) => ({ default: m.EfetividadeDiariaChart })));
-const PortfolioSection = lazy(() => import("@/components/analise/PortfolioSection").then((m) => ({ default: m.PortfolioSection })));
 const BoletosQuebradosChart = lazy(() => import("@/components/analise/BoletosQuebradosChart").then((m) => ({ default: m.BoletosQuebradosChart })));
 const FunilConversaoFinanceira = lazy(() => import("@/components/analise/FunilConversaoFinanceira").then((m) => ({ default: m.FunilConversaoFinanceira })));
-// FunilFinanceiroBoleto aparcado — reativar quando necessário
-// const FunilFinanceiroBoleto = lazy(() => import("@/components/analise/FunilFinanceiroBoleto").then((m) => ({ default: m.FunilFinanceiroBoleto })));
 const EfetividadeHistoricaChart = lazy(() => import("@/components/analise/EfetividadeHistoricaChart").then((m) => ({ default: m.EfetividadeHistoricaChart })));
 const WaterfallPerdasChart = lazy(() => import("@/components/analise/WaterfallPerdasChart").then((m) => ({ default: m.WaterfallPerdasChart })));
 const CurvaQuebraAtrasoChart = lazy(() => import("@/components/analise/CurvaQuebraAtrasoChart").then((m) => ({ default: m.CurvaQuebraAtrasoChart })));
+const HomeRiscoQualidade = lazy(() => import("@/components/executive/HomeRiscoQualidade").then((m) => ({ default: m.HomeRiscoQualidade })));
 
 const CHART_FALLBACK = <div className="h-64 animate-pulse bg-muted rounded-lg" />;
 
@@ -42,6 +40,19 @@ export default function EfetividadeBoletos() {
     ];
   }, [vm.resumoKpis]);
 
+  // Remap data shapes for HomeRiscoQualidade (all count-valued)
+  const hrqExcecoes = useMemo(
+    () => vm.portfolioExcecoesCnt.map((d) => ({ label: d.nome, value: d.qtd })),
+    [vm.portfolioExcecoesCnt],
+  );
+  const hrqRejeitados = useMemo(
+    () => vm.portfolioRejeitadosCnt.map((d) => ({ label: d.nome, value: d.qtd })),
+    [vm.portfolioRejeitadosCnt],
+  );
+  const hrqQuebrados = useMemo(
+    () => vm.boletosQuebrados.map((d) => ({ label: d.nome, value: d.qtd, qtd: d.qtd })),
+    [vm.boletosQuebrados],
+  );
 
 
   return (
@@ -129,14 +140,17 @@ export default function EfetividadeBoletos() {
               <section className="space-y-3">
                 <SectionHeader
                   title="Portfólio"
-                  description="Acordos, exceções e rejeitados agrupados por portfólio (CAMPO010)."
+                  description="Exceções, rejeitados e boletos quebrados por portfólio. Clique num portfólio para detalhar."
                 />
                 <Suspense fallback={CHART_FALLBACK}>
-                  <PortfolioSection
-                    portfolioValor={vm.portfolioValor}
-                    excecoesPorPortfolio={vm.portfolioExcecoes}
-                    rejeitadosPorPortfolio={vm.portfolioRejeitados}
-                    loading={vm.loadingPortfolio}
+                  <HomeRiscoQualidade
+                    excecoes={hrqExcecoes}
+                    rejeitados={hrqRejeitados}
+                    quebrados={hrqQuebrados}
+                    loadingExcecoes={vm.loadingPortfolio}
+                    loadingRejeitados={vm.loadingPortfolio}
+                    loadingQuebrados={vm.loadingQuebrados}
+                    linkTo="/"
                   />
                 </Suspense>
               </section>

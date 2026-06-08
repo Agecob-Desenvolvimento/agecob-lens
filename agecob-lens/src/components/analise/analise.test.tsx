@@ -68,8 +68,8 @@ describe("PortfolioSection", () => {
       />,
     );
     expect(screen.getByText("Valor de Acordos por Portfólio")).toBeInTheDocument();
-    expect(screen.getByText("Exceções por Portfólio (Qtd)")).toBeInTheDocument();
-    expect(screen.getByText("Rejeitados por Portfólio (Qtd)")).toBeInTheDocument();
+    expect(screen.getByText("Exceções por Portfólio (Valor)")).toBeInTheDocument();
+    expect(screen.getByText("Rejeitados por Portfólio (Valor)")).toBeInTheDocument();
   });
 
   it("renders empty state when no data", () => {

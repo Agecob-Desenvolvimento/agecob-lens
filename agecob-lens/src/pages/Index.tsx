@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect } from "react";
+import { lazy, Suspense, useEffect, useMemo } from "react";
 import { AppSidebar } from "@/components/AppSidebar";
 import { useGlobalFilters } from "@/contexts/GlobalFiltersContext";
 import { SidebarProvider } from "@/components/ui/sidebar";
@@ -12,7 +12,6 @@ import ApiDebugBanner from "@/components/executive/ApiDebugBanner";
 import SectionHeader from "@/components/executive/SectionHeader";
 
 const RitmoDiaCard = lazy(() => import("@/components/executive/RitmoDiaCard"));
-const HomeRiscoQualidade = lazy(() => import("@/components/executive/HomeRiscoQualidade"));
 const HandoffTopAgentes1aParcela = lazy(() => import("@/components/executive/HandoffTopAgentes1aParcela"));
 const HandoffFunnelChart = lazy(() => import("@/components/executive/HandoffFunnelChart"));
 const HandoffDiagnosticCards = lazy(() => import("@/components/executive/HandoffDiagnosticCards"));
@@ -20,6 +19,7 @@ const HandoffPortfolioRentabilidade = lazy(() => import("@/components/executive/
 
 const CHART_FALLBACK = <div className="h-64 animate-pulse bg-muted rounded-lg" />;
 
+const PortfolioSection = lazy(() => import("@/components/analise/PortfolioSection").then((m) => ({ default: m.PortfolioSection })));
 export default function Index() {
   const { selectedDatabase } = useGlobalFilters();
   const vm = useHomeViewModel();
@@ -48,6 +48,21 @@ export default function Index() {
     window.dispatchEvent(new CustomEvent("dashboard:refresh", { detail: { route: "/" } }));
   });
 
+  // Remap data shapes for PortfolioSection (all BRL-valued)
+  const psPortfolioValor = useMemo(
+    () => vm.portfolio1aParcela.map((d) => ({ nome: d.label, valor: d.value })),
+    [vm.portfolio1aParcela],
+  );
+  const psExcecoes = useMemo(
+    () => vm.excecoesPorPortfolioValor.map((d) => ({ nome: d.label, valor: d.value })),
+    [vm.excecoesPorPortfolioValor],
+  );
+  const psRejeitados = useMemo(
+    () => vm.rejeitadosPorPortfolioValor.map((d) => ({ nome: d.label, valor: d.value })),
+    [vm.rejeitadosPorPortfolioValor],
+  );
+  const psLoading = vm.loadingAcdPort || vm.loadingExcPort || vm.loadingRejPort;
+ 
   return (
     <SidebarProvider>
       <div className="min-h-screen flex w-full">
@@ -100,15 +115,13 @@ export default function Index() {
             </section>
 
             <section className="space-y-4">
-              <SectionHeader title="Risco / Qualidade" description="Exceções, rejeitados e boletos quebrados por portfólio. Clique num portfólio para detalhar." />
+              <SectionHeader title="Portfólio" description="Acordos, exceções e rejeitados agrupados por portfólio (CAMPO010)." />
               <Suspense fallback={CHART_FALLBACK}>
-                <HomeRiscoQualidade
-                  excecoes={vm.excecoesPorPortfolio}
-                  rejeitados={vm.rejeitadosPorPortfolio}
-                  quebrados={vm.quebradosPorPortfolio}
-                  loadingExcecoes={vm.loadingExcPort}
-                  loadingRejeitados={vm.loadingRejPort}
-                  loadingQuebrados={vm.loadingQbrPort}
+                <PortfolioSection
+                  portfolioValor={psPortfolioValor}
+                  excecoesPorPortfolio={psExcecoes}
+                  rejeitadosPorPortfolio={psRejeitados}
+                  loading={psLoading}
                 />
               </Suspense>
             </section>

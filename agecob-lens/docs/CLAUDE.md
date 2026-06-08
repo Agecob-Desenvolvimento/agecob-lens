@@ -22,7 +22,7 @@ Table
 Metric	Formula
 CPC	Σ qtd_contatos (count of contacts — same as "Contatos", just another name). Unit: count, NOT %.
 Contact rate (Taxa de contato %)	Σ qtd_contatos / Σ qtd_acionamentos — the ratio. MUST be labelled "Taxa de contato", never "CPC".
-Conversão (Conversão %)	Σ qtd_boletos_pagos / Σ qtd_boletos_emitidos × 100 — boleto pago no prazo (≤ 5d do vencimento) sobre boleto vencido (DT_VENCIMENTO < hoje, acordo aprovado). Unit: %. Na Home compara vs "média do escritório" (benchmark 3m), não período anterior — no grão diário é ~0% (boleto de hoje não venceu).
+Conversão (Conversão %)	Σ qtd_boletos_pagos / Σ qtd_boletos_emitidos × 100 — boleto pago no prazo (≤ 5d do vencimento) sobre boleto vencido (DT_VENCIMENTO < hoje, acordo gerado — STATUS_GERADOS 1,2,3,10,12, inclui quebras). Unit: %. Na Home compara vs "média do escritório" (benchmark 3m), não período anterior — no grão diário é ~0% (boleto de hoje não venceu).
 Average ticket	Σ valor_acordos / Σ qtd_acordos
 Exceptions (% value)	Σ valor_excecoes / Σ valor_acordos
 Forbidden to use "Conversion Rate" without specifying the formula.

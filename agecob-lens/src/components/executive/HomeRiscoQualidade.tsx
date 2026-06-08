@@ -19,6 +19,7 @@ interface HomeRiscoQualidadeProps {
   loadingExcecoes?: boolean;
   loadingRejeitados?: boolean;
   loadingQuebrados?: boolean;
+  linkTo?: string;
 }
 
 const toQtd = (d: BarDatum[]) => d.map((x) => ({ nome: x.label, qtd: x.value }));
@@ -74,6 +75,7 @@ export function HomeRiscoQualidade({
   loadingExcecoes,
   loadingRejeitados,
   loadingQuebrados,
+  linkTo = "/efetividade-boletos",
 }: HomeRiscoQualidadeProps) {
   const [selected, setSelected] = useState<Selected>(null);
 
@@ -111,7 +113,7 @@ export function HomeRiscoQualidade({
       )}
 
       <Link
-        to="/efetividade-boletos"
+        to={linkTo}
         className="inline-flex items-center gap-1.5 text-xs font-medium text-sky-700 hover:text-sky-800 hover:underline"
       >
         Para mais detalhes, vá para Análise &amp; Efetividade

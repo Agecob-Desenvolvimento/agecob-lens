@@ -52,8 +52,10 @@ export interface EfetividadeViewModel {
   rankingAgentes: RankingAgenteBoleto[];
   /** Portfolio sections */
   portfolioValor: Array<{ nome: string; valor: number }>;
-  portfolioExcecoes: Array<{ nome: string; qtd: number }>;
-  portfolioRejeitados: Array<{ nome: string; qtd: number }>;
+  portfolioExcecoes: Array<{ nome: string; valor: number }>;
+  portfolioRejeitados: Array<{ nome: string; valor: number }>;
+  portfolioExcecoesCnt: Array<{ nome: string; qtd: number }>;
+  portfolioRejeitadosCnt: Array<{ nome: string; qtd: number }>;
   /** Boletos quebrados — derived from colchão-vencimento agent data */
   boletosQuebrados: Array<{ nome: string; qtd: number }>;
   /** Total broken count for KPI */
@@ -72,11 +74,13 @@ function efResumoToKpis(kpis: EfResumoKpis | undefined, bestDay: EfResumoDayRow 
   if (!kpis) return [];
   return [
     { label: "Boletos Gerados", value: kpis.generated, color: "#0f172a" },
+    { label: "Boletos a Vencer", value: kpis.to_mature, color: "#0f172a", sub: kpis.generated > 0 ? `${((kpis.to_mature / kpis.generated) * 100).toFixed(1).replace(".", ",")}% em aberto` : undefined },
+    { label: "Vencidos não Pagos", value: kpis.overdue_unpaid, color: "#dc2626", sub: kpis.generated > 0 ? `${((kpis.overdue_unpaid / kpis.generated) * 100).toFixed(1).replace(".", ",")}% do período` : undefined },
+    { label: "Valor Boletos Vencendo", value: `R$ ${kpis.amount_maturing.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`, color: "#0f172a" },
     { label: "Pagos no Prazo", value: kpis.paid_on_time, color: "#0f172a" },
     { label: "Boletos Quebrados", value: totalBroken, color: "#dc2626", sub: totalBroken > 0 ? `${((totalBroken / kpis.generated) * 100).toFixed(1).replace(".", ",")}%` : undefined },
     { label: "% Conversão", value: `${kpis.conversion_pct.toFixed(2).replace(".", ",")}%`, color: "#f59e0b" },
     { label: "Efetividade", value: `${kpis.effectiveness_pct.toFixed(2).replace(".", ",")}%`, color: "#f59e0b" },
-    { label: "Valor Boletos Vencendo", value: `R$ ${kpis.amount_maturing.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`, color: "#0f172a" },
     { label: "Valor Recebido", value: `R$ ${kpis.amount_received.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`, color: "#16a34a" },
     { label: "Melhor Dia", value: bestDay ? `${bestDay.dia.slice(5)} – ${bestDay.effectiveness_pct}%` : "—", color: "#16a34a" },
   ];
@@ -220,6 +224,15 @@ export function useEfetividadeViewModel(tipo: TipoParcela): EfetividadeViewModel
   const portfolioExcecoes = useMemo(() => {
     const rows = excecoesQ.data?.data ?? [];
     return rows
+      .filter((r) => Number(r.valor_excecoes || 0) > 0)
+      .sort((a, b) => Number(b.valor_excecoes || 0) - Number(a.valor_excecoes || 0))
+      .slice(0, 8)
+      .map((r) => ({ nome: r.portfolio_name, valor: Number(r.valor_excecoes || 0) }));
+  }, [excecoesQ.data]);
+
+  const portfolioExcecoesCnt = useMemo(() => {
+    const rows = excecoesQ.data?.data ?? [];
+    return rows
       .filter((r) => Number(r.qtd_excecoes || 0) > 0)
       .sort((a, b) => Number(b.qtd_excecoes || 0) - Number(a.qtd_excecoes || 0))
       .slice(0, 8)
@@ -227,6 +240,15 @@ export function useEfetividadeViewModel(tipo: TipoParcela): EfetividadeViewModel
   }, [excecoesQ.data]);
 
   const portfolioRejeitados = useMemo(() => {
+    const rows = rejeitadosQ.data?.data ?? [];
+    return rows
+      .filter((r) => Number(r.valor_rejeitados || 0) > 0)
+      .sort((a, b) => Number(b.valor_rejeitados || 0) - Number(a.valor_rejeitados || 0))
+      .slice(0, 8)
+      .map((r) => ({ nome: r.portfolio_name, valor: Number(r.valor_rejeitados || 0) }));
+  }, [rejeitadosQ.data]);
+
+  const portfolioRejeitadosCnt = useMemo(() => {
     const rows = rejeitadosQ.data?.data ?? [];
     return rows
       .filter((r) => Number(r.qtd_rejeitados || 0) > 0)
@@ -261,6 +283,8 @@ export function useEfetividadeViewModel(tipo: TipoParcela): EfetividadeViewModel
     portfolioValor,
     portfolioExcecoes,
     portfolioRejeitados,
+    portfolioExcecoesCnt,
+    portfolioRejeitadosCnt,
     boletosQuebrados,
     totalQuebrados,
     loadingPortfolio,

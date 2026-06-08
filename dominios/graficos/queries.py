@@ -42,7 +42,7 @@ def wrap_todos_or_single(db: str, base_fn, agg_select: str, order_by: str, date_
 def build_primeira_parcela_dia_query(db: str, assessoria_token: str = "", date_from: str = None, date_to_exclusive: str = None) -> str:
     """
     Card de topo: soma da 1ª parcela de hoje e quantidade de acordos.
-    Considera acordos aprovados (ATIVO, BAIXA POR PAGAMENTO, BAIXA AVULSA).
+    Considera acordos gerados (STATUS_GERADOS = 1,2,3,10,12 — inclui quebras).
     """
     def _base(database: str) -> str:
         assessoria_clause = build_assessoria_clause(assessoria_token)
@@ -54,7 +54,7 @@ def build_primeira_parcela_dia_query(db: str, assessoria_token: str = "", date_f
             JOIN {database}.dbo.USU_MASTER U (NOLOCK) ON R.ID_USUARIO = U.ID_USUARIO
             WHERE R.PARCELA = {settings.PRIMEIRA_PARCELA}
               AND R.DT_EMISSAO >= @Hoje AND R.DT_EMISSAO < @Amanha
-              AND R.ID_REC_STATUS IN {settings.STATUS_APROVADOS_SQL}
+              AND R.ID_REC_STATUS IN {settings.STATUS_GERADOS_SQL}
               {settings.FILTRO_AGENTES_EXCLUIDOS_SQL}
               {assessoria_clause}
         """
@@ -137,7 +137,7 @@ def build_excecoes_por_agente_query(db: str, date_from: str = None, date_to_excl
 
 def build_acordos_por_portfolio_query(db: str, date_from: str = None, date_to_exclusive: str = None) -> str:
     """
-    Gráfico: acordos aprovados agrupados por portfolio (CAMPO010 da DIV_AUX).
+    Gráfico: acordos gerados (1,2,3,10,12) agrupados por portfolio (CAMPO010 da DIV_AUX).
     """
     def _base(database: str) -> str:
         return f"""
@@ -157,7 +157,7 @@ def build_acordos_por_portfolio_query(db: str, date_from: str = None, date_to_ex
             ) DA
             WHERE R.DT_EMISSAO >= @Hoje AND R.DT_EMISSAO < @Amanha
               AND R.PARCELA = {settings.PRIMEIRA_PARCELA}
-              AND R.ID_REC_STATUS IN {settings.STATUS_APROVADOS_SQL}
+              AND R.ID_REC_STATUS IN {settings.STATUS_GERADOS_SQL}
               {settings.FILTRO_AGENTES_EXCLUIDOS_SQL}
             GROUP BY DA.{settings.PORTFOLIO_COLUMN}
         """
@@ -301,8 +301,8 @@ def build_portfolio_rollup_query(db: str, date_from: str = None, date_to_exclusi
     portfólio (CAMPO010) E ID_REC_STATUS. Reproduz client-side, por fatiamento
     de status, os 5 endpoints por-portfólio:
 
-        acordos-por-portfolio              -> id_rec_status IN (1, 3, 12)
-        primeira-parcela-por-portfolio     -> id_rec_status IN (1, 3, 12)
+        acordos-por-portfolio              -> id_rec_status IN (1, 2, 3, 10, 12)
+        primeira-parcela-por-portfolio     -> id_rec_status IN (1, 2, 3, 10, 12)
         excecoes-por-portfolio             -> id_rec_status = 5
         rejeitados-por-portfolio           -> id_rec_status = 7
         quebrados-por-portfolio            -> id_rec_status = 2
@@ -314,8 +314,8 @@ def build_portfolio_rollup_query(db: str, date_from: str = None, date_to_exclusi
     exatamente como nos builders originais.
 
     Paridade de `qtd` para os slices multi-status (acordos / 1ª parcela, que
-    somam 1,3,12) só é exata se nenhum NR_RECEBIMENTO aparecer sob mais de um
-    status aprovado no mesmo portfólio — verificado pelo harness de paridade
+    somam 1,2,3,10,12 — valores gerados) só é exata se nenhum NR_RECEBIMENTO
+    aparecer sob mais de um status gerado no mesmo portfólio — verificado pelo harness de paridade
     (scripts/parity_portfolio_rollup.py). `valor` é aditivo: paridade incondicional.
     """
     def _base(database: str) -> str:
@@ -473,8 +473,8 @@ def build_rejeitados_detalhe_query(db: str, date_from: str = None, date_to_exclu
 
 
 def build_acordos_detalhe_query(db: str, date_from: str = None, date_to_exclusive: str = None) -> str:
-    """Detalhe dos acordos aprovados (ID_REC_STATUS IN (1,3,12)) de um portfólio (param `?`)."""
-    return _build_detalhe_por_portfolio(db, settings.STATUS_APROVADOS_SQL, date_from, date_to_exclusive)
+    """Detalhe dos acordos gerados (ID_REC_STATUS IN (1,2,3,10,12)) de um portfólio (param `?`)."""
+    return _build_detalhe_por_portfolio(db, settings.STATUS_GERADOS_SQL, date_from, date_to_exclusive)
 
 
 def build_quebrados_detalhe_query(db: str, date_from: str = None, date_to_exclusive: str = None) -> str:
@@ -496,7 +496,7 @@ def build_quebrados_detalhe_agente_query(db: str, date_from: str = None, date_to
 
 def build_primeira_parcela_por_agente_query(db: str, assessoria_token: str = "", date_from: str = None, date_to_exclusive: str = None) -> str:
     """
-    Gráfico: valor e quantidade da 1ª parcela por agente (acordos aprovados).
+    Gráfico: valor e quantidade da 1ª parcela por agente (acordos gerados — 1,2,3,10,12).
     """
     def _base(database: str) -> str:
         assessoria_clause = build_assessoria_clause(assessoria_token)
@@ -509,7 +509,7 @@ def build_primeira_parcela_por_agente_query(db: str, assessoria_token: str = "",
             JOIN {database}.dbo.USU_MASTER U (NOLOCK) ON R.ID_USUARIO = U.ID_USUARIO
             WHERE R.PARCELA = {settings.PRIMEIRA_PARCELA}
               AND R.DT_EMISSAO >= @Hoje AND R.DT_EMISSAO < @Amanha
-              AND R.ID_REC_STATUS IN {settings.STATUS_APROVADOS_SQL}
+              AND R.ID_REC_STATUS IN {settings.STATUS_GERADOS_SQL}
               {settings.FILTRO_AGENTES_EXCLUIDOS_SQL}
               {assessoria_clause}
             GROUP BY U.NOME
@@ -528,7 +528,7 @@ def build_primeira_parcela_por_agente_query(db: str, assessoria_token: str = "",
 def build_primeira_parcela_por_portfolio_query(db: str, date_from: str = None, date_to_exclusive: str = None) -> str:
     """
     Gráfico: valor da 1ª parcela agrupado por portfolio (CAMPO010 da DIV_AUX).
-    Apenas acordos aprovados. Usado para análise de rentabilidade por portfólio.
+    Acordos gerados (1,2,3,10,12). Usado para análise de rentabilidade por portfólio.
     """
     def _base(database: str) -> str:
         return f"""
@@ -548,7 +548,7 @@ def build_primeira_parcela_por_portfolio_query(db: str, date_from: str = None, d
             ) DA
             WHERE R.DT_EMISSAO >= @Hoje AND R.DT_EMISSAO < @Amanha
               AND R.PARCELA = {settings.PRIMEIRA_PARCELA}
-              AND R.ID_REC_STATUS IN {settings.STATUS_APROVADOS_SQL}
+              AND R.ID_REC_STATUS IN {settings.STATUS_GERADOS_SQL}
               {settings.FILTRO_AGENTES_EXCLUIDOS_SQL}
             GROUP BY DA.{settings.PORTFOLIO_COLUMN}
         """

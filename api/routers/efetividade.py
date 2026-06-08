@@ -88,7 +88,7 @@ def get_ef_resumo(
             row["dia"] = row["dia"].isoformat()
 
     kpi: Dict[str, Any] = kpi_rows[0] if kpi_rows else {
-        "generated": 0, "paid_on_time": 0, "conversion_pct": 0.0,
+        "generated": 0, "to_mature": 0, "overdue_unpaid": 0, "paid_on_time": 0, "conversion_pct": 0.0,
         "amount_maturing": 0.0, "amount_received": 0.0, "effectiveness_pct": 0.0,
     }
 

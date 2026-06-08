@@ -79,6 +79,7 @@ export default function DetalhamentoAgentes() {
                 primary={vm.kpiPrimary}
                 secondary={vm.kpiSecondary}
                 deltas={vm.insight.kpiDeltas}
+                benchmarks={vm.kpiBenchmarks}
               />
 
               {/* Bloco 1 — Diagnóstico Individual */}

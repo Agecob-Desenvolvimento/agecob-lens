@@ -157,7 +157,7 @@ export function PerformanceHeatmap({ agents, highlightId }: PerformanceHeatmapPr
       <CardHeader>
         <div className="flex items-start justify-between">
           <div>
-            <CardTitle className="text-sm font-semibold">Matriz de Performance</CardTitle>
+            <CardTitle className="text-sm font-semibold">Heatmap de Performance</CardTitle>
             <CardDescription className="text-xs">
               Agentes x Metricas. Cor por percentil na distribuicao do periodo. Rejeitados: ID_REC_STATUS = 7.
             </CardDescription>
@@ -176,10 +176,10 @@ export function PerformanceHeatmap({ agents, highlightId }: PerformanceHeatmapPr
       </CardHeader>
       <CardContent>
         <div className="overflow-x-auto">
-          <table className="w-full border-separate border-spacing-y-1 text-[11px] tabular-nums">
+          <table className="w-full border-collapse text-[11px] tabular-nums">
             <thead className="sticky top-0 z-10 bg-background">
               <tr>
-                <th className="sticky left-0 z-20 bg-background px-2 py-1.5 text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                <th className="sticky left-0 z-20 bg-background px-2 py-1.5 text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground border border-slate-400">
                   Agente
                 </th>
                 {METRICS.map((m) => {
@@ -188,7 +188,7 @@ export function PerformanceHeatmap({ agents, highlightId }: PerformanceHeatmapPr
                     <th
                       key={m.key}
                       className={cn(
-                        "px-2 py-1.5 text-center text-[10px] font-semibold uppercase tracking-wider",
+                        "px-2 py-1.5 text-center text-[10px] font-semibold uppercase tracking-wider border border-slate-400",
                         active ? "text-foreground" : "text-muted-foreground",
                       )}
                     >
@@ -219,11 +219,11 @@ export function PerformanceHeatmap({ agents, highlightId }: PerformanceHeatmapPr
                     key={agent.id}
                     data-testid={`heatmap-row-${agent.id}`}
                     className={cn(
-                      "group transition-transform duration-100 hover:scale-[1.02]",
+                      "group transition-colors hover:bg-muted/20",
                       isHighlight && "ring-2 ring-primary",
                     )}
                   >
-                    <td className="sticky left-0 z-10 bg-background px-2 py-1.5 text-left font-medium text-foreground">
+                    <td className="sticky left-0 z-10 bg-background px-2 py-1.5 text-left font-medium text-foreground border border-slate-400">
                       <div className="max-w-[160px] truncate">{agent.nome}</div>
                       {agent.mat && (
                         <div className="text-[10px] text-muted-foreground">{agent.mat}</div>
@@ -239,7 +239,7 @@ export function PerformanceHeatmap({ agents, highlightId }: PerformanceHeatmapPr
                           data-testid={`cell-${agent.id}-${m.key}`}
                           data-tone={cls}
                           className={cn(
-                            "px-2 py-1.5 text-center font-semibold",
+                            "px-2 py-1.5 text-center font-semibold border border-slate-400",
                             CELL_CLASS[cls],
                           )}
                           style={{ padding: "6px 8px" }}
@@ -277,7 +277,7 @@ export function PerformanceHeatmap({ agents, highlightId }: PerformanceHeatmapPr
       {maximized && (
         <div className="fixed inset-0 z-50 bg-white flex flex-col" data-testid="heatmap-overlay">
           <div className="flex items-center justify-between px-6 py-3 border-b border-slate-200">
-            <span className="text-sm font-semibold">Matriz de Performance — Tela cheia</span>
+            <span className="text-sm font-semibold">Heatmap de Performance — Tela cheia</span>
             <button
               type="button"
               data-testid="heatmap-minimize"
@@ -287,7 +287,7 @@ export function PerformanceHeatmap({ agents, highlightId }: PerformanceHeatmapPr
               ✕
             </button>
           </div>
-          <div className="flex-1 overflow-auto p-4">
+          <div className="flex-1 overflow-y-auto overflow-x-hidden p-4">
             {card}
           </div>
         </div>

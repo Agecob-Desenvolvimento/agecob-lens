@@ -185,7 +185,7 @@ def build_tabela_performance_periodo_query(
         nome_agente, matricula, qtd_acionamentos, qtd_acordos, conversao_pct,
         valor_total, soma_primeira_parcela, qtd_reprovados
 
-    Status válidos (Acordos + valor): ID_REC_STATUS IN (1, 3, 12) — STATUS_APROVADOS.
+    Status (Acordos + valor gerado): ID_REC_STATUS IN (1, 2, 3, 10, 12) — STATUS_GERADOS.
     Reprovados: REC_STATUS.DESCR contém REJEITADO, REPROVADO ou RECUSADO.
     Primeira parcela: PARCELA = 0 (convenção do banco — PARCELA=0 é a 1ª, PARCELA=1+ são demais).
     """
@@ -223,7 +223,7 @@ def build_tabela_performance_periodo_query(
                 GROUP BY CM.ID_USUARIO
             ) A ON A.ID_USUARIO = U.ID_USUARIO
             LEFT JOIN (
-                -- STATUS_APROVADOS = (1, 3, 12). PARCELA=0 é a primeira parcela neste banco.
+                -- STATUS_GERADOS = (1, 2, 3, 10, 12). PARCELA=0 é a primeira parcela neste banco.
                 SELECT
                     ID_USUARIO,
                     COUNT(DISTINCT NR_RECEBIMENTO) AS qtd_acordos,
@@ -233,7 +233,7 @@ def build_tabela_performance_periodo_query(
                     SUM(CASE WHEN PARCELA = 0 THEN VALOR ELSE 0 END) AS soma_primeira_parcela
                 FROM {db}.dbo.REC_MASTER
                 WHERE DT_EMISSAO >= CAST('{df}' AS DATE) AND DT_EMISSAO < CAST('{dt}' AS DATE)
-                  AND ID_REC_STATUS IN (1, 3, 12)
+                  AND ID_REC_STATUS IN {settings.STATUS_GERADOS_SQL}
                 GROUP BY ID_USUARIO
             ) AC ON AC.ID_USUARIO = U.ID_USUARIO
             LEFT JOIN (

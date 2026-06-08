@@ -89,20 +89,20 @@ CTE_Saldo_Original AS (
 CTE_Financeiro_Agente AS (
     SELECT
         A.ID_USUARIO,
-        COUNT(CASE WHEN A.ID_REC_STATUS IN {settings.STATUS_APROVADOS_SQL} THEN 1 END)                                   AS qtd_acordos,
-        SUM(CASE WHEN A.ID_REC_STATUS IN {settings.STATUS_APROVADOS_SQL} THEN A.VALOR_TOTAL_ACORDO ELSE 0 END)           AS valor_acordos,
-        AVG(CASE WHEN A.ID_REC_STATUS IN {settings.STATUS_APROVADOS_SQL} THEN A.VALOR_TOTAL_ACORDO END)                  AS acordo_medio,
-        AVG(CASE WHEN A.ID_REC_STATUS IN {settings.STATUS_APROVADOS_SQL} THEN CAST(A.PLANO AS DECIMAL(10,2)) END)        AS parcelamento_medio,
-        AVG(CASE WHEN A.ID_REC_STATUS IN {settings.STATUS_APROVADOS_SQL} AND S.VR_ORIGINAL > 0
+        COUNT(CASE WHEN A.ID_REC_STATUS IN {settings.STATUS_GERADOS_SQL} THEN 1 END)                                   AS qtd_acordos,
+        SUM(CASE WHEN A.ID_REC_STATUS IN {settings.STATUS_GERADOS_SQL} THEN A.VALOR_TOTAL_ACORDO ELSE 0 END)           AS valor_acordos,
+        AVG(CASE WHEN A.ID_REC_STATUS IN {settings.STATUS_GERADOS_SQL} THEN A.VALOR_TOTAL_ACORDO END)                  AS acordo_medio,
+        AVG(CASE WHEN A.ID_REC_STATUS IN {settings.STATUS_GERADOS_SQL} THEN CAST(A.PLANO AS DECIMAL(10,2)) END)        AS parcelamento_medio,
+        AVG(CASE WHEN A.ID_REC_STATUS IN {settings.STATUS_GERADOS_SQL} AND S.VR_ORIGINAL > 0
             THEN A.VALOR_TOTAL_ACORDO / S.VR_ORIGINAL * 100 END)                                                AS desconto_medio_percentual,
-        SUM(CASE WHEN A.ID_REC_STATUS IN {settings.STATUS_APROVADOS_SQL} THEN A.VALOR_P1 ELSE 0 END)                    AS valor_primeira_parcela,
-        SUM(CASE WHEN A.ID_REC_STATUS IN {settings.STATUS_APROVADOS_SQL} THEN A.VR_PAGO_P1 ELSE 0 END)                  AS valor_p1_recebido,
+        SUM(CASE WHEN A.ID_REC_STATUS IN {settings.STATUS_GERADOS_SQL} THEN A.VALOR_P1 ELSE 0 END)                    AS valor_primeira_parcela,
+        SUM(CASE WHEN A.ID_REC_STATUS IN {settings.STATUS_GERADOS_SQL} THEN A.VR_PAGO_P1 ELSE 0 END)                  AS valor_p1_recebido,
         COUNT(CASE WHEN A.ID_REC_STATUS IN {settings.STATUS_EXCECAO_SQL} THEN 1 END)                                     AS qtd_excecoes,
         SUM(CASE WHEN A.ID_REC_STATUS IN {settings.STATUS_EXCECAO_SQL} THEN A.VALOR_TOTAL_ACORDO ELSE 0 END)             AS valor_excecoes,
         SUM(CASE WHEN A.ID_REC_STATUS IN {settings.STATUS_EXCECAO_SQL} THEN A.VALOR_P1 ELSE 0 END)                       AS valor_primeira_parcela_excecoes,
         COUNT(CASE WHEN A.ID_REC_STATUS IN {settings.STATUS_REJEITADO_SQL} THEN 1 END)                                   AS qtd_rejeitados,
         SUM(CASE WHEN A.ID_REC_STATUS IN {settings.STATUS_REJEITADO_SQL} THEN A.VALOR_TOTAL_ACORDO ELSE 0 END)           AS valor_rejeitados,
-        AVG(CASE WHEN A.ID_REC_STATUS IN {settings.STATUS_APROVADOS_SQL}
+        AVG(CASE WHEN A.ID_REC_STATUS IN {settings.STATUS_GERADOS_SQL}
             THEN DATEDIFF(DAY, S.DT_VENC_DIV, @Hoje) END)                                                       AS idade_media_acordos
     FROM CTE_Acordos A
     LEFT JOIN CTE_Saldo_Original S ON A.NR_RECEBIMENTO = S.NR_RECEBIMENTO
@@ -123,14 +123,14 @@ CTE_Horas_Agente AS (
             MAX(RM.DT_EMISSAO) AS dia_max
          FROM REC_MASTER RM (NOLOCK)
          WHERE RM.DT_EMISSAO >= @Hoje AND RM.DT_EMISSAO < @Amanha
-           AND RM.ID_REC_STATUS IN {settings.STATUS_APROVADOS_SQL}
+           AND RM.ID_REC_STATUS IN {settings.STATUS_GERADOS_SQL}
            {cart_filter}
          GROUP BY RM.ID_USUARIO, CAST(RM.DT_EMISSAO AS DATE)
     ) d
     GROUP BY ID_USUARIO
 ),
 -- Boletos emitidos vs pagos no prazo (5d do venc.) por agente — base da Conversão.
--- "Emitido" = boleto vencido (DT_VENCIMENTO < hoje) de acordo aprovado. Parcelas
+-- "Emitido" = boleto vencido (DT_VENCIMENTO < hoje) de acordo gerado (inclui quebras). Parcelas
 -- ainda não vencidas não entram: não há como ter sido pagas no prazo ainda.
 CTE_Boletos_Agente AS (
     SELECT
@@ -139,7 +139,7 @@ CTE_Boletos_Agente AS (
         SUM({settings.BOLETO_PAGO_PRAZO_SQL}) AS qtd_boletos_pagos
      FROM REC_MASTER RM (NOLOCK)
      WHERE RM.DT_EMISSAO >= @Hoje AND RM.DT_EMISSAO < @Amanha
-       AND RM.ID_REC_STATUS IN {settings.STATUS_APROVADOS_SQL}
+       AND RM.ID_REC_STATUS IN {settings.STATUS_GERADOS_SQL}
        AND RM.DT_VENCIMENTO < CAST(GETDATE() AS DATE)
        {cart_filter}
      GROUP BY RM.ID_USUARIO
@@ -300,13 +300,13 @@ CTE_Saldo_Original AS (
 CTE_Financeiro_Final AS (
     SELECT
         A.ID_USUARIO, A.origem,
-        COUNT(CASE WHEN A.ID_REC_STATUS IN {settings.STATUS_APROVADOS_SQL} THEN A.NR_RECEBIMENTO END) AS qtd_acordos,
-        SUM(CASE WHEN A.ID_REC_STATUS IN {settings.STATUS_APROVADOS_SQL} THEN A.VALOR_TOTAL_ACORDO ELSE 0 END) AS valor_total_acordos,
-        AVG(CASE WHEN A.ID_REC_STATUS IN {settings.STATUS_APROVADOS_SQL} THEN A.VALOR_TOTAL_ACORDO END) AS acordo_medio,
-        SUM(CASE WHEN A.ID_REC_STATUS IN {settings.STATUS_APROVADOS_SQL} THEN A.VALOR_P1 ELSE 0 END) AS valor_total_p1,
-        SUM(CASE WHEN A.ID_REC_STATUS IN {settings.STATUS_APROVADOS_SQL} THEN A.VR_PAGO_P1 ELSE 0 END) AS valor_p1_recebido,
-        AVG(CASE WHEN A.ID_REC_STATUS IN {settings.STATUS_APROVADOS_SQL} THEN CAST(A.PLANO AS DECIMAL(10,2)) END) AS parcelamento_medio,
-        AVG(CASE WHEN A.ID_REC_STATUS IN {settings.STATUS_APROVADOS_SQL} AND S.VR_ORIGINAL > 0
+        COUNT(CASE WHEN A.ID_REC_STATUS IN {settings.STATUS_GERADOS_SQL} THEN A.NR_RECEBIMENTO END) AS qtd_acordos,
+        SUM(CASE WHEN A.ID_REC_STATUS IN {settings.STATUS_GERADOS_SQL} THEN A.VALOR_TOTAL_ACORDO ELSE 0 END) AS valor_total_acordos,
+        AVG(CASE WHEN A.ID_REC_STATUS IN {settings.STATUS_GERADOS_SQL} THEN A.VALOR_TOTAL_ACORDO END) AS acordo_medio,
+        SUM(CASE WHEN A.ID_REC_STATUS IN {settings.STATUS_GERADOS_SQL} THEN A.VALOR_P1 ELSE 0 END) AS valor_total_p1,
+        SUM(CASE WHEN A.ID_REC_STATUS IN {settings.STATUS_GERADOS_SQL} THEN A.VR_PAGO_P1 ELSE 0 END) AS valor_p1_recebido,
+        AVG(CASE WHEN A.ID_REC_STATUS IN {settings.STATUS_GERADOS_SQL} THEN CAST(A.PLANO AS DECIMAL(10,2)) END) AS parcelamento_medio,
+        AVG(CASE WHEN A.ID_REC_STATUS IN {settings.STATUS_GERADOS_SQL} AND S.VR_ORIGINAL > 0
             THEN A.VALOR_TOTAL_ACORDO / S.VR_ORIGINAL * 100
         END) AS desconto_medio,
         COUNT(CASE WHEN A.ID_REC_STATUS IN {settings.STATUS_EXCECAO_SQL} THEN A.NR_RECEBIMENTO END) AS qtd_excecoes,
@@ -318,7 +318,7 @@ CTE_Financeiro_Final AS (
 ),
 
 -- Boletos emitidos vs pagos no prazo (5d do venc.) por agente — base da Conversão.
--- "Emitido" = boleto vencido (DT_VENCIMENTO < hoje) de acordo aprovado. Parcelas
+-- "Emitido" = boleto vencido (DT_VENCIMENTO < hoje) de acordo gerado (inclui quebras). Parcelas
 -- ainda não vencidas não entram: não há como ter sido pagas no prazo ainda.
 CTE_Boletos AS (
     SELECT
@@ -326,7 +326,7 @@ CTE_Boletos AS (
         COUNT(*) AS qtd_boletos_emitidos,
         SUM({settings.BOLETO_PAGO_PRAZO_SQL}) AS qtd_boletos_pagos
     FROM ({rec_master}) R
-    WHERE R.ID_REC_STATUS IN {settings.STATUS_APROVADOS_SQL}
+    WHERE R.ID_REC_STATUS IN {settings.STATUS_GERADOS_SQL}
       AND R.DT_VENCIMENTO < CAST(GETDATE() AS DATE)
     GROUP BY R.ID_USUARIO, R.origem
 )
@@ -441,16 +441,16 @@ CTE_Acordos_Diario AS (
         CAST(R.DT_EMISSAO AS DATE) AS dia,
         SUM(R.VALOR) AS valor_total_acordos,
         COUNT(DISTINCT R.NR_RECEBIMENTO) AS qtd_acordos,
-        SUM(CASE WHEN R.ID_REC_STATUS IN {settings.STATUS_APROVADOS_SQL}
+        SUM(CASE WHEN R.ID_REC_STATUS IN {settings.STATUS_GERADOS_SQL}
                  AND R.PARCELA = {settings.PRIMEIRA_PARCELA}
             THEN R.VALOR ELSE 0 END) AS valor_p1,
-        SUM(CASE WHEN R.ID_REC_STATUS IN {settings.STATUS_APROVADOS_SQL}
+        SUM(CASE WHEN R.ID_REC_STATUS IN {settings.STATUS_GERADOS_SQL}
                  AND R.PARCELA = {settings.PRIMEIRA_PARCELA}
             THEN R.VR_PAGO ELSE 0 END) AS valor_p1_recebido,
-        SUM(CASE WHEN R.ID_REC_STATUS IN {settings.STATUS_APROVADOS_SQL}
+        SUM(CASE WHEN R.ID_REC_STATUS IN {settings.STATUS_GERADOS_SQL}
                  AND R.DT_VENCIMENTO < @Hoje
             THEN 1 ELSE 0 END) AS qtd_boletos_emitidos,
-        SUM(CASE WHEN R.ID_REC_STATUS IN {settings.STATUS_APROVADOS_SQL}
+        SUM(CASE WHEN R.ID_REC_STATUS IN {settings.STATUS_GERADOS_SQL}
                  AND R.DT_VENCIMENTO < @Hoje
             THEN {settings.BOLETO_PAGO_PRAZO_SQL} ELSE 0 END) AS qtd_boletos_pagos,
         SUM(CASE WHEN R.ID_REC_STATUS IN {settings.STATUS_EXCECAO_SQL}

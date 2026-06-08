@@ -30,15 +30,15 @@ describe("formatBRLCompact", () => {
 
 describe("formatDelta", () => {
   it("renders up arrow with rounded magnitude", () => {
-    expect(formatDelta(0.124, "up")).toBe("↑ 12%");
+    expect(formatDelta(0.124, "up")).toBe("12%");
   });
 
   it("renders down arrow with absolute magnitude", () => {
-    expect(formatDelta(0.041, "down")).toBe("↓ 4%");
-    expect(formatDelta(-0.041, "down")).toBe("↓ 4%");
+    expect(formatDelta(0.041, "down")).toBe("4%");
+    expect(formatDelta(-0.041, "down")).toBe("4%");
   });
 
   it("renders flat arrow for stable delta", () => {
-    expect(formatDelta(0.003, "flat")).toBe("→ 0%");
+    expect(formatDelta(0.003, "flat")).toBe("0%");
   });
 });

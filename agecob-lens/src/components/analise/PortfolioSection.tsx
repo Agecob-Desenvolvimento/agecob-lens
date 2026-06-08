@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatBRLCompact } from "@/lib/metrics";
 import { cn } from "@/lib/utils";
 import { usePortfolioDetalhe } from "@/hooks/usePortfolioDetalhe";
-import { type BarRow, excecoesToRows, rejeitadosToRows } from "./portfolioRows";
+import { type BarRow } from "./portfolioRows";
 
 export function HBarList({
   rows,
@@ -148,8 +148,8 @@ export function PortfolioDetailPanel({
 
 export interface PortfolioSectionProps {
   portfolioValor: Array<{ nome: string; valor: number }>;
-  excecoesPorPortfolio: Array<{ nome: string; qtd: number }>;
-  rejeitadosPorPortfolio: Array<{ nome: string; qtd: number }>;
+  excecoesPorPortfolio: Array<{ nome: string; valor: number }>;
+  rejeitadosPorPortfolio: Array<{ nome: string; valor: number }>;
   loading?: boolean;
 }
 
@@ -164,6 +164,9 @@ export function PortfolioSection({
   const [expandedExc, setExpandedExc] = useState<string | null>(null);
   const [expandedRej, setExpandedRej] = useState<string | null>(null);
 
+  const maxExc = Math.max(...excecoesPorPortfolio.map((d) => d.valor), 1);
+  const maxRej = Math.max(...rejeitadosPorPortfolio.map((d) => d.valor), 1);
+
   const valorRows: BarRow[] = portfolioValor.map((d) => ({
     label: d.nome,
     ratio: d.valor / maxValor,
@@ -173,8 +176,23 @@ export function PortfolioSection({
     valueClass: "text-muted-foreground",
   }));
 
-  const excecoesRows: BarRow[] = excecoesToRows(excecoesPorPortfolio);
-  const rejeitadosRows: BarRow[] = rejeitadosToRows(rejeitadosPorPortfolio);
+  const excecoesRows: BarRow[] = excecoesPorPortfolio.map((d) => ({
+    label: d.nome,
+    ratio: d.valor / maxExc,
+    valueText: formatBRLCompact(d.valor),
+    barColor: "#f43f5e",
+    trackClass: "bg-rose-50",
+    valueClass: "text-rose-600 font-semibold",
+  }));
+
+  const rejeitadosRows: BarRow[] = rejeitadosPorPortfolio.map((d) => ({
+    label: d.nome,
+    ratio: d.valor / maxRej,
+    valueText: formatBRLCompact(d.valor),
+    barColor: "#f97316",
+    trackClass: "bg-orange-50",
+    valueClass: "text-orange-600 font-semibold",
+  }));
 
   return (
     <div className="space-y-3">
@@ -205,7 +223,7 @@ export function PortfolioSection({
         {/* Exceções */}
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-[13px] font-semibold">Exceções por Portfólio (Qtd)</CardTitle>
+            <CardTitle className="text-[13px] font-semibold">Exceções por Portfólio (Valor)</CardTitle>
           </CardHeader>
           <CardContent>
             {loading ? (
@@ -228,7 +246,7 @@ export function PortfolioSection({
         {/* Rejeitados */}
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-[13px] font-semibold">Rejeitados por Portfólio (Qtd)</CardTitle>
+            <CardTitle className="text-[13px] font-semibold">Rejeitados por Portfólio (Valor)</CardTitle>
           </CardHeader>
           <CardContent>
             {loading ? (

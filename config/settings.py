@@ -46,12 +46,24 @@ STATUS_APROVADOS: Tuple[int, ...] = (1, 3, 12)
 STATUS_EXCECAO: Tuple[int, ...] = (5,)
 STATUS_REJEITADO: Tuple[int, ...] = (7,)
 STATUS_QUEBRADO: Tuple[int, ...] = (2,)
-STATUS_UNIVERSO_ACORDOS: Tuple[int, ...] = STATUS_APROVADOS + STATUS_EXCECAO  # (1, 3, 5, 12)
-# Cluster A (portfolio-rollup): união exata dos 5 conjuntos de status por-portfólio.
+STATUS_QUEBRA_AUTOMATICA: Tuple[int, ...] = (10,)
+# "Valores gerados": um acordo firmado hoje conta no valor gerado mesmo que depois
+# quebre (QUEBRA=2) ou seja cancelado por estouro de carência (QUEBRA AUTOMÁTICA=10).
+# Base de valor_acordos, 1ª parcela, qtd_acordos, ticket e boletos (conversão/
+# efetividade). Derivado — não inferir literais.
+STATUS_GERADOS: Tuple[int, ...] = tuple(sorted(set(
+    STATUS_APROVADOS + STATUS_QUEBRADO + STATUS_QUEBRA_AUTOMATICA
+)))  # (1, 2, 3, 10, 12)
+# Pré-filtro das CTEs de agregação: gerados + exceção (quebras precisam sobreviver
+# ao pré-filtro p/ entrar nas métricas de geração).
+STATUS_UNIVERSO_ACORDOS: Tuple[int, ...] = tuple(sorted(set(
+    STATUS_GERADOS + STATUS_EXCECAO
+)))  # (1, 2, 3, 5, 10, 12)
+# Cluster A (portfolio-rollup): união exata dos conjuntos de status por-portfólio.
 # Derivado dos constantes existentes — não inferir literais. Ordenado p/ leitura.
 STATUS_PORTFOLIO_ROLLUP: Tuple[int, ...] = tuple(sorted(set(
-    STATUS_APROVADOS + STATUS_EXCECAO + STATUS_REJEITADO + STATUS_QUEBRADO
-)))  # (1, 2, 3, 5, 7, 12)
+    STATUS_APROVADOS + STATUS_EXCECAO + STATUS_REJEITADO + STATUS_QUEBRADO + STATUS_QUEBRA_AUTOMATICA
+)))  # (1, 2, 3, 5, 7, 10, 12)
 
 PRIMEIRA_PARCELA: int = 0
 PORTFOLIO_COLUMN: str = "CAMPO010"
@@ -130,6 +142,7 @@ STATUS_APROVADOS_SQL: str = _sql_in(STATUS_APROVADOS)
 STATUS_EXCECAO_SQL: str = _sql_in(STATUS_EXCECAO)
 STATUS_REJEITADO_SQL: str = _sql_in(STATUS_REJEITADO)
 STATUS_QUEBRADO_SQL: str = _sql_in(STATUS_QUEBRADO)
+STATUS_GERADOS_SQL: str = _sql_in(STATUS_GERADOS)
 STATUS_UNIVERSO_SQL: str = _sql_in(STATUS_UNIVERSO_ACORDOS)
 STATUS_PORTFOLIO_ROLLUP_SQL: str = _sql_in(STATUS_PORTFOLIO_ROLLUP)
 CPC_IDS_SQL: str = _sql_in(CPC_COMPLEMENTO_IDS)

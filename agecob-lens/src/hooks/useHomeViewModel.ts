@@ -35,10 +35,12 @@ import {
   selectTopAgentesPorPrimeiraParcela,
   selectTopPortfolioPorExcecoes,
   selectTopPortfolioPorRejeitados,
+  selectTopPortfolioPorExcecoesValor,
+  selectTopPortfolioPorRejeitadosValor,
   selectTopPortfolioPorQuebrados,
   selectTopPortfolioPorValor,
 } from "@/selectors/homeSelectors";
-import type { HomeViewModel } from "@/types/viewModels";
+import type { HomeViewModel, PortfolioRiskEntry } from "@/types/viewModels";
 
 function countBusinessDays(fromIso: string, toIso: string): number {
   const start = new Date(`${fromIso}T00:00:00`);
@@ -268,6 +270,8 @@ export function useHomeViewModel(): HomeViewModel {
   const excecoesPorPortfolio = useMemo(() => selectTopPortfolioPorExcecoes(qExcPort.data?.data ?? []), [qExcPort.data]);
   const rejeitadosPorPortfolio = useMemo(() => selectTopPortfolioPorRejeitados(qRejPort.data?.data ?? []), [qRejPort.data]);
   const quebradosPorPortfolio = useMemo(() => selectTopPortfolioPorQuebrados(qQbrPort.data?.data ?? []), [qQbrPort.data]);
+  const excecoesPorPortfolioValor = useMemo(() => selectTopPortfolioPorExcecoesValor(qExcPort.data?.data ?? []), [qExcPort.data]);
+  const rejeitadosPorPortfolioValor = useMemo(() => selectTopPortfolioPorRejeitadosValor(qRejPort.data?.data ?? []), [qRejPort.data]);
 
   // Portfolio 1ª parcela (rentabilidade + risco)
   const { data: ppPortfolioEnv, isLoading: loadingPpPortfolio } = useQuery({
@@ -292,15 +296,29 @@ export function useHomeViewModel(): HomeViewModel {
     return map;
   }, [benchAutosEnv, benchConsumerEnv]);
 
-  // Risk map: portfolio_name → valor_exceções (from existing excecoes data)
+  // Risk map: portfolio_name → { excecoes, quebrados, rejeitados }
   const portfolioRiskMap = useMemo(() => {
-    const map = new Map<string, number>();
+    const map = new Map<string, PortfolioRiskEntry>();
     const rawExcecoes = qExcPort.data?.data ?? [];
+    const rawQuebrados = qQbrPort.data?.data ?? [];
+    const rawRejeitados = qRejPort.data?.data ?? [];
     for (const row of rawExcecoes) {
-      map.set(row.portfolio_name, Number(row.valor_excecoes || 0));
+      const entry = map.get(row.portfolio_name) ?? { excecoes: 0, quebrados: 0, rejeitados: 0 };
+      entry.excecoes = Number(row.valor_excecoes || 0);
+      map.set(row.portfolio_name, entry);
+    }
+    for (const row of rawQuebrados) {
+      const entry = map.get(row.portfolio_name) ?? { excecoes: 0, quebrados: 0, rejeitados: 0 };
+      entry.quebrados = Number(row.valor_quebrados || 0);
+      map.set(row.portfolio_name, entry);
+    }
+    for (const row of rawRejeitados) {
+      const entry = map.get(row.portfolio_name) ?? { excecoes: 0, quebrados: 0, rejeitados: 0 };
+      entry.rejeitados = Number(row.valor_rejeitados || 0);
+      map.set(row.portfolio_name, entry);
     }
     return map;
-  }, [qExcPort.data]);
+  }, [qExcPort.data, qQbrPort.data, qRejPort.data]);
 
   return {
     loading,
@@ -320,6 +338,8 @@ export function useHomeViewModel(): HomeViewModel {
     portfolio1aParcela,
     excecoesPorPortfolio,
     rejeitadosPorPortfolio,
+    excecoesPorPortfolioValor,
+    rejeitadosPorPortfolioValor,
     quebradosPorPortfolio,
     loadingPpAgente: qPpAgente.isLoading,
     loadingAcdPort: qAcdPort.isLoading,

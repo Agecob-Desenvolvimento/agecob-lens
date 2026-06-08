@@ -67,9 +67,10 @@ Graph (após mudanças relevantes): `/graphify . --update`
 |---|---|
 | Primeira parcela | `PARCELA = 0` |
 | Acordos aprovados (`ID_REC_STATUS`) | `IN (1, 3, 12)` |
+| **Valores gerados** (`STATUS_GERADOS`) | `IN (1, 2, 3, 10, 12)` — aprovados + QUEBRA(2) + QUEBRA AUTOMÁTICA(10). Base de valor_acordos, 1ª parcela, qtd_acordos, ticket e boletos (conversão/efetividade) |
 | Exceções (`ID_REC_STATUS`) | `IN (5)` — negócio chama de "Exceção" o status que o enum REC_MASTER nomeia como PENDENTE |
 | Boletos quebrados (`ID_REC_STATUS`) | `IN (2)` |
-| Pré-filtro CTE | `IN (1, 3, 5, 12)` |
+| Pré-filtro CTE | `IN (1, 2, 3, 5, 10, 12)` — gerados + exceção |
 | Portfólio | `DIV_AUX.CAMPO010` |
 | Filtro de data padrão | `DT_EMISSAO >= @Hoje AND DT_EMISSAO < @Amanha` |
 | `NOLOCK` | **Obrigatório** em todas as tabelas de leitura |

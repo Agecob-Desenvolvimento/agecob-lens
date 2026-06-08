@@ -88,6 +88,20 @@ Reason:
 ID_REC_STATUS IN (1, 3, 12)
 ```
 
+## Generated Agreements (STATUS_GERADOS) — base de valor
+
+```sql
+ID_REC_STATUS IN (1, 2, 3, 10, 12)
+```
+
+Aprovados (1,3,12) + QUEBRA (2) + QUEBRA AUTOMÁTICA (10). **Esta é a base dos KPIs
+de valor gerado**: `valor_acordos`, `valor_primeira_parcela`, `qtd_acordos`, ticket,
+e os boletos de conversão/efetividade. Um acordo gerado hoje conta no valor gerado
+mesmo que depois quebre — quebrar é desfecho posterior. Conversão = boletos pagos /
+emitidos agora inclui boletos de quebras no denominador (nunca no de pagos), o que
+corrige a inflação anterior. Pré-filtro das CTEs (`STATUS_UNIVERSO_ACORDOS`) =
+gerados + exceção = `(1, 2, 3, 5, 10, 12)`.
+
 ## Exception Status
 
 ```sql

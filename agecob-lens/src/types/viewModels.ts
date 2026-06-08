@@ -11,6 +11,13 @@ import type { HandoffEficienciaDatum } from "@/components/executive/HandoffEfici
 import type { BarDatum, FunnelDatum, QuebradoPortfolioDatum } from "@/selectors/homeSelectors";
 import type { PrimeiraParcelaPorPortfolioRow } from "@/services/api";
 
+/** Risk dimensions per portfolio for the Rentabilidade & Risco chart. */
+export interface PortfolioRiskEntry {
+  excecoes: number;
+  quebrados: number;
+  rejeitados: number;
+}
+
 // ── Home (Index.tsx) ────────────────────────────────────────────
 
 export interface HomeViewModel {
@@ -35,6 +42,8 @@ export interface HomeViewModel {
   portfolio1aParcela: BarDatum[];
   excecoesPorPortfolio: BarDatum[];
   rejeitadosPorPortfolio: BarDatum[];
+  excecoesPorPortfolioValor: BarDatum[];
+  rejeitadosPorPortfolioValor: BarDatum[];
   quebradosPorPortfolio: QuebradoPortfolioDatum[];
   loadingPpAgente: boolean;
   loadingAcdPort: boolean;
@@ -42,7 +51,7 @@ export interface HomeViewModel {
   loadingRejPort: boolean;
   loadingQbrPort: boolean;
   ppPortfolioRows: PrimeiraParcelaPorPortfolioRow[];
-  portfolioRiskMap: Map<string, number>;
+  portfolioRiskMap: Map<string, PortfolioRiskEntry>;
   loadingPpPortfolio: boolean;
   benchByBu: Map<string, { cpc: number | null; conversao: number | null }>;
 }

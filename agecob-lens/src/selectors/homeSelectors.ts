@@ -93,12 +93,28 @@ export function selectTopPortfolioPorExcecoes(rows: ExcecoesPorPortfolioRow[], n
     .map((r) => ({ label: r.portfolio_name, value: Number(r.qtd_excecoes || 0) }));
 }
 
+export function selectTopPortfolioPorExcecoesValor(rows: ExcecoesPorPortfolioRow[], n = 10): BarDatum[] {
+  return [...rows]
+    .filter((r) => Number(r.valor_excecoes || 0) > 0)
+    .sort((a, b) => Number(b.valor_excecoes || 0) - Number(a.valor_excecoes || 0))
+    .slice(0, n)
+    .map((r) => ({ label: r.portfolio_name, value: Number(r.valor_excecoes || 0) }));
+}
+
 export function selectTopPortfolioPorRejeitados(rows: RejeitadosPorPortfolioRow[], n = 10): BarDatum[] {
   return [...rows]
     .filter((r) => Number(r.qtd_rejeitados || 0) > 0)
     .sort((a, b) => Number(b.qtd_rejeitados || 0) - Number(a.qtd_rejeitados || 0))
     .slice(0, n)
     .map((r) => ({ label: r.portfolio_name, value: Number(r.qtd_rejeitados || 0) }));
+}
+
+export function selectTopPortfolioPorRejeitadosValor(rows: RejeitadosPorPortfolioRow[], n = 10): BarDatum[] {
+  return [...rows]
+    .filter((r) => Number(r.valor_rejeitados || 0) > 0)
+    .sort((a, b) => Number(b.valor_rejeitados || 0) - Number(a.valor_rejeitados || 0))
+    .slice(0, n)
+    .map((r) => ({ label: r.portfolio_name, value: Number(r.valor_rejeitados || 0) }));
 }
 
 /** Portfolio-level quebrados with financial impact. Sort by valor_quebrados DESC. */

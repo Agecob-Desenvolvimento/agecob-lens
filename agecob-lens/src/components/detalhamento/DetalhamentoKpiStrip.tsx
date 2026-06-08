@@ -1,5 +1,22 @@
+import { useState } from "react";
+import { ChevronDown } from "lucide-react";
 import { fmtNum, fmtPct, formatBRLCompact } from "@/lib/metrics";
+import { KpiDeltaBadge, type DeltaDirection } from "@/components/executive/KpiDeltaBadge";
 import { cn } from "@/lib/utils";
+
+/** KPI ids where a falling value is good (delta colors invert). */
+const INVERTED_DELTA_IDS = new Set([
+  "qtd_excecoes",
+  "valor_excecoes",
+  "qtd_rejeitados",
+  "valor_rejeitados",
+  "idade_media",
+]);
+
+function deltaDirection(delta: number): DeltaDirection {
+  if (Math.abs(delta) < 0.01) return "flat";
+  return delta > 0 ? "up" : "down";
+}
 
 export type KpiUnit = "BRL" | "%" | "count";
 
@@ -10,11 +27,19 @@ export interface KpiDatum {
   unit: KpiUnit;
 }
 
+/** Internal reference (office average) for the green/amber benchmark sub-line. */
+export interface KpiBenchmark {
+  ref: number;
+  betterWhen: "up" | "down";
+}
+
 export interface DetalhamentoKpiStripProps {
   primary: KpiDatum[];
   secondary: KpiDatum[];
   /** Fractional deltas vs previous period. Key = KPI id, value = fraction (-0.12 = -12%). */
   deltas?: Record<string, number>;
+  /** Office-average reference per KPI id. Renders a green/amber sub-line. */
+  benchmarks?: Record<string, KpiBenchmark>;
 }
 
 function formatValue(kpi: KpiDatum): string {
@@ -23,73 +48,112 @@ function formatValue(kpi: KpiDatum): string {
   return fmtNum(kpi.value);
 }
 
-function DeltaBadge({ delta }: { delta: number }) {
-  if (delta === 0) {
-    return (
-      <span className="text-[10px] text-muted-foreground tabular-nums">→ 0%</span>
-    );
-  }
-  const up = delta > 0;
-  const absPct = Math.round(Math.abs(delta) * 100);
-  const color = up ? "text-success-fg" : "text-danger-fg";
-  const arrow = up ? "↑" : "↓";
+function formatByUnit(value: number, unit: KpiUnit): string {
+  if (unit === "BRL") return formatBRLCompact(value, "full");
+  if (unit === "%") return fmtPct(value);
+  return fmtNum(value);
+}
+
+function BenchmarkLine({ kpi, bench }: { kpi: KpiDatum; bench: KpiBenchmark }) {
+  const above = bench.betterWhen === "down" ? kpi.value <= bench.ref : kpi.value >= bench.ref;
   return (
-    <span className={cn("text-[10px] font-semibold tabular-nums", color)}>
-      {arrow} {absPct}%
-    </span>
+    <div
+      title="Referência interna — média do escritório no período."
+      className={cn("text-[10px] font-medium", above ? "text-success-fg" : "text-amber-600")}
+    >
+      Média: {formatByUnit(bench.ref, kpi.unit)}
+    </div>
   );
 }
 
 const LABEL_CLS =
   "text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground";
 
-export function DetalhamentoKpiStrip({ primary, secondary, deltas }: DetalhamentoKpiStripProps) {
+interface KpiCardProps {
+  kpi: KpiDatum;
+  delta?: number;
+  bench?: KpiBenchmark;
+  tier: "primary" | "secondary";
+}
+
+function KpiCard({ kpi, delta, bench, tier }: KpiCardProps) {
+  const primary = tier === "primary";
+  return (
+    <div
+      className={cn(
+        "rounded-lg border border-border transition-colors",
+        primary ? "bg-card" : "bg-muted/30 hover:bg-card",
+      )}
+      style={{ padding: primary ? "14px 16px" : "10px 12px" }}
+    >
+      <div className={LABEL_CLS}>{kpi.label}</div>
+      <div
+        className={cn(
+          "leading-none tabular-nums text-foreground",
+          primary ? "mt-1.5 text-[26px] font-bold" : "mt-1 text-lg font-semibold",
+        )}
+      >
+        {formatValue(kpi)}
+      </div>
+      {(delta !== undefined || bench) && (
+        <div className="mt-0.5 space-y-0.5">
+          {delta !== undefined && (
+            <KpiDeltaBadge
+              value={delta}
+              direction={deltaDirection(delta)}
+              baselineLabel="período anterior"
+              inverted={INVERTED_DELTA_IDS.has(kpi.id)}
+            />
+          )}
+          {bench && <BenchmarkLine kpi={kpi} bench={bench} />}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function DetalhamentoKpiStrip({ primary, secondary, deltas, benchmarks }: DetalhamentoKpiStripProps) {
+  const [showSecondary, setShowSecondary] = useState(false);
   return (
     <div className="flex flex-col gap-2">
       <div className="grid grid-cols-4 gap-2">
-        {primary.map((kpi) => {
-          const d = deltas?.[kpi.id];
-          return (
-            <div
-              key={kpi.id}
-              className="rounded-lg border border-border bg-card"
-              style={{ padding: "14px 16px" }}
-            >
-              <div className={LABEL_CLS}>{kpi.label}</div>
-              <div className="mt-1.5 text-[26px] font-bold leading-none tabular-nums text-foreground">
-                {formatValue(kpi)}
-              </div>
-              {d !== undefined && (
-                <div className="mt-0.5">
-                  <DeltaBadge delta={d} />
-                </div>
-              )}
-            </div>
-          );
-        })}
+        {primary.map((kpi) => (
+          <KpiCard
+            key={kpi.id}
+            kpi={kpi}
+            delta={deltas?.[kpi.id]}
+            bench={benchmarks?.[kpi.id]}
+            tier="primary"
+          />
+        ))}
       </div>
-      <div className="grid grid-cols-6 gap-2">
-        {secondary.map((kpi) => {
-          const d = deltas?.[kpi.id];
-          return (
-            <div
+
+      <button
+        type="button"
+        onClick={() => setShowSecondary((v) => !v)}
+        className="flex items-center gap-1.5 self-start text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
+        aria-expanded={showSecondary}
+      >
+        <ChevronDown
+          className={cn("h-3.5 w-3.5 transition-transform", showSecondary && "rotate-180")}
+          aria-hidden
+        />
+        Mais métricas ({secondary.length})
+      </button>
+
+      {showSecondary && (
+        <div className="grid grid-cols-6 gap-2">
+          {secondary.map((kpi) => (
+            <KpiCard
               key={kpi.id}
-              className="rounded-lg border border-border bg-card"
-              style={{ padding: "12px 14px" }}
-            >
-              <div className={LABEL_CLS}>{kpi.label}</div>
-              <div className="mt-1 text-xl font-semibold leading-none tabular-nums text-foreground">
-                {formatValue(kpi)}
-              </div>
-              {d !== undefined && (
-                <div className="mt-0.5">
-                  <DeltaBadge delta={d} />
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+              kpi={kpi}
+              delta={deltas?.[kpi.id]}
+              bench={benchmarks?.[kpi.id]}
+              tier="secondary"
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

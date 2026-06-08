@@ -932,6 +932,8 @@ export interface EfResumoDayRow {
 export interface EfResumoKpis {
   generated: number;
   total_acordos: number;
+  to_mature: number;
+  overdue_unpaid: number;
   paid_on_time: number;
   conversion_pct: number;
   amount_maturing: number;
