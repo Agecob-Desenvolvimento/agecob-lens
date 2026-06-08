@@ -936,6 +936,7 @@ export interface EfResumoKpis {
   to_mature: number;
   overdue_unpaid: number;
   paid_on_time: number;
+  broken: number;
   conversion_pct: number;
   amount_maturing: number;
   amount_received: number;

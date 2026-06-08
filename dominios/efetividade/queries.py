@@ -191,7 +191,7 @@ def _build_ef_resumo_sql(
 
     def _inner(database: str) -> str:
         return (
-            f"    SELECT R.NR_RECEBIMENTO, R.VALOR, R.VR_PAGO, R.DT_PAGAMENTO, R.DT_VENCIMENTO\n"
+            f"    SELECT R.NR_RECEBIMENTO, R.VALOR, R.VR_PAGO, R.DT_PAGAMENTO, R.DT_VENCIMENTO, R.ID_REC_STATUS\n"
             f"    FROM {database}.dbo.REC_MASTER (NOLOCK) R\n"
             f"    INNER JOIN {database}.dbo.USU_MASTER (NOLOCK) U ON R.ID_USUARIO = U.ID_USUARIO\n"
             f"    WHERE R.DT_VENCIMENTO >= CONVERT(DATE, '{date_from_lit}', 112)\n"
@@ -216,6 +216,7 @@ SELECT
     SUM(CASE WHEN DT_VENCIMENTO < CAST(GETDATE() AS DATE)
              AND ({pago_expr}) = 0 THEN 1 ELSE 0 END) AS overdue_unpaid,
     SUM({pago_expr}) AS paid_on_time,
+    SUM(CASE WHEN ID_REC_STATUS = {settings.STATUS_QUEBRADO[0]} THEN 1 ELSE 0 END) AS broken,
     CAST(100.0 * SUM({pago_expr}) / NULLIF(COUNT(*), 0) AS DECIMAL(8, 2)) AS conversion_pct,
     COALESCE(SUM(VALOR), 0) AS amount_maturing,
     COALESCE(SUM({recv_expr}), 0) AS amount_received,
