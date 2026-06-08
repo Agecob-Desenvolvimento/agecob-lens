@@ -48,9 +48,10 @@ def _ef_inner_simple(db: str, parcela_cond: str, date_col: str, extra_cols: str 
 
 def _ef_inner_agent(db: str, parcela_cond: str, date_col: str) -> str:
     """Builds the inner SELECT(s) for agent efetividade queries."""
+    venc_col = "" if "DT_VENCIMENTO" in date_col else " R.DT_VENCIMENTO,"
     def _one(database: str) -> str:
         return (
-            f"SELECT R.{date_col}, R.VR_PAGO, R.DT_PAGAMENTO, R.DT_VENCIMENTO,\n"
+            f"SELECT R.{date_col}, R.VR_PAGO, R.DT_PAGAMENTO,{venc_col} R.ID_REC_STATUS,\n"
             f"           U.CHAVE AS Agente, YEAR(R.{date_col}) AS Ano, MONTH(R.{date_col}) AS Mes\n"
             f"    FROM {database}.dbo.REC_MASTER (NOLOCK) R\n"
             f"    INNER JOIN {database}.dbo.USU_MASTER (NOLOCK) U ON R.ID_USUARIO = U.ID_USUARIO\n"
@@ -146,7 +147,8 @@ def _build_ef_mensal_agente_colchao_vencimento(db: str) -> str:
     inner = _ef_inner_agent(db, "> 0", "DT_VENCIMENTO")
     return f"""
 SELECT Agente, Ano, Mes, COUNT(*) AS Boletos_Gerados_Colchao,
-    SUM({_EF_PAID}) AS Pagos_No_Prazo, {_EF_CONV} AS Conversao_Colchao
+    SUM({_EF_PAID}) AS Pagos_No_Prazo, {_EF_CONV} AS Conversao_Colchao,
+    SUM(CASE WHEN ID_REC_STATUS = {settings.STATUS_QUEBRADO[0]} THEN 1 ELSE 0 END) AS Quebrados
 FROM ({inner}) AS T
 GROUP BY Agente, Ano, Mes HAVING COUNT(*) >= 10
 ORDER BY Ano, Mes, Agente

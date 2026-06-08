@@ -911,6 +911,7 @@ export interface EfAgenteColchaoVencimentoRow {
   Boletos_Gerados_Colchao: number;
   Pagos_No_Prazo: number;
   Conversao_Colchao: number;
+  Quebrados: number;
 }
 
 export async function fetchEfAgenteColchaoVencimento(db?: string): Promise<ApiEnvelope<EfAgenteColchaoVencimentoRow>> {

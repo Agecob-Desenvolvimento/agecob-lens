@@ -116,12 +116,12 @@ function efAgenteToRanking(rows: EfAgenteRow[] | EfAgenteColchaoRow[]): RankingA
     }));
 }
 
-/** Derive boletos quebrados (generated - paid) from colchão-vencimento agent data. */
+/** Boletos quebrados (ID_REC_STATUS = 2) por agente, da fonte colchão-vencimento. */
 function efAgenteToQuebrados(rows: EfAgenteColchaoVencimentoRow[]): { nome: string; qtd: number }[] {
   return [...rows]
     .map((r) => ({
       nome: r.Agente,
-      qtd: Math.max(0, (r.Boletos_Gerados_Colchao || 0) - (r.Pagos_No_Prazo || 0)),
+      qtd: Number(r.Quebrados) || 0,
     }))
     .filter((r) => r.qtd > 0)
     .sort((a, b) => b.qtd - a.qtd);
