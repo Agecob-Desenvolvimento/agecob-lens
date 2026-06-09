@@ -46,6 +46,17 @@ export function isBusinessDay(d: Date): boolean {
   return !HOLIDAYS_2026.has(fmtLocal(d));
 }
 
+/** Count business days (Mon-Fri, excluding holidays) in [fromIso, toIso] inclusive. */
+export function countBusinessDays(fromIso: string, toIso: string): number {
+  const start = new Date(`${fromIso}T00:00:00`);
+  const end = new Date(`${toIso}T00:00:00`);
+  let n = 0;
+  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    if (isBusinessDay(d)) n++;
+  }
+  return n;
+}
+
 /** Step back to the last business day (skip Sat/Sun + feriados). */
 function lastBusinessDayOnOrBefore(d: Date): Date {
   const r = new Date(d);
@@ -54,15 +65,24 @@ function lastBusinessDayOnOrBefore(d: Date): Date {
 }
 
 /**
- * Equal-length window before [fromIso, toIso], ending on the last business day
- * strictly before `from` (so a Monday compares against Friday, not Sunday).
+ * Equal-business-day window before [fromIso, toIso].
+ * Counts business days in the current period, then walks backward from the day
+ * before `from` collecting the same number of business days for fair comparison.
  */
 export function previousPeriod(fromIso: string, toIso: string): { from: string; to: string } {
   const dayMs = 86_400_000;
   const from = new Date(`${fromIso}T00:00:00`);
-  const to = new Date(`${toIso}T00:00:00`);
-  const days = Math.round((to.getTime() - from.getTime()) / dayMs) + 1;
+  const target = countBusinessDays(fromIso, toIso);
+  if (target <= 0) {
+    const prev = lastBusinessDayOnOrBefore(new Date(from.getTime() - dayMs));
+    return { from: fmtLocal(prev), to: fmtLocal(prev) };
+  }
   const prevTo = lastBusinessDayOnOrBefore(new Date(from.getTime() - dayMs));
-  const prevFrom = new Date(prevTo.getTime() - (days - 1) * dayMs);
+  let prevFrom = new Date(prevTo);
+  let collected = 1;
+  while (collected < target) {
+    prevFrom = new Date(prevFrom.getTime() - dayMs);
+    if (isBusinessDay(prevFrom)) collected++;
+  }
   return { from: fmtLocal(prevFrom), to: fmtLocal(prevTo) };
 }

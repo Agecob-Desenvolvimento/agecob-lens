@@ -25,7 +25,7 @@ import {
   calcTicketMedio,
 } from "@/lib/metrics";
 import { generateDailyReadout } from "@/lib/insightEngine";
-import { firstOfMonthStr, isBusinessDay, lastOfMonthStr, previousPeriod, todayStr } from "@/lib/dates";
+import { countBusinessDays, firstOfMonthStr, lastOfMonthStr, previousPeriod, todayStr } from "@/lib/dates";
 import {
   selectEficienciaHandoffData,
   selectFinanceiroHandoffData,
@@ -41,16 +41,6 @@ import {
   selectTopPortfolioPorValor,
 } from "@/selectors/homeSelectors";
 import type { HomeViewModel, PortfolioRiskEntry } from "@/types/viewModels";
-
-function countBusinessDays(fromIso: string, toIso: string): number {
-  const start = new Date(`${fromIso}T00:00:00`);
-  const end = new Date(`${toIso}T00:00:00`);
-  let n = 0;
-  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-    if (isBusinessDay(d)) n++;
-  }
-  return n;
-}
 
 export function useHomeViewModel(): HomeViewModel {
   const { selectedDatabase, dateFrom, dateTo } = useGlobalFilters();
