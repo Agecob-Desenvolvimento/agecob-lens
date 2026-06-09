@@ -57,32 +57,29 @@ export function countBusinessDays(fromIso: string, toIso: string): number {
   return n;
 }
 
-/** Step back to the last business day (skip Sat/Sun + feriados). */
-function lastBusinessDayOnOrBefore(d: Date): Date {
-  const r = new Date(d);
-  while (!isBusinessDay(r)) r.setDate(r.getDate() - 1);
-  return r;
-}
-
 /**
- * Equal-business-day window before [fromIso, toIso].
- * Counts business days in the current period, then walks backward from the day
- * before `from` collecting the same number of business days for fair comparison.
+ * Calendar-month-offset window: subtract one month from both dates.
+ * A period 25-May to 01-Jun compares against 25-Apr to 01-May.
+ * Month boundaries are clamped (31 Mar → 28/29 Feb, 31 May → 30 Apr, etc.).
  */
 export function previousPeriod(fromIso: string, toIso: string): { from: string; to: string } {
-  const dayMs = 86_400_000;
   const from = new Date(`${fromIso}T00:00:00`);
-  const target = countBusinessDays(fromIso, toIso);
-  if (target <= 0) {
-    const prev = lastBusinessDayOnOrBefore(new Date(from.getTime() - dayMs));
-    return { from: fmtLocal(prev), to: fmtLocal(prev) };
-  }
-  const prevTo = lastBusinessDayOnOrBefore(new Date(from.getTime() - dayMs));
-  let prevFrom = new Date(prevTo);
-  let collected = 1;
-  while (collected < target) {
-    prevFrom = new Date(prevFrom.getTime() - dayMs);
-    if (isBusinessDay(prevFrom)) collected++;
-  }
+  const to = new Date(`${toIso}T00:00:00`);
+  const prevFrom = _subtractOneMonth(from);
+  const prevTo = _subtractOneMonth(to);
   return { from: fmtLocal(prevFrom), to: fmtLocal(prevTo) };
+}
+
+/** Subtract exactly one calendar month, clamping the day to the last valid day of the target month. */
+function _subtractOneMonth(d: Date): Date {
+  const year = d.getFullYear();
+  const month = d.getMonth(); // 0-based
+  const day = d.getDate();
+
+  const targetYear = month === 0 ? year - 1 : year;
+  const targetMonth = month === 0 ? 11 : month - 1;
+
+  // Last day of the target month
+  const lastDay = new Date(targetYear, targetMonth + 1, 0).getDate();
+  return new Date(targetYear, targetMonth, Math.min(day, lastDay));
 }
