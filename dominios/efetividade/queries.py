@@ -254,6 +254,107 @@ def _build_ef_resumo_params(
     return per_db + per_db if db == "todos" else per_db
 
 
+_EF_PAGO_PRAZO_EXPR = (
+    "CASE WHEN R.DT_PAGAMENTO IS NOT NULL AND R.VR_PAGO > 0 "
+    "AND R.DT_PAGAMENTO <= DATEADD(DAY, 5, R.DT_VENCIMENTO) THEN 1 ELSE 0 END"
+)
+
+# Filtro extra por KPI — espelha exatamente os CASEs do resumo (_build_ef_resumo_sql).
+_EF_DETALHE_FILTERS = {
+    # to_mature: a vencer a partir de hoje, ainda não pago
+    "a_vencer": (
+        "AND R.DT_VENCIMENTO >= CAST(GETDATE() AS DATE)\n"
+        "              AND (R.DT_PAGAMENTO IS NULL OR R.VR_PAGO = 0)"
+    ),
+    # overdue_unpaid: vencido e não pago no prazo
+    "vencidos_nao_pagos": (
+        "AND R.DT_VENCIMENTO < CAST(GETDATE() AS DATE)\n"
+        f"              AND ({_EF_PAGO_PRAZO_EXPR}) = 0"
+    ),
+    # broken: boleto quebrado
+    "quebrados": f"AND R.ID_REC_STATUS = {settings.STATUS_QUEBRADO[0]}",
+    # paid_on_time: pago dentro de 5 dias do vencimento
+    "pagos_prazo": f"AND ({_EF_PAGO_PRAZO_EXPR}) = 1",
+}
+
+EF_DETALHE_KINDS = tuple(_EF_DETALHE_FILTERS.keys())
+
+
+def _build_ef_detalhe_sql(db: str, parcela_tipo: str, kind: str, date_from_lit: str, date_to_lit: str) -> str:
+    """Detalhe (1 linha por boleto) de um KPI de efetividade (`kind`) — espelha o
+    filtro do CASE correspondente no resumo: DT_VENCIMENTO no período + filtro do KPI.
+    Colunas no formato QuebradoDetalheRow. Datas como literais YYYYMMDD (validadas upstream).
+    """
+    parcela_cond = "= 0" if parcela_tipo == "primeira" else "> 0"
+    extra_where = _EF_DETALHE_FILTERS[kind]
+
+    def _one(database: str) -> str:
+        return f"""
+            SELECT
+                R.NR_RECEBIMENTO,
+                R.ID_CARTEIRA,
+                R.VALOR AS valor_primeira_parcela,
+                COALESCE((
+                    SELECT SUM(R2.VALOR)
+                    FROM {database}.dbo.REC_MASTER R2 (NOLOCK)
+                    WHERE R2.NR_RECEBIMENTO = R.NR_RECEBIMENTO
+                      AND R2.ID_CARTEIRA = R.ID_CARTEIRA
+                ), R.VALOR) AS valor_total,
+                U.NOME AS agente,
+                U.MATRICULA AS matricula,
+                CASE
+                    WHEN LEN(D.CPF_CNPJ) >= 5
+                    THEN LEFT(D.CPF_CNPJ, 3) + '.***.***-' + RIGHT(D.CPF_CNPJ, 2)
+                    ELSE D.CPF_CNPJ
+                END AS cpf_mask,
+                D.NOME_RAZAO AS nome_devedor,
+                CONVERT(varchar(10), R.DT_EMISSAO, 120) AS data_acordo,
+                CONVERT(varchar(10), R.DT_VENCIMENTO, 120) AS data_vencimento,
+                (
+                    SELECT COUNT(1)
+                    FROM {database}.dbo.REC_MASTER R3 (NOLOCK)
+                    WHERE R3.NR_RECEBIMENTO = R.NR_RECEBIMENTO
+                      AND R3.ID_CARTEIRA = R.ID_CARTEIRA
+                ) AS total_parcelas,
+                (
+                    SELECT COUNT(1)
+                    FROM {database}.dbo.REC_MASTER R4 (NOLOCK)
+                    WHERE R4.NR_RECEBIMENTO = R.NR_RECEBIMENTO
+                      AND R4.ID_CARTEIRA = R.ID_CARTEIRA
+                      AND R4.VR_PAGO > 0
+                ) AS parcelas_pagas,
+                CONVERT(varchar(10), R.DT_QUEBRA, 120) AS data_quebra,
+                DA.portfolio_name AS portfolio_name,
+                (
+                    SELECT SUM(DM.VR_SALDO)
+                    FROM {database}.dbo.REC_DIVIDAS RD (NOLOCK)
+                    JOIN {database}.dbo.DIV_MASTER DM (NOLOCK) ON RD.ID_DIVIDA = DM.ID_DIVIDA
+                    WHERE RD.NR_RECEBIMENTO = R.NR_RECEBIMENTO
+                      AND RD.ID_CARTEIRA = R.ID_CARTEIRA
+                ) AS divida_original
+            FROM {database}.dbo.REC_MASTER R (NOLOCK)
+            INNER JOIN {database}.dbo.USU_MASTER U (NOLOCK) ON R.ID_USUARIO = U.ID_USUARIO
+            LEFT JOIN {database}.dbo.DEV_MASTER D (NOLOCK) ON R.ID_DEV = D.ID_DEV
+            OUTER APPLY (
+                SELECT TOP 1 DA2.{settings.PORTFOLIO_COLUMN} AS portfolio_name
+                FROM {database}.dbo.REC_DIVIDAS RD2 (NOLOCK)
+                JOIN {database}.dbo.DIV_AUX DA2 (NOLOCK) ON RD2.ID_DIVIDA = DA2.ID_DIVIDA
+                WHERE RD2.NR_RECEBIMENTO = R.NR_RECEBIMENTO
+                  AND RD2.ID_CARTEIRA = R.ID_CARTEIRA
+                  AND DA2.{settings.PORTFOLIO_COLUMN} IS NOT NULL
+            ) DA
+            WHERE R.DT_VENCIMENTO >= CONVERT(DATE, '{date_from_lit}', 112)
+              AND R.DT_VENCIMENTO <= CONVERT(DATE, '{date_to_lit}', 112)
+              AND R.ID_REC_STATUS IN {_EF_STATUS}
+              AND R.PARCELA {parcela_cond}
+              {extra_where}
+              {_EF_AGENT_FILTER}
+        """
+
+    inner = f"{_one(_EF_DB_A)}\n    UNION ALL\n{_one(_EF_DB_C)}" if db == "todos" else _one(db)
+    return f"SELECT TOP 500 *\nFROM (\n{inner}\n) AS T\nORDER BY valor_primeira_parcela DESC"
+
+
 def _build_ef_curva_quebra_query(db: str, date_from_lit: str, date_to_lit: str) -> str:
     """Curva de quebra por idade do boleto.
 

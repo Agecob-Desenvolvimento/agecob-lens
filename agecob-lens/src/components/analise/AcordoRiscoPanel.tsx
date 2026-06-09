@@ -14,7 +14,7 @@ const RISK_LABEL: Record<AcordoQuebrado["perfilRisco"], string> = {
   baixo: "Baixo Risco",
 };
 
-const TONE = {
+export const TONE = {
   rose: {
     border: "border-rose-200",
     headBg: "bg-rose-50",
@@ -37,6 +37,17 @@ const TONE = {
     subBorder: "border-orange-200",
     subLabel: "text-orange-700",
   },
+  emerald: {
+    border: "border-emerald-200",
+    headBg: "bg-emerald-50",
+    headText: "text-emerald-800",
+    rowBorder: "border-emerald-100",
+    rowActive: "bg-emerald-50",
+    rowHover: "hover:bg-emerald-50/50",
+    valor: "text-emerald-600",
+    subBorder: "border-emerald-200",
+    subLabel: "text-emerald-700",
+  },
 } as const;
 
 const CONFIG: Record<RiscoTipo, { title: string; tone: keyof typeof TONE }> = {
@@ -54,7 +65,7 @@ function Detail({ label, value, highlight }: { label: string; value: string; hig
   );
 }
 
-function AcordoRow({
+export function AcordoRow({
   acordo,
   isExpanded,
   isLast,

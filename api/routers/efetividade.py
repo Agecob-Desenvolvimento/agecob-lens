@@ -5,7 +5,13 @@ from fastapi import APIRouter, HTTPException, Query
 
 import config.settings as settings
 from core.database.query_executor import run_query
-from dominios.efetividade.queries import _build_ef_curva_quebra_query, _build_ef_resumo_params, _build_ef_resumo_sql
+from dominios.efetividade.queries import (
+    EF_DETALHE_KINDS,
+    _build_ef_curva_quebra_query,
+    _build_ef_detalhe_sql,
+    _build_ef_resumo_params,
+    _build_ef_resumo_sql,
+)
 from dominios.efetividade.servico import get_efetividade, resolve_ef_db
 
 router = APIRouter(prefix="/efetividade")
@@ -115,6 +121,45 @@ def get_ef_resumo(
             "best_day": best_day,
             "worst_day": worst_day,
         },
+        "errors": [],
+    }
+
+
+@router.get("/boletos-detalhe")
+def get_ef_boletos_detalhe(
+    kind: str = Query(..., description="a_vencer | vencidos_nao_pagos | quebrados"),
+    date_from: str = Query(..., description="Start date YYYY-MM-DD (DT_VENCIMENTO >=)"),
+    date_to: str = Query(..., description="End date YYYY-MM-DD (DT_VENCIMENTO <=)"),
+    db: Optional[str] = Query(default=None),
+    parcela_tipo: str = Query(default="primeira"),
+) -> Dict[str, Any]:
+    if kind not in EF_DETALHE_KINDS:
+        raise HTTPException(status_code=422, detail=f"kind must be one of {EF_DETALHE_KINDS}")
+    if parcela_tipo not in ("primeira", "colchao"):
+        raise HTTPException(status_code=422, detail="parcela_tipo must be 'primeira' or 'colchao'")
+    try:
+        date_from_lit = date.fromisoformat(date_from).strftime("%Y%m%d")
+        date_to_lit = date.fromisoformat(date_to).strftime("%Y%m%d")
+    except ValueError:
+        raise HTTPException(status_code=422, detail="date_from and date_to must be YYYY-MM-DD")
+    db_variant = resolve_ef_db(db)
+    sql = _build_ef_detalhe_sql(db_variant, parcela_tipo, kind, date_from_lit, date_to_lit)
+    conn_db = settings.ALLOWED_DATABASES[0]
+    rows = run_query(sql, conn_db, context=f"ef-boletos-detalhe/{kind}")
+    sources = settings.ALLOWED_DATABASES if db_variant == "todos" else [db_variant]
+    return {
+        "meta": {
+            "generated_at": datetime.now(tz=timezone.utc).isoformat(),
+            "sources": sources,
+            "filters": {
+                "kind": kind,
+                "date_from": date_from,
+                "date_to": date_to,
+                "parcela_tipo": parcela_tipo,
+                "db": db_variant,
+            },
+        },
+        "data": rows,
         "errors": [],
     }
 

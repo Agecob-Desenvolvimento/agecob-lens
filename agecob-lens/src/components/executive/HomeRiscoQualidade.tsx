@@ -3,9 +3,8 @@ import { ArrowRight } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { HBarList } from "@/components/analise/PortfolioSection";
-import { excecoesToRows, rejeitadosToRows, quebradosToRows, type BarRow } from "@/components/analise/portfolioRows";
+import { excecoesValorToRows, rejeitadosValorToRows, quebradosValorToRows, type BarRow } from "@/components/analise/portfolioRows";
 import { AcordoRiscoPanel, type RiscoTipo } from "@/components/analise/AcordoRiscoPanel";
-import type { QuebradoPortfolioDatum } from "@/selectors/homeSelectors";
 
 interface BarDatum {
   label: string;
@@ -15,15 +14,14 @@ interface BarDatum {
 interface HomeRiscoQualidadeProps {
   excecoes: BarDatum[];
   rejeitados: BarDatum[];
-  quebrados: QuebradoPortfolioDatum[];
+  quebrados: BarDatum[];
   loadingExcecoes?: boolean;
   loadingRejeitados?: boolean;
   loadingQuebrados?: boolean;
   linkTo?: string;
 }
 
-const toQtd = (d: BarDatum[]) => d.map((x) => ({ nome: x.label, qtd: x.value }));
-const toQuebradoQtd = (d: QuebradoPortfolioDatum[]) => d.map((x) => ({ nome: x.label, qtd: x.qtd }));
+const toValor = (d: BarDatum[]) => d.map((x) => ({ nome: x.label, valor: x.value }));
 
 type Selected = { type: RiscoTipo; label: string } | null;
 
@@ -83,24 +81,24 @@ export function HomeRiscoQualidade({
     <div className="space-y-3">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <ClickableBarCard
-          title="Exceções por Portfólio (Qtd)"
-          rows={excecoesToRows(toQtd(excecoes))}
+          title="Exceções por Portfólio (Valor)"
+          rows={excecoesValorToRows(toValor(excecoes))}
           type="excecoes"
           loading={loadingExcecoes}
           selected={selected}
           onSelect={setSelected}
         />
         <ClickableBarCard
-          title="Rejeitados por Portfólio (Qtd)"
-          rows={rejeitadosToRows(toQtd(rejeitados))}
+          title="Rejeitados por Portfólio (Valor)"
+          rows={rejeitadosValorToRows(toValor(rejeitados))}
           type="rejeitados"
           loading={loadingRejeitados}
           selected={selected}
           onSelect={setSelected}
         />
         <ClickableBarCard
-          title="Boletos Quebrados (Qtd)"
-          rows={quebradosToRows(toQuebradoQtd(quebrados))}
+          title="Boletos Quebrados (Valor)"
+          rows={quebradosValorToRows(toValor(quebrados))}
           type="quebrados"
           loading={loadingQuebrados}
           selected={selected}

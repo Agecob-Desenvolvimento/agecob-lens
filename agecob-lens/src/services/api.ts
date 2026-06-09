@@ -321,10 +321,14 @@ export interface ExcecaoSemPortfolioRow {
   data_acordo: string | null;
   data_vencimento: string | null;
   total_parcelas: number;
+  // Opcionais — só os sidebars de KPI de efetividade (boletos-detalhe) retornam estes
+  parcelas_pagas?: number | null;
+  data_quebra?: string | null;
+  portfolio_name?: string | null;
+  divida_original?: number | null;
 }
 
-export interface QuebradoDetalheRow extends ExcecaoSemPortfolioRow {
-}
+export type QuebradoDetalheRow = ExcecaoSemPortfolioRow;
 
 export interface PrimeiraParcelaPorAgenteRow {
   agente: string;
@@ -967,6 +971,20 @@ export async function fetchEfResumo(
   if (db && db !== "todos") params.set("db", db);
   if (idPortfolio != null) params.set("id_portfolio", String(idPortfolio));
   return request<EfResumoEnvelope>(`/efetividade/resumo?${params.toString()}`);
+}
+
+export type BoletosDetalheKind = "a_vencer" | "vencidos_nao_pagos" | "quebrados" | "pagos_prazo";
+
+export async function fetchBoletosDetalhe(
+  kind: BoletosDetalheKind,
+  dateFrom: string,
+  dateTo: string,
+  db?: string,
+  parcelaTipo: "primeira" | "colchao" = "primeira",
+): Promise<ApiEnvelope<QuebradoDetalheRow>> {
+  const params = new URLSearchParams({ kind, date_from: dateFrom, date_to: dateTo, parcela_tipo: parcelaTipo });
+  if (db && db !== "todos") params.set("db", db);
+  return request<ApiEnvelope<QuebradoDetalheRow>>(`/efetividade/boletos-detalhe?${params.toString()}`);
 }
 
 // ── Curva de Quebra por Atraso ──────────────────────────────────────────

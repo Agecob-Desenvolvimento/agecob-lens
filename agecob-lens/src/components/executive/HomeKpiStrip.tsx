@@ -34,6 +34,8 @@ export interface HomeKpiSecondary {
     value: number;
     label: string;
     betterWhen: "up" | "down" | "flat";
+    /** absolute reference value (e.g. office mean), shown as "(24,7%)" after the label */
+    baselineValue?: number;
   };
   /** plain descriptive text shown when there is no comparative baseline */
   caption?: string;
@@ -62,6 +64,12 @@ function formatPrimaryValue(kpi: HomeKpiPrimary): string {
   if (kpi.unit === "BRL") return formatBRLCompact(kpi.value);
   if (kpi.unit === "percent") return fmtPct(kpi.value);
   return fmtNum(kpi.value);
+}
+
+function formatUnitValue(unit: HomeKpiSecondary["unit"], v: number): string {
+  if (unit === "BRL") return formatBRLCompact(v);
+  if (unit === "percent") return fmtPct(v);
+  return fmtNum(v);
 }
 
 function formatSecondaryValue(kpi: HomeKpiSecondary): string {
@@ -187,6 +195,9 @@ function SecondaryCard({ kpi }: { kpi: HomeKpiSecondary }) {
             <span>{formatDelta(baseline.value, direction)}</span>
             <span className="text-muted-foreground font-normal">
               vs {baseline.label}
+              {baseline.baselineValue != null
+                ? ` (${formatUnitValue(kpi.unit, baseline.baselineValue)})`
+                : ""}
             </span>
           </span>
         ) : null}

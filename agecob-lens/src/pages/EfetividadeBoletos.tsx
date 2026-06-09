@@ -7,14 +7,15 @@ import ApiDebugBanner from "@/components/executive/ApiDebugBanner";
 import { cn } from "@/lib/utils";
 import { BoletosKpiStrip } from "@/components/analise/BoletosKpiStrip";
 import { useEfetividadeViewModel, type TipoParcela } from "@/hooks/useEfetividadeViewModel";
+import type { BoletosDetalheKind } from "@/services/api";
 
 const EfetividadeDiariaChart = lazy(() => import("@/components/analise/EfetividadeDiariaChart").then((m) => ({ default: m.EfetividadeDiariaChart })));
-const BoletosQuebradosChart = lazy(() => import("@/components/analise/BoletosQuebradosChart").then((m) => ({ default: m.BoletosQuebradosChart })));
 const FunilConversaoFinanceira = lazy(() => import("@/components/analise/FunilConversaoFinanceira").then((m) => ({ default: m.FunilConversaoFinanceira })));
 const EfetividadeHistoricaChart = lazy(() => import("@/components/analise/EfetividadeHistoricaChart").then((m) => ({ default: m.EfetividadeHistoricaChart })));
 const WaterfallPerdasChart = lazy(() => import("@/components/analise/WaterfallPerdasChart").then((m) => ({ default: m.WaterfallPerdasChart })));
 const CurvaQuebraAtrasoChart = lazy(() => import("@/components/analise/CurvaQuebraAtrasoChart").then((m) => ({ default: m.CurvaQuebraAtrasoChart })));
 const HomeRiscoQualidade = lazy(() => import("@/components/executive/HomeRiscoQualidade").then((m) => ({ default: m.HomeRiscoQualidade })));
+const BoletosDetalheSheet = lazy(() => import("@/components/analise/BoletosDetalheSheet").then((m) => ({ default: m.BoletosDetalheSheet })));
 
 const CHART_FALLBACK = <div className="h-64 animate-pulse bg-muted rounded-lg" />;
 
@@ -24,8 +25,16 @@ function tipoToApi(t: (typeof TIPOS)[number]): TipoParcela {
   return t === "Colchão" ? "colchao" : "primeira";
 }
 
+const KIND_BY_LABEL: Record<string, BoletosDetalheKind> = {
+  "Boletos a Vencer": "a_vencer",
+  "Vencidos não Pagos": "vencidos_nao_pagos",
+  "Boletos Quebrados": "quebrados",
+  "Pagos no Prazo": "pagos_prazo",
+};
+
 export default function EfetividadeBoletos() {
   const [tipoLabel, setTipoLabel] = useState<(typeof TIPOS)[number]>("Primeira Parcela");
+  const [sheetKind, setSheetKind] = useState<BoletosDetalheKind | null>(null);
   const vm = useEfetividadeViewModel(tipoToApi(tipoLabel));
 
   // Derived waterfall stages from KPI data
@@ -40,18 +49,18 @@ export default function EfetividadeBoletos() {
     ];
   }, [vm.resumoKpis]);
 
-  // Remap data shapes for HomeRiscoQualidade (all count-valued)
+  // Remap data shapes for HomeRiscoQualidade (all value-valued)
   const hrqExcecoes = useMemo(
-    () => vm.portfolioExcecoesCnt.map((d) => ({ label: d.nome, value: d.qtd })),
-    [vm.portfolioExcecoesCnt],
+    () => vm.portfolioExcecoes.map((d) => ({ label: d.nome, value: d.valor })),
+    [vm.portfolioExcecoes],
   );
   const hrqRejeitados = useMemo(
-    () => vm.portfolioRejeitadosCnt.map((d) => ({ label: d.nome, value: d.qtd })),
-    [vm.portfolioRejeitadosCnt],
+    () => vm.portfolioRejeitados.map((d) => ({ label: d.nome, value: d.valor })),
+    [vm.portfolioRejeitados],
   );
   const hrqQuebrados = useMemo(
-    () => vm.boletosQuebrados.map((d) => ({ label: d.nome, value: d.qtd, qtd: d.qtd })),
-    [vm.boletosQuebrados],
+    () => vm.boletosQuebradosValor.map((d) => ({ label: d.nome, value: d.valor })),
+    [vm.boletosQuebradosValor],
   );
 
 
@@ -97,7 +106,11 @@ export default function EfetividadeBoletos() {
                   title="Efetividade de Boletos"
                   description="KPIs de boletos gerados, pagos, conversão e efetividade no período."
                 />
-                <BoletosKpiStrip kpis={vm.kpis} />
+                <BoletosKpiStrip
+                  kpis={vm.kpis}
+                  clickableLabels={Object.keys(KIND_BY_LABEL)}
+                  onKpiClick={(label) => setSheetKind(KIND_BY_LABEL[label])}
+                />
               </section>
 
               {/* Efetividade Diária */}
@@ -154,24 +167,14 @@ export default function EfetividadeBoletos() {
                   />
                 </Suspense>
               </section>
-
-              {/* Boletos Quebrados */}
-              <section className="space-y-3">
-                <SectionHeader
-                  title="Boletos Quebrados"
-                  description="Acordos que não foram mantidos — análise por portfólio com perfil do devedor."
-                />
-                <Suspense fallback={CHART_FALLBACK}>
-                  <BoletosQuebradosChart
-                    portfolioRows={vm.boletosQuebrados}
-                    loading={vm.loadingQuebrados}
-                  />
-                </Suspense>
-              </section>
             </div>
           </div>
         </div>
       </div>
+
+      <Suspense fallback={null}>
+        <BoletosDetalheSheet kind={sheetKind} onClose={() => setSheetKind(null)} tipo={tipoToApi(tipoLabel)} />
+      </Suspense>
     </SidebarProvider>
   );
 }

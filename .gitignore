@@ -23,6 +23,14 @@ agecob-lens/.vite/
 .cursor/
 .vscode/
 .idea/
+.vs/
+
+# Local agent/scratch state
+.deepseek/
+agecob-lens/docs/aa.txt
+
+# Relatórios exportados (podem conter PII — CPF completo). Não versionar.
+relatorio_*.csv
 
 # Claude Code local state
 .claude/settings.local.json

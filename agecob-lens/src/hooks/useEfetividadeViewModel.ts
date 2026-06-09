@@ -14,7 +14,7 @@ import {
   fetchEfMensalColchao,
   fetchEfAgentePrimeira,
   fetchEfAgenteColchao,
-  fetchEfAgenteColchaoVencimento,
+  fetchQuebradosPorPortfolio,
   fetchEfCurvaQuebra,
   fetchAcordosPorPortfolio,
   fetchExcecoesPorPortfolio,
@@ -25,7 +25,7 @@ import {
   type EfMensalColchaoRow,
   type EfAgenteRow,
   type EfAgenteColchaoRow,
-  type EfAgenteColchaoVencimentoRow,
+  type QuebradosPorPortfolioRow,
   type EfCurvaQuebraRow,
   type AcordosPorPortfolioRow,
   type ExcecoesPorPortfolioRow,
@@ -54,10 +54,8 @@ export interface EfetividadeViewModel {
   portfolioValor: Array<{ nome: string; valor: number }>;
   portfolioExcecoes: Array<{ nome: string; valor: number }>;
   portfolioRejeitados: Array<{ nome: string; valor: number }>;
-  portfolioExcecoesCnt: Array<{ nome: string; qtd: number }>;
-  portfolioRejeitadosCnt: Array<{ nome: string; qtd: number }>;
-  /** Boletos quebrados — derived from colchão-vencimento agent data */
-  boletosQuebrados: Array<{ nome: string; qtd: number }>;
+  /** Boletos quebrados por portfólio — valor total */
+  boletosQuebradosValor: Array<{ nome: string; valor: number }>;
   /** Total broken count for KPI */
   totalQuebrados: number;
   loadingPortfolio: boolean;
@@ -116,17 +114,6 @@ function efAgenteToRanking(rows: EfAgenteRow[] | EfAgenteColchaoRow[]): RankingA
     }));
 }
 
-/** Boletos quebrados (ID_REC_STATUS = 2) por agente, da fonte colchão-vencimento. */
-function efAgenteToQuebrados(rows: EfAgenteColchaoVencimentoRow[]): { nome: string; qtd: number }[] {
-  return [...rows]
-    .map((r) => ({
-      nome: r.Agente,
-      qtd: Number(r.Quebrados) || 0,
-    }))
-    .filter((r) => r.qtd > 0)
-    .sort((a, b) => b.qtd - a.qtd);
-}
-
 export function useEfetividadeViewModel(tipo: TipoParcela): EfetividadeViewModel {
   const { selectedDatabase, dateFrom, dateTo } = useGlobalFilters();
   const dbParam = selectedDatabase === "todos" ? undefined : selectedDatabase;
@@ -155,10 +142,10 @@ export function useEfetividadeViewModel(tipo: TipoParcela): EfetividadeViewModel
         : fetchEfAgenteColchao(dbParam).then((e) => e.data as EfAgenteColchaoRow[]),
   });
 
-  // Boletos quebrados — colchão-vencimento agent data
+  // Boletos quebrados — por portfólio (qtd + valor)
   const quebradosQuery = useQuery({
-    queryKey: ["efetividade", "agente-colchao-vencimento", selectedDatabase] as const,
-    queryFn: () => fetchEfAgenteColchaoVencimento(dbParam).then((e) => e.data as EfAgenteColchaoVencimentoRow[]),
+    queryKey: ["efetividade", "quebrados-portfolio", selectedDatabase, dateFrom, dateTo] as const,
+    queryFn: () => fetchQuebradosPorPortfolio(selectedDatabase, dateFrom, dateTo).then((e) => e.data as QuebradosPorPortfolioRow[]),
     staleTime: 120_000,
   });
 
@@ -187,14 +174,18 @@ export function useEfetividadeViewModel(tipo: TipoParcela): EfetividadeViewModel
   const resumoData = resumoQuery.data?.data;
 
   // Derive broken totals
-  const boletosQuebrados = useMemo(() => {
-    if (!quebradosQuery.data) return [];
-    return efAgenteToQuebrados(quebradosQuery.data);
+  const boletosQuebradosValor = useMemo(() => {
+    const rows = quebradosQuery.data ?? [];
+    return rows
+      .filter((r) => Number(r.valor_quebrados || 0) > 0)
+      .sort((a, b) => Number(b.valor_quebrados || 0) - Number(a.valor_quebrados || 0))
+      .slice(0, 8)
+      .map((r) => ({ nome: r.portfolio_name, valor: Number(r.valor_quebrados || 0) }));
   }, [quebradosQuery.data]);
 
   const totalQuebrados = useMemo(
-    () => boletosQuebrados.reduce((s, r) => s + r.qtd, 0),
-    [boletosQuebrados],
+    () => (quebradosQuery.data ?? []).reduce((s, r) => s + Number(r.qtd_quebrados || 0), 0),
+    [quebradosQuery.data],
   );
 
   const kpis = useMemo(
@@ -230,15 +221,6 @@ export function useEfetividadeViewModel(tipo: TipoParcela): EfetividadeViewModel
       .map((r) => ({ nome: r.portfolio_name, valor: Number(r.valor_excecoes || 0) }));
   }, [excecoesQ.data]);
 
-  const portfolioExcecoesCnt = useMemo(() => {
-    const rows = excecoesQ.data?.data ?? [];
-    return rows
-      .filter((r) => Number(r.qtd_excecoes || 0) > 0)
-      .sort((a, b) => Number(b.qtd_excecoes || 0) - Number(a.qtd_excecoes || 0))
-      .slice(0, 8)
-      .map((r) => ({ nome: r.portfolio_name, qtd: Number(r.qtd_excecoes || 0) }));
-  }, [excecoesQ.data]);
-
   const portfolioRejeitados = useMemo(() => {
     const rows = rejeitadosQ.data?.data ?? [];
     return rows
@@ -246,15 +228,6 @@ export function useEfetividadeViewModel(tipo: TipoParcela): EfetividadeViewModel
       .sort((a, b) => Number(b.valor_rejeitados || 0) - Number(a.valor_rejeitados || 0))
       .slice(0, 8)
       .map((r) => ({ nome: r.portfolio_name, valor: Number(r.valor_rejeitados || 0) }));
-  }, [rejeitadosQ.data]);
-
-  const portfolioRejeitadosCnt = useMemo(() => {
-    const rows = rejeitadosQ.data?.data ?? [];
-    return rows
-      .filter((r) => Number(r.qtd_rejeitados || 0) > 0)
-      .sort((a, b) => Number(b.qtd_rejeitados || 0) - Number(a.qtd_rejeitados || 0))
-      .slice(0, 8)
-      .map((r) => ({ nome: r.portfolio_name, qtd: Number(r.qtd_rejeitados || 0) }));
   }, [rejeitadosQ.data]);
 
   const curvaQuebra = useMemo(() => {
@@ -283,9 +256,7 @@ export function useEfetividadeViewModel(tipo: TipoParcela): EfetividadeViewModel
     portfolioValor,
     portfolioExcecoes,
     portfolioRejeitados,
-    portfolioExcecoesCnt,
-    portfolioRejeitadosCnt,
-    boletosQuebrados,
+    boletosQuebradosValor,
     totalQuebrados,
     loadingPortfolio,
     loadingRanking,

@@ -10,6 +10,8 @@ import HomeKpiStrip from "@/components/executive/HomeKpiStrip";
 import ExecutiveInsightCard from "@/components/executive/ExecutiveInsightCard";
 import ApiDebugBanner from "@/components/executive/ApiDebugBanner";
 import SectionHeader from "@/components/executive/SectionHeader";
+import ReportDownloadDialog from "@/components/executive/ReportDownloadDialog";
+import type { ReportSection } from "@/lib/csvReport";
 
 const RitmoDiaCard = lazy(() => import("@/components/executive/RitmoDiaCard"));
 const HandoffTopAgentes1aParcela = lazy(() => import("@/components/executive/HandoffTopAgentes1aParcela"));
@@ -21,7 +23,7 @@ const CHART_FALLBACK = <div className="h-64 animate-pulse bg-muted rounded-lg" /
 
 const PortfolioSection = lazy(() => import("@/components/analise/PortfolioSection").then((m) => ({ default: m.PortfolioSection })));
 export default function Index() {
-  const { selectedDatabase } = useGlobalFilters();
+  const { selectedDatabase, dateFrom, dateTo } = useGlobalFilters();
   const vm = useHomeViewModel();
 
   useEffect(() => {
@@ -62,7 +64,95 @@ export default function Index() {
     [vm.rejeitadosPorPortfolioValor],
   );
   const psLoading = vm.loadingAcdPort || vm.loadingExcPort || vm.loadingRejPort;
- 
+
+  const reportSections = useMemo<ReportSection[]>(() => {
+    const unitLabel = (u: string) => (u === "BRL" ? "R$" : u === "percent" ? "%" : "qtd");
+    const kpis = [...vm.kpiPrimary, ...vm.kpiSecondary];
+    return [
+      {
+        id: "kpis",
+        label: "Indicadores (KPIs)",
+        available: kpis.length > 0,
+        build: () => ({
+          columns: ["Indicador", "Valor", "Unidade"],
+          rows: kpis.map((k) => [k.label, k.value ?? "", unitLabel(k.unit)]),
+        }),
+      },
+      {
+        id: "top10-1a-parcela",
+        label: "Top 10 Agentes por 1ª Parcela",
+        available: vm.top10PrimeiraParcela.length > 0,
+        build: () => ({
+          columns: ["Agente", "Valor 1ª Parcela (R$)"],
+          rows: vm.top10PrimeiraParcela.map((d) => [d.label, d.value]),
+        }),
+      },
+      {
+        id: "1a-parcela-portfolio",
+        label: "1ª Parcela por Portfólio",
+        available: vm.ppPortfolioRows.length > 0,
+        build: () => ({
+          columns: ["Portfólio", "Qtd Acordos", "Valor 1ª Parcela (R$)"],
+          rows: vm.ppPortfolioRows.map((r) => [r.portfolio_name, r.qtd_acordos, r.valor_primeira_parcela]),
+        }),
+      },
+      {
+        id: "funil",
+        label: "Funil de Conversão",
+        available: vm.funnelData.length > 0,
+        build: () => ({
+          columns: ["Unidade", "Acionamentos", "Alô", "CPC", "Acordos"],
+          rows: vm.funnelData.map((f) => [f.bu, f.acionamentos, f.alo, f.contatos, f.acordos]),
+        }),
+      },
+      {
+        id: "diagnostico-bu",
+        label: "Diagnóstico por Unidade de Negócio",
+        available: vm.eficienciaData.length > 0,
+        build: () => ({
+          columns: ["Unidade", "CPC", "Conversão %"],
+          rows: vm.eficienciaData.map((e) => [e.bu, e.cpc, e.conversao]),
+        }),
+      },
+      {
+        id: "acordos-portfolio",
+        label: "Acordos por Portfólio (R$)",
+        available: vm.portfolio1aParcela.length > 0,
+        build: () => ({
+          columns: ["Portfólio", "Valor Acordos (R$)"],
+          rows: vm.portfolio1aParcela.map((d) => [d.label, d.value]),
+        }),
+      },
+      {
+        id: "excecoes-portfolio",
+        label: "Exceções por Portfólio (R$)",
+        available: vm.excecoesPorPortfolioValor.length > 0,
+        build: () => ({
+          columns: ["Portfólio", "Valor Exceções (R$)"],
+          rows: vm.excecoesPorPortfolioValor.map((d) => [d.label, d.value]),
+        }),
+      },
+      {
+        id: "rejeitados-portfolio",
+        label: "Rejeitados por Portfólio (R$)",
+        available: vm.rejeitadosPorPortfolioValor.length > 0,
+        build: () => ({
+          columns: ["Portfólio", "Valor Rejeitados (R$)"],
+          rows: vm.rejeitadosPorPortfolioValor.map((d) => [d.label, d.value]),
+        }),
+      },
+    ];
+  }, [vm.kpiPrimary, vm.kpiSecondary, vm.top10PrimeiraParcela, vm.ppPortfolioRows, vm.funnelData, vm.eficienciaData, vm.portfolio1aParcela, vm.excecoesPorPortfolioValor, vm.rejeitadosPorPortfolioValor]);
+
+  const reportMeta = useMemo(
+    () => ({
+      "Relatório": "Dashboard Executivo",
+      "Período": `${dateFrom} a ${dateTo}`,
+      "Banco": selectedDatabase,
+    }),
+    [dateFrom, dateTo, selectedDatabase],
+  );
+
   return (
     <SidebarProvider>
       <div className="min-h-screen flex w-full">
@@ -79,6 +169,14 @@ export default function Index() {
           <div className="flex-1 bg-background overflow-auto">
             <div className="mx-auto max-w-[1600px] w-full p-6 space-y-6">
             <ApiDebugBanner error={vm.error} warnings={vm.warnings} onRetry={guardedRefresh} />
+
+            <div className="flex justify-end">
+              <ReportDownloadDialog
+                meta={reportMeta}
+                sections={reportSections}
+                filename={`relatorio-dashboard-${dateFrom}_a_${dateTo}.csv`}
+              />
+            </div>
 
             <ExecutiveInsightCard {...vm.insight} loading={vm.loading} />
             <Suspense fallback={CHART_FALLBACK}>

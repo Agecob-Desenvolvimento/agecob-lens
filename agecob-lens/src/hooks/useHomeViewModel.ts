@@ -25,7 +25,7 @@ import {
   calcTicketMedio,
 } from "@/lib/metrics";
 import { generateDailyReadout } from "@/lib/insightEngine";
-import { firstOfMonthStr, lastOfMonthStr, previousPeriod, todayStr } from "@/lib/dates";
+import { firstOfMonthStr, isBusinessDay, lastOfMonthStr, previousPeriod, todayStr } from "@/lib/dates";
 import {
   selectEficienciaHandoffData,
   selectFinanceiroHandoffData,
@@ -47,8 +47,7 @@ function countBusinessDays(fromIso: string, toIso: string): number {
   const end = new Date(`${toIso}T00:00:00`);
   let n = 0;
   for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-    const dow = d.getDay();
-    if (dow !== 0 && dow !== 6) n++;
+    if (isBusinessDay(d)) n++;
   }
   return n;
 }
@@ -213,7 +212,7 @@ export function useHomeViewModel(): HomeViewModel {
     // venceram); comparar período-a-período não faz sentido. Baseline vs benchmark.
     const mkBench = (value: number, mean: number | null | undefined, betterWhen: "up" | "down") => {
       if (mean == null || mean <= 0) return undefined;
-      return { value: (value - mean) / mean, label: "média do escritório", betterWhen };
+      return { value: (value - mean) / mean, label: "média do escritório", betterWhen, baselineValue: mean };
     };
     const bm = (b?: { top10: number | null; mean: number | null }) => {
       const result: { value: number; label: string }[] = [];
