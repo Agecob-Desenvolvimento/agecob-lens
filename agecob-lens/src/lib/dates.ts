@@ -58,16 +58,16 @@ export function countBusinessDays(fromIso: string, toIso: string): number {
 }
 
 /**
- * Calendar-month-offset window: subtract one month from both dates.
- * A period 25-May to 01-Jun compares against 25-Apr to 01-May.
- * Month boundaries are clamped (31 Mar → 28/29 Feb, 31 May → 30 Apr, etc.).
+ * Calendar-month-offset window.
+ * - Single day: maps to the same business-day position in the previous month
+ *   (e.g. 6th biz day of June → 6th biz day of May).
+ * - Multi-day range: subtracts one calendar month from both dates.
  */
 export function previousPeriod(fromIso: string, toIso: string): { from: string; to: string } {
   const from = new Date(`${fromIso}T00:00:00`);
-  const to = new Date(`${toIso}T00:00:00`);
-  const prevFrom = _subtractOneMonth(from);
-  const prevTo = _subtractOneMonth(to);
-  return { from: fmtLocal(prevFrom), to: fmtLocal(prevTo) };
+  return fromIso === toIso
+    ? { from: fmtLocal(_sameBizDayPrevMonth(from)), to: fmtLocal(_sameBizDayPrevMonth(from)) }
+    : { from: fmtLocal(_subtractOneMonth(from)), to: fmtLocal(_subtractOneMonth(new Date(`${toIso}T00:00:00`))) };
 }
 
 /** Subtract exactly one calendar month, clamping the day to the last valid day of the target month. */
@@ -82,4 +82,39 @@ function _subtractOneMonth(d: Date): Date {
   // Last day of the target month
   const lastDay = new Date(targetYear, targetMonth + 1, 0).getDate();
   return new Date(targetYear, targetMonth, Math.min(day, lastDay));
+}
+
+/**
+ * Find the same business-day position (1st, 2nd, ... Nth) in the previous month.
+ * If the given date is not a business day, uses the count of business days
+ * up to and including that date as N (holidays/weekends don't increment N).
+ * Falls back to the last business day of the target month if it has fewer.
+ */
+function _sameBizDayPrevMonth(d: Date): Date {
+  // Count N = position of this business day (or last biz day ≤ d) in current month
+  const monthStart = new Date(d.getFullYear(), d.getMonth(), 1);
+  let n = 0;
+  for (let c = new Date(monthStart); c <= d; c.setDate(c.getDate() + 1)) {
+    if (isBusinessDay(c)) n++;
+  }
+
+  // Target = previous month
+  const targetYear = d.getMonth() === 0 ? d.getFullYear() - 1 : d.getFullYear();
+  const targetMonth = d.getMonth() === 0 ? 11 : d.getMonth() - 1;
+  const targetEnd = new Date(targetYear, targetMonth + 1, 0);
+
+  // Find Nth business day in target month
+  let found = 0;
+  for (let c = new Date(targetYear, targetMonth, 1); c <= targetEnd; c.setDate(c.getDate() + 1)) {
+    if (isBusinessDay(c)) {
+      found++;
+      if (found === n) return new Date(c);
+    }
+  }
+
+  // Target month has fewer business days → return its last business day
+  for (let c = new Date(targetEnd); c >= new Date(targetYear, targetMonth, 1); c.setDate(c.getDate() - 1)) {
+    if (isBusinessDay(c)) return new Date(c);
+  }
+  return new Date(targetYear, targetMonth, 1);
 }
