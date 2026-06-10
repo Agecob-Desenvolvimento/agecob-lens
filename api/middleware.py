@@ -28,6 +28,7 @@ async def security_middleware(request: Request, call_next):
         path.startswith("/dashboard/")
         or path.startswith("/health/")
         or path.startswith("/admin/")
+        or path.startswith("/agente/")
     )
     run_id = extract_run_id(request)
     request.state.run_id = run_id

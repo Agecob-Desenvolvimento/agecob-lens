@@ -1091,3 +1091,49 @@ export async function fetchRegressionModels(
     skipInflightDedup: true,
   });
 }
+
+// ─────────────────────────────────────────────────────────────────
+// AGENTE DE CHAT — ANALISTA DE CARTEIRAS
+// Backend: POST /agente/chat (api/routers/agente.py), atras de ENABLE_AGENT_CHAT.
+// ─────────────────────────────────────────────────────────────────
+export interface AgentChatMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export interface AgentHighlight {
+  type: "anomaly" | "metric" | "portfolio";
+  label: string;
+  value?: string;
+}
+
+export interface AgentSuggestedAction {
+  label: string;
+  /** Pergunta de follow-up enviada ao clicar; ausente = botao apenas informativo. */
+  prompt?: string;
+}
+
+export interface AgentResponse {
+  text: string;
+  highlights: AgentHighlight[];
+  suggested_actions: AgentSuggestedAction[];
+  data_sources: string[];
+  confidence: "high" | "medium" | "low";
+  data_referencia?: string;
+}
+
+export async function postAgentChat(
+  messages: AgentChatMessage[],
+  db: DatabaseOption,
+  dateFrom?: string,
+  dateTo?: string,
+): Promise<AgentResponse> {
+  const envelope = await request<ApiEnvelope<AgentResponse>>("/agente/chat", {
+    method: "POST",
+    body: { messages, database: db, dateFrom, dateTo },
+    skipInflightDedup: true,
+  });
+  const first = envelope.data[0];
+  if (!first) throw new Error("Resposta vazia do agente.");
+  return first;
+}
