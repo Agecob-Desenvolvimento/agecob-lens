@@ -23,7 +23,7 @@ def setup_static_routes(app: FastAPI) -> None:
         index_path = os.path.join(settings.FRONTEND_DIST_DIR, "index.html")
         if not os.path.exists(index_path):
             raise HTTPException(status_code=404, detail="Not Found")
-        if full_path.startswith(("dashboard/", "health/", "admin/", "efetividade/", "docs", "redoc", "openapi.json", "api/")):
+        if full_path.startswith(("dashboard/", "health/", "admin/", "efetividade/", "agente/", "docs", "redoc", "openapi.json", "api/")):
             raise HTTPException(status_code=404, detail="Not Found")
         static_file = os.path.join(settings.FRONTEND_DIST_DIR, full_path)
         if full_path and os.path.isfile(static_file):

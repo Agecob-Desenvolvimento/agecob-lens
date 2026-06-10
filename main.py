@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.middleware import api_prefix_middleware, security_middleware
-from api.routers import dashboard, efetividade, admin, health, ritmo_dia, regressao
+from api.routers import dashboard, efetividade, admin, health, ritmo_dia, regressao, agente
 from api.static import setup_static_routes
 from core.telemetry.agent_logger import _start_agent_log_cleanup_worker, _agent_ndjson
 from dominios.efetividade.etl import efetividade_etl
@@ -31,6 +31,7 @@ app.include_router(admin.router)
 app.include_router(health.router)
 app.include_router(ritmo_dia.router)
 app.include_router(regressao.router)
+app.include_router(agente.router)
 
 setup_static_routes(app)
 

@@ -205,6 +205,25 @@ ENABLE_AGENT_TELEMETRY: bool = (os.getenv("ENABLE_AGENT_TELEMETRY") or "false").
 ENABLE_INDEX_ADMIN: bool = (os.getenv("ENABLE_INDEX_ADMIN") or "false").strip().lower() == "true"
 
 # ─────────────────────────────────────────────────────────────────
+# AGENTE DE CHAT (/agente/chat)
+# ─────────────────────────────────────────────────────────────────
+# Provedores: "anthropic" (Claude) ou "deepseek" (API compatível com OpenAI).
+# Requer a chave do provedor ativo e saída HTTPS para a API correspondente.
+ENABLE_AGENT_CHAT: bool = (os.getenv("ENABLE_AGENT_CHAT") or "false").strip().lower() == "true"
+AGENT_PROVIDER: str = (os.getenv("AGENT_PROVIDER") or "anthropic").strip().lower()
+ANTHROPIC_API_KEY: str = (os.getenv("ANTHROPIC_API_KEY") or "").strip()
+DEEPSEEK_API_KEY: str = (os.getenv("DEEPSEEK_API_KEY") or "").strip()
+DEEPSEEK_BASE_URL: str = (os.getenv("DEEPSEEK_BASE_URL") or "https://api.deepseek.com").strip()
+_AGENT_DEFAULT_MODELS: Dict[str, str] = {"anthropic": "claude-sonnet-4-6", "deepseek": "deepseek-chat"}
+AGENT_MODEL: str = (os.getenv("AGENT_MODEL") or _AGENT_DEFAULT_MODELS.get(AGENT_PROVIDER, "claude-sonnet-4-6")).strip()
+AGENT_MAX_TOOL_ITERS: int = max(1, int(os.getenv("AGENT_MAX_TOOL_ITERS", "4")))
+
+# Limiares do risco composto da visão de carteiras (% sobre 1ª parcela dos
+# gerados) — espelham os thresholds do frontend (PortfolioSection/Handoff).
+RISK_LEVEL_LOW_MAX: float = 25.0   # <= 25 → baixo
+RISK_LEVEL_MID_MAX: float = 50.0   # <= 50 → medio; acima → alto
+
+# ─────────────────────────────────────────────────────────────────
 # DATABASE POOL
 # ─────────────────────────────────────────────────────────────────
 CACHE_TTL_SECONDS: float = float(os.getenv("DASHBOARD_CACHE_TTL", "60"))
