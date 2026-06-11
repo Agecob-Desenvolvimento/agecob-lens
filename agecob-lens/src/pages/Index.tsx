@@ -22,7 +22,6 @@ const HandoffPortfolioRentabilidade = lazy(() => import("@/components/executive/
 const CHART_FALLBACK = <div className="h-64 animate-pulse bg-muted rounded-lg" />;
 
 const PortfolioSection = lazy(() => import("@/components/analise/PortfolioSection").then((m) => ({ default: m.PortfolioSection })));
-const AgentChatPanel = lazy(() => import("@/components/agente/AgentChatPanel"));
 export default function Index() {
   const { selectedDatabase, dateFrom, dateTo } = useGlobalFilters();
   const vm = useHomeViewModel();
@@ -228,10 +227,6 @@ export default function Index() {
             </div>
           </div>
         </div>
-
-        <Suspense fallback={null}>
-          <AgentChatPanel />
-        </Suspense>
       </div>
     </SidebarProvider>
   );

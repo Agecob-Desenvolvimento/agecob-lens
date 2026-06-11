@@ -9,7 +9,10 @@ import { routeHeatManager } from "@/lib/routeHeatManager";
 import { trackPageView } from "@/services/analytics";
 import { GlobalFiltersProvider } from "@/contexts/GlobalFiltersContext";
 import { NotificationProvider } from "@/contexts/NotificationProvider";
+import { AgentChatProvider } from "@/contexts/AgentChatContext";
 import { RouteErrorBoundary } from "@/components/RouteErrorBoundary";
+
+const AgentChatPanel = lazy(() => import("@/components/agente/AgentChatPanel"));
 
 const Index = lazy(() => import("./pages/Index.tsx"));
 const DetalhamentoAgentes = lazy(() => import("./pages/DetalhamentoAgentes.tsx"));
@@ -126,7 +129,12 @@ const App = () => (
       <BrowserRouter>
         <GlobalFiltersProvider>
           <NotificationProvider>
-            <AppRoutes />
+            <AgentChatProvider>
+              <AppRoutes />
+              <Suspense fallback={null}>
+                <AgentChatPanel />
+              </Suspense>
+            </AgentChatProvider>
           </NotificationProvider>
         </GlobalFiltersProvider>
       </BrowserRouter>

@@ -45,6 +45,18 @@ export default defineConfig(({ mode }) => ({
           ) {
             return "vendor-ui";
           }
+          if (
+            id.includes("node_modules/react-markdown") ||
+            id.includes("node_modules/remark-") ||
+            id.includes("node_modules/micromark") ||
+            id.includes("node_modules/mdast-") ||
+            id.includes("node_modules/unist-") ||
+            id.includes("node_modules/hast-") ||
+            id.includes("node_modules/unified") ||
+            id.includes("node_modules/vfile")
+          ) {
+            return "vendor-markdown";
+          }
           if (id.includes("node_modules")) return "vendor-core";
           return undefined;
         },

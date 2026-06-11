@@ -1,6 +1,7 @@
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useGlobalFilters } from "@/contexts/GlobalFiltersContext";
+import { useAgentChatContext } from "@/contexts/AgentChatContext";
 import {
   type AgentChatMessage,
   type AgentResponse,
@@ -12,13 +13,14 @@ export type AgentChatTurn =
   | { role: "assistant"; response: AgentResponse };
 
 /**
- * Estado local da conversa + mutation de envio. O historico enviado ao
- * backend e derivado dos turnos (assistant vira apenas o texto da resposta);
- * banco e periodo vem dos filtros globais.
+ * Conversa vive no AgentChatContext (sobrevive a navegacao/fechamento do
+ * painel); aqui fica so a mutation de envio. O historico enviado ao backend
+ * e derivado dos turnos (assistant vira apenas o texto da resposta); banco
+ * e periodo vem dos filtros globais.
  */
 export function useAgentChat() {
   const { selectedDatabase, dateFrom, dateTo } = useGlobalFilters();
-  const [turns, setTurns] = useState<AgentChatTurn[]>([]);
+  const { turns, setTurns, clearTurns } = useAgentChatContext();
 
   const mutation = useMutation({
     mutationFn: (messages: AgentChatMessage[]) =>
@@ -45,13 +47,13 @@ export function useAgentChat() {
         return next;
       });
     },
-    [mutate],
+    [mutate, setTurns],
   );
 
   const reset = useCallback(() => {
-    setTurns([]);
+    clearTurns();
     resetMutation();
-  }, [resetMutation]);
+  }, [clearTurns, resetMutation]);
 
   return {
     turns,

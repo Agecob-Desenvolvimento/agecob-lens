@@ -8,9 +8,9 @@ interface PortfolioRiskDatum {
   label: string;
   value: number;          // valor 1ª parcela
   qtd: number;            // qtd acordos
-  excecoesPct: number;    // % exceções sobre 1ª parcela
-  quebradosPct: number;   // % quebrados sobre 1ª parcela
-  rejeitadosPct: number;  // % rejeitados sobre 1ª parcela
+  excecoesPct: number;    // % exceções sobre o universo do período
+  quebradosPct: number;   // % quebrados sobre o universo do período
+  rejeitadosPct: number;  // % rejeitados sobre o universo do período
   compositeRisk: number;  // max das 3 dimensões (0-100)
 }
 
@@ -42,26 +42,16 @@ function buildDatum(
 ): PortfolioRiskDatum {
   const valor = Number(r.valor_primeira_parcela || 0);
   const risk = riskMap.get(r.portfolio_name) ?? { excecoes: 0, quebrados: 0, rejeitados: 0 };
-  const rawExc = valor > 0 ? (risk.excecoes / valor) * 100 : 0;
-  const rawQbr = valor > 0 ? (risk.quebrados / valor) * 100 : 0;
-  const rawRej = valor > 0 ? (risk.rejeitados / valor) * 100 : 0;
-  // Cap individual dimensions to 100% — values above 100% indicate a data
-  // consistency issue (e.g. risk numerator from a wider time window than the
-  // 1ª-parcela denominator). Log a warning so the DBA can investigate.
-  const excecoesPct = Math.min(rawExc, 100);
-  const quebradosPct = Math.min(rawQbr, 100);
-  const rejeitadosPct = Math.min(rawRej, 100);
-  if (rawExc > 100 || rawQbr > 100 || rawRej > 100) {
-    console.warn(
-      `[HandoffPortfolioRentabilidade] Risco >100% para "${r.portfolio_name}": ` +
-      `exceções=${rawExc.toFixed(1)}% quebrados=${rawQbr.toFixed(1)}% rejeitados=${rawRej.toFixed(1)}% ` +
-      `(1ª parcela = R$ ${valor.toFixed(2)} | exc = R$ ${risk.excecoes.toFixed(2)} | ` +
-      `qbr = R$ ${risk.quebrados.toFixed(2)} | rej = R$ ${risk.rejeitados.toFixed(2)}). ` +
-      `Provável: numerador de risco cobre janela maior que o denominador de 1ª parcela.`
-    );
-  }
+  // Denominador = universo de 1ª parcela do período (gerados + exceções + rejeitados).
+  // Exceções (5) e rejeitados (7) ficam fora de STATUS_GERADOS; dividir só pelos
+  // gerados estourava 100% quando a carteira rejeitava mais do que gerava.
+  // Mesma fórmula do agente em dominios/agente/risco.py — alterar lá e aqui juntos.
+  const universo = valor + risk.excecoes + risk.rejeitados;
+  const excecoesPct = universo > 0 ? (risk.excecoes / universo) * 100 : 0;
+  const quebradosPct = universo > 0 ? (risk.quebrados / universo) * 100 : 0;
+  const rejeitadosPct = universo > 0 ? (risk.rejeitados / universo) * 100 : 0;
   // Composite = pior dimensão (max). Evita inflação por soma de dimensões sobrepostas.
-  const compositeRisk = Math.min(Math.max(excecoesPct, quebradosPct, rejeitadosPct), 100);
+  const compositeRisk = Math.max(excecoesPct, quebradosPct, rejeitadosPct);
   return {
     label: r.portfolio_name,
     value: valor,
@@ -101,7 +91,7 @@ export function HandoffPortfolioRentabilidade({
   return (
     <ChartShell
       title={title}
-      description={`${visible.length} de ${allRanked.length} carteiras. Ordem: valor 1ª parcela → risco → qtd acordos. Risco é cor ao lado. Baixo ≤25%, Médio 25–50%, Alto >50%.`}
+      description={`${visible.length} de ${allRanked.length} carteiras. Ordem: valor 1ª parcela → risco → qtd acordos. Risco = pior dimensão sobre o valor total do período (gerados + exceções + rejeitados). Baixo ≤25%, Médio 25–50%, Alto >50%.`}
       loading={loading}
       empty={isEmpty}
       height={Math.min(660, 160 + visible.length * 36 + (hasMore ? 36 : 0))}
@@ -183,7 +173,7 @@ export function HandoffPortfolioRentabilidade({
           <span className="w-2 h-2 rounded-full bg-emerald-500" /> Baixo ≤25%
         </span>
         <span className="flex items-center gap-1">
-          <span className="w-2 h-2 rounded-full bg-amber-500" /> Médio 10–{HIGH_RISK_THRESHOLD}%
+          <span className="w-2 h-2 rounded-full bg-amber-500" /> Médio 25–{HIGH_RISK_THRESHOLD}%
         </span>
         <span className="flex items-center gap-1">
           <span className="w-2 h-2 rounded-full bg-red-500" /> Alto &gt;{HIGH_RISK_THRESHOLD}%
