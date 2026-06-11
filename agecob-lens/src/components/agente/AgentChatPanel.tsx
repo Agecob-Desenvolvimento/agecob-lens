@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { Bot, Loader2, RotateCcw, Send, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -33,8 +35,8 @@ function AssistantTurn({ response, onAction, disabled }: {
   const confidence = CONFIDENCE_STYLES[response.confidence] ?? CONFIDENCE_STYLES.low;
   return (
     <div className="max-w-[90%] space-y-2">
-      <div className="rounded-lg bg-muted px-3 py-2 text-sm text-foreground whitespace-pre-wrap leading-snug">
-        {response.text}
+      <div className="rounded-lg bg-muted px-3 py-2 text-sm leading-snug prose prose-sm prose-slate max-w-none prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0 prose-headings:my-2 prose-headings:text-sm prose-table:my-2 prose-strong:text-foreground text-foreground">
+        <ReactMarkdown remarkPlugins={[remarkGfm]}>{response.text}</ReactMarkdown>
       </div>
       {response.highlights.length > 0 && (
         <div className="flex flex-wrap gap-1">
