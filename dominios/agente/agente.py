@@ -8,13 +8,19 @@ API subir mesmo sem os pacotes instalados (rota responde 503 com instrução).
 """
 import json
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from fastapi import HTTPException
 
 import config.settings as settings
 from core.telemetry.agent_logger import _agent_ndjson
-from dominios.agente.risco import build_portfolio_entries
+from dominios.agente.agentes import build_agent_entries
+from dominios.agente.conversao import build_conversao_view
+from dominios.agente.cruzamento import build_cruzamento, build_ranking_agentes
+from dominios.agente.detalhe import build_maiores_acordos
+from dominios.agente.fases import build_fase_negociacao
+from dominios.agente.risco import build_portfolio_entries, build_status_breakdown
+from dominios.agente.series import build_time_series
 from dominios.agente.tools import AGENT_TOOLS, dispatch_tool
 
 _SYSTEM_PROMPT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "system_prompt.md")
@@ -114,8 +120,69 @@ def _load_system_prompt(data_referencia: str) -> str:
     return prompt.replace("{{DATA_REFERENCIA}}", data_referencia)
 
 
-def _tool_result_json(name: str, args: Dict[str, Any], entries: List[Dict[str, Any]]) -> str:
-    output = dispatch_tool(name, args, entries)
+def _build_providers(
+    db: str,
+    date_from: str,
+    date_to: str,
+    run_id: Optional[str],
+) -> Dict[str, Callable[..., Any]]:
+    """
+    Fontes próprias das tools que não usam o dataset de carteiras. Closures
+    lazy: cada query roda apenas se a tool correspondente for chamada. O
+    ritmo importa a rota KNN sob demanda (joblib/numpy só carregam se usados)
+    e nunca propaga exceção — o chat degrada para um error dict.
+    """
+    def get_ritmo() -> Dict[str, Any]:
+        from api.routers.ritmo_dia import ritmo_dia
+        try:
+            envelope = ritmo_dia(db)
+        except HTTPException as exc:
+            return {"error": str(exc.detail)}
+        except Exception:
+            return {"error": "Falha ao calcular o ritmo do dia."}
+        return {**envelope["data"], "meta": envelope["meta"]}
+
+    def get_series(metric: str, period: str, portfolio: Optional[str]) -> Dict[str, Any]:
+        return build_time_series(db, metric, period, portfolio, date_to, run_id=run_id)
+
+    def get_breakdown() -> Dict[str, Any]:
+        return build_status_breakdown(db, date_from, date_to, run_id=run_id)
+
+    def get_fases(fase: Optional[str]) -> Dict[str, Any]:
+        return build_fase_negociacao(db, date_to, fase, run_id=run_id)
+
+    def get_conversao(visao: str, agente: Optional[str]) -> Dict[str, Any]:
+        return build_conversao_view(db, visao, agente)
+
+    def get_cruzamento(portfolio: Optional[str], agente: Optional[str]) -> Dict[str, Any]:
+        return build_cruzamento(db, date_from, date_to, portfolio, agente, run_id=run_id)
+
+    def get_ranking(dimensao: str, limit: int) -> Dict[str, Any]:
+        return build_ranking_agentes(db, date_from, date_to, dimensao, limit, run_id=run_id)
+
+    def get_maiores(tipo: str, portfolio: str, limit: int) -> Dict[str, Any]:
+        return build_maiores_acordos(db, date_from, date_to, tipo, portfolio, limit, run_id=run_id)
+
+    return {
+        "get_ritmo_acordos_dia": get_ritmo,
+        "get_time_series": get_series,
+        "get_acordo_status_breakdown": get_breakdown,
+        "get_fase_negociacao": get_fases,
+        "get_efetividade_conversao": get_conversao,
+        "get_cruzamento_agente_carteira": get_cruzamento,
+        "get_ranking_agentes_por_dimensao": get_ranking,
+        "get_maiores_acordos": get_maiores,
+    }
+
+
+def _tool_result_json(
+    name: str,
+    args: Dict[str, Any],
+    entries: List[Dict[str, Any]],
+    get_agents: Callable[[], List[Dict[str, Any]]],
+    providers: Dict[str, Callable[..., Any]],
+) -> str:
+    output = dispatch_tool(name, args, entries, get_agents, providers=providers)
     return json.dumps(output, ensure_ascii=False, default=str)
 
 
@@ -123,6 +190,8 @@ def _loop_anthropic(
     system_prompt: str,
     messages: List[Dict[str, str]],
     entries: List[Dict[str, Any]],
+    get_agents: Callable[[], List[Dict[str, Any]]],
+    providers: Dict[str, Callable[..., Any]],
     run_id: Optional[str],
 ) -> str:
     try:
@@ -158,7 +227,7 @@ def _loop_anthropic(
                 tool_results.append({
                     "type": "tool_result",
                     "tool_use_id": block.id,
-                    "content": _tool_result_json(block.name, dict(block.input or {}), entries),
+                    "content": _tool_result_json(block.name, dict(block.input or {}), entries, get_agents, providers),
                 })
             convo.append({"role": "user", "content": tool_results})
     except anthropic.APIError as exc:
@@ -183,6 +252,8 @@ def _loop_deepseek(
     system_prompt: str,
     messages: List[Dict[str, str]],
     entries: List[Dict[str, Any]],
+    get_agents: Callable[[], List[Dict[str, Any]]],
+    providers: Dict[str, Callable[..., Any]],
     run_id: Optional[str],
 ) -> str:
     """Mesmo loop de tools no formato OpenAI (API do DeepSeek é compatível)."""
@@ -231,7 +302,7 @@ def _loop_deepseek(
                 convo.append({
                     "role": "tool",
                     "tool_call_id": tool_call.id,
-                    "content": _tool_result_json(tool_call.function.name, args, entries),
+                    "content": _tool_result_json(tool_call.function.name, args, entries, get_agents, providers),
                 })
     except openai.OpenAIError as exc:
         _agent_ndjson(
@@ -261,6 +332,10 @@ def run_agent(
     provedor; nunca falha por formato de resposta (degrada para low).
     """
     entries = build_portfolio_entries(db, date_from, date_to, run_id=run_id)
+
+    def get_agents() -> List[Dict[str, Any]]:
+        return build_agent_entries(db, date_from, date_to, run_id=run_id)
+
     system_prompt = _load_system_prompt(date_to)
     system_prompt += (
         f"\n\n## Contexto desta sessão\n"
@@ -269,10 +344,12 @@ def run_agent(
         f"- Carteiras carregadas no período: {len(entries)}\n"
     )
 
+    providers = _build_providers(db, date_from, date_to, run_id)
+
     if settings.AGENT_PROVIDER == "deepseek":
-        final_text = _loop_deepseek(system_prompt, messages, entries, run_id)
+        final_text = _loop_deepseek(system_prompt, messages, entries, get_agents, providers, run_id)
     else:
-        final_text = _loop_anthropic(system_prompt, messages, entries, run_id)
+        final_text = _loop_anthropic(system_prompt, messages, entries, get_agents, providers, run_id)
 
     agent_response = _parse_agent_final_text(final_text)
     agent_response["data_referencia"] = date_to

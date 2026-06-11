@@ -46,7 +46,7 @@ def test_fora_de_horario(monkeypatch):
 
 def test_hora_10_classifica_bandas(monkeypatch):
     _freeze(monkeypatch, 2026, 5, 11, 10)
-    monkeypatch.setattr(rd, "_coletar_dados", lambda db: (3, {8: 7, 9: 5}))
+    monkeypatch.setattr(rd, "_coletar_dados_por_banco", lambda db: {db: (3, {8: 7, 9: 5})})
     resp = rd.ritmo_dia("COBwebRCBCONSUMER")
     bandas = {b["hora"]: b for b in resp["data"]["bandas"]}
     assert bandas[8]["status"] == "acima"
@@ -59,7 +59,7 @@ def test_hora_10_classifica_bandas(monkeypatch):
 
 def test_hora_8_inicio_dia(monkeypatch):
     _freeze(monkeypatch, 2026, 5, 11, 8)
-    monkeypatch.setattr(rd, "_coletar_dados", lambda db: (3, {7: 0}))
+    monkeypatch.setattr(rd, "_coletar_dados_por_banco", lambda db: {db: (3, {7: 0})})
     resp = rd.ritmo_dia("COBwebRCBCONSUMER")
     bandas = {b["hora"]: b for b in resp["data"]["bandas"]}
     assert bandas[8]["status"] == "em_andamento"
@@ -69,7 +69,7 @@ def test_hora_8_inicio_dia(monkeypatch):
 def test_hora_19_ultima_banda(monkeypatch):
     _freeze(monkeypatch, 2026, 5, 11, 19)
     reais = {h: 5 for h in range(8, 19)}
-    monkeypatch.setattr(rd, "_coletar_dados", lambda db: (3, reais))
+    monkeypatch.setattr(rd, "_coletar_dados_por_banco", lambda db: {db: (3, reais)})
     resp = rd.ritmo_dia("COBwebRCBCONSUMER")
     bandas = {b["hora"]: b for b in resp["data"]["bandas"]}
     assert bandas[19]["status"] == "em_andamento"
@@ -81,7 +81,7 @@ def test_sem_dados_no_horario(monkeypatch):
     # marca a hora atual como "futuro" (e não "em_andamento"). Teste fixa esse
     # contrato — alterar exige decisão de produto.
     _freeze(monkeypatch, 2026, 5, 11, 12)
-    monkeypatch.setattr(rd, "_coletar_dados", lambda db: (3, {}))
+    monkeypatch.setattr(rd, "_coletar_dados_por_banco", lambda db: {db: (3, {})})
     resp = rd.ritmo_dia("COBwebRCBCONSUMER")
     bandas = {b["hora"]: b for b in resp["data"]["bandas"]}
     assert all(bandas[h]["status"] == "abaixo" for h in range(8, 12))
