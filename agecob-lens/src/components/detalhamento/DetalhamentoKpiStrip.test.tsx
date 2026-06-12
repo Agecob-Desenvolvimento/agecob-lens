@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { DetalhamentoKpiStrip, type KpiDatum } from "./DetalhamentoKpiStrip";
+
+/** Secondary KPIs are collapsed by default — expand before asserting on them. */
+function expandSecondary() {
+  fireEvent.click(screen.getByRole("button", { name: /mais métricas/i }));
+}
 
 const primary: KpiDatum[] = [
   { id: "valor_acordos", label: "Receita", value: 1_675_038.91, unit: "BRL" },
@@ -24,6 +29,9 @@ describe("DetalhamentoKpiStrip", () => {
     for (const k of primary) {
       expect(screen.getByText(k.label)).toBeInTheDocument();
     }
+    // secondary tier starts collapsed
+    expect(screen.queryByText(secondary[0].label)).not.toBeInTheDocument();
+    expandSecondary();
     for (const k of secondary) {
       expect(screen.getByText(k.label)).toBeInTheDocument();
     }
@@ -38,6 +46,7 @@ describe("DetalhamentoKpiStrip", () => {
 
   it("formats % values with comma + percent", () => {
     render(<DetalhamentoKpiStrip primary={[]} secondary={secondary} />);
+    expandSecondary();
     expect(screen.getByText("43,6%")).toBeInTheDocument();
     expect(screen.getByText("1,2%")).toBeInTheDocument();
     expect(screen.getByText("1,1%")).toBeInTheDocument();
@@ -45,6 +54,7 @@ describe("DetalhamentoKpiStrip", () => {
 
   it("formats count values with pt-BR grouping", () => {
     render(<DetalhamentoKpiStrip primary={primary} secondary={secondary} />);
+    expandSecondary();
     expect(screen.getByText("372")).toBeInTheDocument();
     expect(screen.getByText("31.967")).toBeInTheDocument();
     expect(screen.getByText("13.939")).toBeInTheDocument();
