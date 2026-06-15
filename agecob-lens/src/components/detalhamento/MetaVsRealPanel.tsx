@@ -41,7 +41,8 @@ type MesValue = (typeof MESES)[number]["value"];
 
 export interface RealPorPortfolio {
   portfolio_name: string;
-  valor_acordos: number;
+  /** Caixa recebido no mês (VR_PAGO) — base da barra Real vs Meta */
+  valor_recebido: number;
   valor_primeira_parcela: number;
   qtd_acordos: number;
 }
@@ -111,10 +112,10 @@ export function MetaVsRealPanel({
     let achou = false;
     for (const m of metasFiltradas) {
       const r = dadosReais[m.portfolio];
-      if (r) { soma += r.valor_acordos; achou = true; }
+      if (r) { soma += r.valor_recebido; achou = true; }
     }
     if (!achou) return undefined;
-    return { portfolio_name: mediaRow.portfolio, valor_acordos: soma, qtd_acordos: 0, valor_primeira_parcela: 0 };
+    return { portfolio_name: mediaRow.portfolio, valor_recebido: soma, qtd_acordos: 0, valor_primeira_parcela: 0 };
   }, [mediaRow, dadosReais, metasFiltradas]);
 
   return (
@@ -123,13 +124,13 @@ export function MetaVsRealPanel({
         <div className="flex items-center justify-between gap-3">
           <div>
             <CardTitle className="text-sm font-semibold text-foreground">
-              Meta vs Real — PNT (Caixa + Retomadas)
+              Meta Caixa vs Caixa Recebido
             </CardTitle>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Metas extraídas do PDF trimestral
+              Meta Caixa do PDF trimestral
               {periodoMetas ? ` · ${periodoMetas}` : ""}
-              {isMedia ? " — média por headcount" : ""}
-              {hasRealData ? " · comparado com valor gerado hoje" : ""}
+              {isMedia ? " — Total da carteira" : ""}
+              {hasRealData ? " · Real = caixa recebido (VR_PAGO) do mês" : ""}
             </p>
           </div>
 
@@ -349,13 +350,15 @@ function MetaBarRow({
   item: MetaFiltrada;
   real?: RealPorPortfolio;
 }) {
-  const { portfolio, grupo, meta_pnt, qtd_negociadores, _isMedia } = item;
-  const temMeta = meta_pnt > 0;
-  const metaFmt = formatBRLCompact(meta_pnt);
-  const realValor = real?.valor_acordos ?? null;
+  // Compara contra a Meta Caixa (caixa = dinheiro recebido), apples-to-apples
+  // com o real = VR_PAGO. Retomadas ficam fora (não há real de retomada).
+  const { portfolio, grupo, meta_caixa, qtd_negociadores, _isMedia } = item;
+  const temMeta = meta_caixa > 0;
+  const metaFmt = formatBRLCompact(meta_caixa);
+  const realValor = real?.valor_recebido ?? null;
   const realFmt = realValor != null ? formatBRLCompact(realValor) : "—";
   // Modelo de atingimento: a trilha inteira = meta (100%); a barra preenche o % do real.
-  const pct = temMeta && realValor != null ? Math.round((realValor / meta_pnt) * 100) : null;
+  const pct = temMeta && realValor != null ? Math.round((realValor / meta_caixa) * 100) : null;
   const realW = pct != null ? Math.min(100, pct) : 0;
   const barColor = _isMedia ? "bg-sky-500" : achievementColor(pct ?? 0);
   const txtColor = _isMedia ? "text-sky-700" : achievementTextColor(pct ?? 0);

@@ -324,7 +324,8 @@ export async function uploadMetasPDF(file: File): Promise<MetasEnvelope> {
 export interface RealPorPortfolioRow {
   portfolio_name: string;
   qtd_acordos: number;
-  valor_acordos: number;
+  /** Caixa recebido no mês (SUM VR_PAGO por DT_PAGAMENTO) — base da comparação Meta vs Real */
+  valor_recebido: number;
   valor_primeira_parcela: number;
 }
 

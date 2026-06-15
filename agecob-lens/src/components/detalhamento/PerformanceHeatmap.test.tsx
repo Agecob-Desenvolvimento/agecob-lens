@@ -47,9 +47,25 @@ describe("PerformanceHeatmap", () => {
 
   it("renders 13 metric columns", () => {
     render(<PerformanceHeatmap agents={MOCK_AGENTS_ENRICHED} />);
-    // 13 sort buttons = 13 columns (includes acionamentos)
-    const buttons = screen.getAllByTestId(/^sort-/);
+    // 13 botões de métrica (exclui o sort da coluna Agente)
+    const buttons = screen
+      .getAllByTestId(/^sort-/)
+      .filter((b) => b.getAttribute("data-testid") !== "sort-nome");
     expect(buttons).toHaveLength(13);
+  });
+
+  it("sorts agents alphabetically when clicking the Agente header", () => {
+    render(<PerformanceHeatmap agents={MOCK_AGENTS_ENRICHED} />);
+    fireEvent.click(screen.getByTestId("heatmap-maximize"));
+    fireEvent.click(screen.getByTestId("sort-nome"));
+    expect(screen.getByTestId("sort-indicator-nome")).toBeInTheDocument();
+    const expected = [...MOCK_AGENTS_ENRICHED]
+      .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" }))
+      .map((a) => `heatmap-row-${a.id}`);
+    const rows = screen
+      .getAllByTestId(/^heatmap-row-/)
+      .map((el) => el.getAttribute("data-testid"));
+    expect(rows).toEqual(expected);
   });
 
   it("renders maximize button", () => {

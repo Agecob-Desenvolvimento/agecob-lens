@@ -565,9 +565,12 @@ def build_primeira_parcela_por_portfolio_query(db: str, date_from: str = None, d
 
 def build_real_por_portfolio_query(db: str, date_from: str = None, date_to_exclusive: str = None) -> str:
     """
-    Dados reais agregados por portfólio para o componente MetaVsRealPanel.
+    Caixa RECEBIDO por portfólio para o componente MetaVsRealPanel.
 
-    Retorna: portfolio_name, qtd_acordos, valor_acordos, valor_primeira_parcela.
+    Compara contra a Meta Caixa (caixa = dinheiro que entrou). O "real" é
+    `valor_recebido` = SUM(VR_PAGO) das parcelas **pagas no período**, filtrado por
+    DT_PAGAMENTO (caixa realizado no mês), não por DT_EMISSAO. Assim casa com o alvo
+    mensal de caixa, independentemente de quando o acordo foi gerado.
     Usa CROSS APPLY TOP 1 (ADR-004) para resolver o portfólio sem multiplicar linhas.
     """
     def _base(database: str) -> str:
@@ -575,8 +578,8 @@ def build_real_por_portfolio_query(db: str, date_from: str = None, date_to_exclu
             SELECT
                 DA.{settings.PORTFOLIO_COLUMN} AS portfolio_name,
                 COUNT(DISTINCT R.NR_RECEBIMENTO) AS qtd_acordos,
-                SUM(R.VALOR) AS valor_acordos,
-                SUM(CASE WHEN R.PARCELA = {settings.PRIMEIRA_PARCELA} THEN R.VALOR ELSE 0 END) AS valor_primeira_parcela
+                SUM(R.VR_PAGO) AS valor_recebido,
+                SUM(CASE WHEN R.PARCELA = {settings.PRIMEIRA_PARCELA} THEN R.VR_PAGO ELSE 0 END) AS valor_primeira_parcela
             FROM {database}.dbo.REC_MASTER R (NOLOCK)
             JOIN {database}.dbo.USU_MASTER U (NOLOCK) ON R.ID_USUARIO = U.ID_USUARIO
             CROSS APPLY (
@@ -587,7 +590,8 @@ def build_real_por_portfolio_query(db: str, date_from: str = None, date_to_exclu
                   AND RD.ID_CARTEIRA = R.ID_CARTEIRA
                   AND DA2.{settings.PORTFOLIO_COLUMN} IS NOT NULL
             ) DA
-            WHERE R.DT_EMISSAO >= @Hoje AND R.DT_EMISSAO < @Amanha
+            WHERE R.DT_PAGAMENTO >= @Hoje AND R.DT_PAGAMENTO < @Amanha
+              AND R.VR_PAGO > 0
               AND R.ID_REC_STATUS IN {settings.STATUS_GERADOS_SQL}
               {settings.FILTRO_AGENTES_EXCLUIDOS_SQL}
             GROUP BY DA.{settings.PORTFOLIO_COLUMN}
@@ -597,8 +601,8 @@ def build_real_por_portfolio_query(db: str, date_from: str = None, date_to_exclu
         SELECT
             portfolio_name,
             SUM(qtd_acordos) AS qtd_acordos,
-            SUM(valor_acordos) AS valor_acordos,
+            SUM(valor_recebido) AS valor_recebido,
             SUM(valor_primeira_parcela) AS valor_primeira_parcela
     """
-    order = "GROUP BY portfolio_name ORDER BY valor_acordos DESC" if db == "todos" else "ORDER BY valor_acordos DESC"
+    order = "GROUP BY portfolio_name ORDER BY valor_recebido DESC" if db == "todos" else "ORDER BY valor_recebido DESC"
     return wrap_todos_or_single(db, _base, agg, order_by=order, date_from=date_from, date_to_exclusive=date_to_exclusive)

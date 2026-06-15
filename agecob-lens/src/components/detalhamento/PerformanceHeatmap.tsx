@@ -41,6 +41,8 @@ type MetricKey =
   | "qtdRejeitados" | "valorRejeitados" | "rejPrimeiraParcela";
 
 type SortDir = "desc" | "asc";
+/** Coluna ordenável: métricas numéricas + a coluna Agente (alfabética). */
+type SortKey = MetricKey | "nome";
 
 interface MetricDef {
   key: MetricKey;
@@ -107,18 +109,19 @@ interface PerformanceHeatmapProps {
 }
 
 export function PerformanceHeatmap({ agents, highlightId }: PerformanceHeatmapProps) {
-  const [sortCol, setSortCol] = useState<MetricKey | null>(null);
+  const [sortCol, setSortCol] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [maximized, setMaximized] = useState(false);
 
-  const toggleSort = (key: MetricKey) => {
+  const toggleSort = (key: SortKey) => {
     if (sortCol !== key) {
       setSortCol(key);
-      setSortDir("desc");
+      // Nome começa A→Z (asc); métricas começam do maior (desc).
+      setSortDir(key === "nome" ? "asc" : "desc");
       return;
     }
-    if (sortDir === "desc") {
-      setSortDir("asc");
+    if (sortDir === (key === "nome" ? "asc" : "desc")) {
+      setSortDir(sortDir === "desc" ? "asc" : "desc");
     } else {
       setSortCol(null);
       setSortDir("desc");
@@ -127,7 +130,12 @@ export function PerformanceHeatmap({ agents, highlightId }: PerformanceHeatmapPr
 
   const sortedAgents = useMemo(() => {
     const copy = [...agents];
-    if (sortCol) {
+    if (sortCol === "nome") {
+      copy.sort((a, b) => {
+        const cmp = a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" });
+        return sortDir === "asc" ? cmp : -cmp;
+      });
+    } else if (sortCol) {
       copy.sort((a, b) => {
         const va = a[sortCol] ?? 0;
         const vb = b[sortCol] ?? 0;
@@ -179,8 +187,26 @@ export function PerformanceHeatmap({ agents, highlightId }: PerformanceHeatmapPr
           <table className="w-full border-collapse text-[11px] tabular-nums">
             <thead className="sticky top-0 z-10 bg-background">
               <tr>
-                <th className="sticky left-0 z-20 bg-background px-2 py-1.5 text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground border border-slate-400">
-                  Agente
+                <th
+                  className={cn(
+                    "sticky left-0 z-20 bg-background px-2 py-1.5 text-left text-[10px] font-semibold uppercase tracking-wider border border-slate-400",
+                    sortCol === "nome" ? "text-foreground" : "text-muted-foreground",
+                  )}
+                >
+                  <button
+                    type="button"
+                    onClick={() => toggleSort("nome")}
+                    className="inline-flex items-center gap-1 select-none hover:text-foreground"
+                    data-testid="sort-nome"
+                    aria-label="Ordenar por Agente (alfabético)"
+                  >
+                    <span>Agente</span>
+                    {sortCol === "nome" && (
+                      <span aria-hidden="true" data-testid="sort-indicator-nome">
+                        {sortDir === "desc" ? "↓" : "↑"}
+                      </span>
+                    )}
+                  </button>
                 </th>
                 {METRICS.map((m) => {
                   const active = sortCol === m.key;

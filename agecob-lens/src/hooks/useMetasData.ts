@@ -91,10 +91,11 @@ export function useMetasData(
     // Exibe portfólios COM meta no mês + uma linha de média no topo.
     // Portfólios com meta 0 no PDF (linhas "-") são omitidos — nada a comparar.
 
+    // Comparação é Caixa vs Caixa, então filtra/ordena por meta_caixa.
     const todas = data.metas
       .map((m) => rowToMeta(m, mes))
-      .filter((m) => m.meta_pnt > 0)
-      .sort((a, b) => b.meta_pnt - a.meta_pnt); // maior meta primeiro
+      .filter((m) => m.meta_caixa > 0)
+      .sort((a, b) => b.meta_caixa - a.meta_caixa); // maior meta primeiro
 
     // Linha de resumo = TOTAL da carteira (soma das metas = alvo do escritório).
     // Somar metas por portfólio é válido (≠ somar por agente). O real agregado
