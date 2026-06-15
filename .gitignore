@@ -41,3 +41,9 @@ deploy/d.csv
 # graphify artifacts (generated)
 graphify-out/
 .graphify_*
+
+# Metas extraídas de PDF (ETL)
+dados_metas/
+
+# PDFs de metas — contêm PII (CPF, DocuSign Envelope ID). Não versionar.
+docs/*.pdf

@@ -129,14 +129,16 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     let lastError: unknown = null;
     let triedAnyResponse = false;
     const startedAt = performance.now();
+    const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
     const headers: Record<string, string> = { "X-Run-Id": runId };
     if (API_KEY) headers["X-API-Key"] = API_KEY;
     if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
-    if (options.body !== undefined) headers["Content-Type"] = "application/json";
+    // FormData: o browser define Content-Type com o boundary multipart — não forçar.
+    if (options.body !== undefined && !isFormData) headers["Content-Type"] = "application/json";
 
     const init: RequestInit = { method, headers };
     if (options.body !== undefined) {
-      init.body = JSON.stringify(options.body);
+      init.body = isFormData ? (options.body as FormData) : JSON.stringify(options.body);
     }
 
     for (const base of API_BASE_CANDIDATES) {
@@ -189,7 +191,14 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
       let detail = `HTTP ${res.status}`;
       try {
         const body = await res.json();
-        if (body?.detail) detail = String(body.detail);
+        if (body?.detail) {
+          // FastAPI 422 retorna detail como array de objetos de validação.
+          detail = typeof body.detail === "string"
+            ? body.detail
+            : Array.isArray(body.detail)
+              ? body.detail.map((d: { msg?: string }) => d?.msg ?? JSON.stringify(d)).join("; ")
+              : JSON.stringify(body.detail);
+        }
       } catch {
         // Mantem fallback de HTTP status.
       }
@@ -259,6 +268,76 @@ export async function fetchPortfolios(
   db: Exclude<DatabaseOption, "todos">,
 ): Promise<ApiEnvelope<PortfolioRow>> {
   return request<ApiEnvelope<PortfolioRow>>(`/dashboard/portfolios/${db}`);
+}
+
+// ── Metas (PDF → JSON) ────────────────────────────────────────────────────────
+
+export interface MetaMensal {
+  "202604": number;
+  "202605": number;
+  "202606": number;
+}
+
+export interface MetaRow {
+  escritorio: string | null;
+  portfolio: string;
+  grupo: string | null;
+  qtd_negociadores: number | null;
+  meta_caixa: MetaMensal;
+  meta_retomadas_qtd: MetaMensal;
+  meta_retomadas_valor: MetaMensal;
+  meta_pnt: MetaMensal;
+}
+
+export interface MetasEnvelope {
+  meta: {
+    periodo: string;
+    extraido_em: string;
+    arquivo_origem: string;
+    total_registros: number;
+    validado: boolean;
+    checksum_pnt_202604: number;
+    checksum_total_geral_202604: number;
+  };
+  metas: MetaRow[];
+}
+
+export async function fetchMetas(): Promise<MetasEnvelope> {
+  return request<MetasEnvelope>("/dashboard/metas");
+}
+
+export async function uploadMetasPDF(file: File): Promise<MetasEnvelope> {
+  const form = new FormData();
+  form.append("file", file);
+  // O backend responde HTTP 200 mesmo em falha de validação (envelope com errors).
+  const resp = await request<MetasEnvelope & { errors?: ApiErrorItem[] }>("/dashboard/metas/upload", {
+    method: "POST",
+    body: form,
+    skipInflightDedup: true,
+  });
+  if (resp.errors?.length) throw new Error(resp.errors.map((e) => e.message).join("; "));
+  return resp;
+}
+
+// ── Real por Portfólio (MetaVsRealPanel) ──────────────────────────────────────
+
+export interface RealPorPortfolioRow {
+  portfolio_name: string;
+  qtd_acordos: number;
+  valor_acordos: number;
+  valor_primeira_parcela: number;
+}
+
+export async function fetchRealPorPortfolio(
+  db: DatabaseOption,
+  dateFrom?: string,
+  dateTo?: string,
+): Promise<ApiEnvelope<RealPorPortfolioRow>> {
+  const query = new URLSearchParams();
+  if (dateFrom) query.set("dateFrom", dateFrom);
+  if (dateTo) query.set("dateTo", dateTo);
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<ApiEnvelope<RealPorPortfolioRow>>(`/dashboard/real-por-portfolio/${db}${suffix}`);
 }
 
 export interface PrimeiraParcelaDiaRow {

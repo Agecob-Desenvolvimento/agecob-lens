@@ -193,6 +193,13 @@ O `atualizar.bat` já força `--workers 4` via `nssm set` antes de reiniciar.
 
 `{db}`: `COBwebRCBAUTOS` | `COBwebRCBCONSUMER` | `todos`
 
+### Metas (PDF → JSON)
+| Endpoint | Descrição |
+|---|---|
+| `GET /dashboard/metas` | Serve `dados_metas/ultimas_metas.json` (metas por portfólio do trimestre). Envelope com `errors` se o JSON não existir |
+| `POST /dashboard/metas/upload` | Recebe PDF de metas (`multipart/form-data`, campo `file`), valida e regrava `ultimas_metas.json` |
+| `GET /dashboard/real-por-portfolio/{db}` | Valor gerado hoje agregado por portfólio (base do Meta vs Real) |
+
 ### Admin (requer `ENABLE_INDEX_ADMIN=true`)
 | Endpoint | Descrição |
 |---|---|
@@ -227,7 +234,15 @@ npm run dev | dev:lan | build | lint | test | check
 
 # Servidor
 atualizar.bat
+
+# Metas — extrai PDF trimestral → dados_metas/ultimas_metas.json
+python scripts/extrator.py docs/document_pdf.pdf
 ```
+
+> O extrator valida `meta_pnt = meta_caixa + meta_retomadas_valor` por linha e a
+> soma das linhas contra `TOTAL GERAL`. Se falhar, grava `dados_metas/erro_extracao.log`
+> e **não** sobrescreve `ultimas_metas.json`. `dados_metas/` é gitignorado.
+> Reexecutar a cada novo trimestre (ou via `POST /dashboard/metas/upload` na UI).
 
 ---
 

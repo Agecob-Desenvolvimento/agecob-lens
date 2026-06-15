@@ -27,7 +27,6 @@ import {
 import type { ProdutividadeRowWithSource } from "@/hooks/useProdutividadeData";
 import type { KpiDatum, KpiBenchmark } from "@/components/detalhamento/DetalhamentoKpiStrip";
 import type { FunilData } from "@/components/detalhamento/FunilConversao";
-import type { BulletPanelData } from "@/components/detalhamento/BulletChartsPanel";
 import type { AgentRow } from "@/components/detalhamento/PerformanceHeatmap";
 import type { ScatterPoint } from "@/components/detalhamento/regressionMocks";
 import type { RankingEntry } from "@/components/detalhamento/RankingPrioridade";
@@ -65,7 +64,6 @@ export interface DetalhamentoViewModel {
   /** Office-average reference per KPI id (only when an agent is selected). */
   kpiBenchmarks: Record<string, KpiBenchmark>;
   funil: FunilData;
-  metas: BulletPanelData;
   heatmapAgents: AgentRow[];
   scatterPoints: ScatterPoint[];
   rankingEntries: RankingEntry[];
@@ -492,19 +490,6 @@ export function useDetalhamentoViewModel(): DetalhamentoViewModel {
   }), [effectiveTotals]);
 
   const teamTotals = useMemo(() => aggregateTotals(rows), [rows]);
-  const metaAnchorTotals = portfolioActive && portfolioAgentRows.length > 0
-    ? aggregateTotals(portfolioRows)
-    : teamTotals;
-  const metaAnchorLen = portfolioActive
-    ? (portfolioRows.length || 1)
-    : (rows.length || 1);
-  const metas: BulletPanelData = useMemo(() => ({
-    cpc: { value: calcCpc(effectiveTotals), meta: Math.max(calcCpc(metaAnchorTotals) * 0.9, 8), ranges: { poor: 5, ok: 10, good: 15 }, unit: "%" },
-    conversao: { value: calcConversao(effectiveTotals), meta: Math.max(calcConversao(metaAnchorTotals) * 1.1, 5), ranges: { poor: 4, ok: 7, good: 11 }, unit: "%" },
-    primeiraParcela: { value: effectiveTotals.valor_primeira_parcela, meta: Math.max((metaAnchorTotals.valor_primeira_parcela / metaAnchorLen) * 1.05, 500), ranges: { poor: 2000, ok: 5000, good: 8000 }, unit: "BRL" },
-    excecoes: { value: calcExcecoesPctValor(effectiveTotals), meta: 3.0, ranges: { poor: 6, ok: 8.5, good: 10 }, unit: "%", inverted: true },
-  }), [effectiveTotals, metaAnchorTotals, metaAnchorLen]);
-
   // Office-average reference per KPI. Shown only when an agent is selected, so the
   // agent's value can be compared against the team. Rates use ratio-of-sums; totals
   // divide by distinct agent count.
@@ -575,7 +560,7 @@ export function useDetalhamentoViewModel(): DetalhamentoViewModel {
     loading, error: mergedError, warnings: mergedWarnings, refresh,
     agentList, selectedAgent, setSelectedAgent,
     selectedPortfolio, setSelectedPortfolio, portfolioActive,
-    kpiPrimary, kpiSecondary, kpiBenchmarks, funil, metas,
+    kpiPrimary, kpiSecondary, kpiBenchmarks, funil,
     heatmapAgents, scatterPoints, rankingEntries, paretoPoints,
     radarData,
     insight,

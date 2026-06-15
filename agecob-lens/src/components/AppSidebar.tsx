@@ -1,4 +1,4 @@
-import { LayoutDashboard, Users, TrendingUp } from "lucide-react";
+import { LayoutDashboard, Users, TrendingUp, Target } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
 import {
@@ -17,6 +17,7 @@ import {
 const navItems = [
   { title: "Dashboard Executivo", url: "/", icon: LayoutDashboard, enabled: true, level: 1 },
   { title: "Detalhamento Agentes", url: "/detalhamento-agentes", icon: Users, enabled: true, level: 2 },
+  { title: "Carteiras — Metas", url: "/carteiras", icon: Target, enabled: true, level: 2 },
   { title: "Análise & Efetividade", url: "/efetividade-boletos", icon: TrendingUp, enabled: true, level: 3 },
 ];
 

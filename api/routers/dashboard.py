@@ -1,10 +1,12 @@
+import json
 import time
 from datetime import date, timedelta
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import uuid4
 
 import numpy as np
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, File, Query, Request, UploadFile
 
 import config.settings as settings
 from core.cache.cache_manager import cache_manager
@@ -41,11 +43,13 @@ from dominios.graficos.queries import (
     build_quebrados_por_portfolio_query,
     build_rejeitados_detalhe_query,
     build_rejeitados_por_portfolio_query,
+    build_real_por_portfolio_query,
     build_excecoes_detalhe_agente_query,
     build_rejeitados_detalhe_agente_query,
     build_quebrados_detalhe_agente_query,
 )
 from dominios.produtividade.queries import build_benchmark_query, build_produtividade_query, build_produtividade_hoje_params
+from dominios.metas.extrator import processar_pdf, salvar_resultado
 from dominios.produtividade.servico import produtividade_servico
 
 router = APIRouter(prefix="/dashboard")
@@ -914,3 +918,96 @@ def get_primeira_parcela_por_agente(
         filters_extra={"assessoria": assessoria_applied, "date": f"{parsed_from}/{parsed_to_excl}" if parsed_from else "today"},
         cache_key_suffix=f"|assessoria:{assessoria_token or 'todos'}{period_suffix}",
     )
+
+
+@router.get("/metas")
+def get_metas(request: Request = None) -> Dict[str, Any]:
+    """Serve o JSON de metas extraído do PDF via extrator.py.
+
+    Retorna os dados de metas por portfólio extraídos do PDF trimestral.
+    Se o arquivo não existir, retorna envelope com errors (não quebra o frontend).
+    """
+    run_id = str(uuid4())
+    metas_path = Path("dados_metas/ultimas_metas.json")
+
+    if not metas_path.is_file():
+        return build_response_envelope(
+            rows=[],
+            sources=[],
+            errors=[{"message": "Arquivo de metas não encontrado. Execute extrator.py primeiro."}],
+            run_id=run_id,
+        )
+
+    with open(metas_path, "r", encoding="utf-8") as f:
+        dados = json.load(f)
+
+    return dados
+
+
+@router.get("/real-por-portfolio/{db}")
+def get_real_por_portfolio(
+    db: str,
+    dateFrom: Optional[str] = Query(default=None),
+    dateTo: Optional[str] = Query(default=None),
+    request: Request = None,
+) -> Dict[str, Any]:
+    """Dados reais agregados por portfolio para MetaVsRealPanel."""
+    parsed_from, parsed_to_excl = _parse_period(dateFrom, dateTo)
+    period_suffix = f"|period:{parsed_from or 'hoje'}-{parsed_to_excl or 'hoje'}"
+    return _run_dashboard_chart(
+        db, build_real_por_portfolio_query,
+        "dashboard/real-por-portfolio", request,
+        query_args=(parsed_from, parsed_to_excl),
+        filters_extra={"date": f"{parsed_from}/{parsed_to_excl}" if parsed_from else "today"},
+        cache_key_suffix=period_suffix,
+    )
+
+
+@router.post("/metas/upload")
+async def upload_metas_pdf(
+    file: UploadFile = File(...),
+    request: Request = None,
+) -> Dict[str, Any]:
+    """Recebe um PDF de metas, processa e atualiza ultimas_metas.json."""
+    run_id = str(uuid4())
+
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
+        return build_response_envelope(
+            rows=[],
+            sources=[],
+            errors=[{"message": "Arquivo inválido. Envie um PDF."}],
+            run_id=run_id,
+        )
+
+    # Salva em arquivo temporário
+    tmp_path = Path(f"dados_metas/_upload_{run_id}.pdf")
+    tmp_path.parent.mkdir(exist_ok=True)
+    try:
+        content = await file.read()
+        tmp_path.write_bytes(content)
+
+        dados = processar_pdf(str(tmp_path), nome_origem=file.filename)
+        periodo = salvar_resultado(dados, file.filename or "upload.pdf")
+
+        return build_response_envelope(
+            rows=[{"periodo": periodo, "total_registros": dados["meta"]["total_registros"]}],
+            sources=[file.filename],
+            run_id=run_id,
+        )
+    except ValueError as e:
+        return build_response_envelope(
+            rows=[],
+            sources=[file.filename] if file.filename else [],
+            errors=[{"message": str(e)}],
+            run_id=run_id,
+        )
+    except Exception as e:
+        return build_response_envelope(
+            rows=[],
+            sources=[file.filename] if file.filename else [],
+            errors=[{"message": f"Erro ao processar PDF: {e}"}],
+            run_id=run_id,
+        )
+    finally:
+        if tmp_path.exists():
+            tmp_path.unlink()

@@ -16,10 +16,11 @@ const AgentChatPanel = lazy(() => import("@/components/agente/AgentChatPanel"));
 
 const Index = lazy(() => import("./pages/Index.tsx"));
 const DetalhamentoAgentes = lazy(() => import("./pages/DetalhamentoAgentes.tsx"));
+const Carteiras = lazy(() => import("./pages/Carteiras.tsx"));
 const EfetividadeBoletos = lazy(() => import("./pages/EfetividadeBoletos.tsx"));
 const NotFound = lazy(() => import("./pages/NotFound.tsx"));
 
-const ALL_ROUTES = ["/", "/detalhamento-agentes", "/efetividade-boletos"];
+const ALL_ROUTES = ["/", "/detalhamento-agentes", "/carteiras", "/efetividade-boletos"];
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -29,6 +30,9 @@ const queryClient = new QueryClient({
       refetchOnWindowFocus: false,
       refetchOnReconnect: false,
       retry: 1,
+      // Polling: revalida os dados do dash a cada 2 min (somente com aba ativa).
+      refetchInterval: 120_000,
+      refetchIntervalInBackground: false,
     },
   },
 });
@@ -77,6 +81,7 @@ function AppRoutes() {
 
     const warmImports: Record<string, () => Promise<unknown>> = {
       "/detalhamento-agentes": () => import("./pages/DetalhamentoAgentes.tsx"),
+      "/carteiras": () => import("./pages/Carteiras.tsx"),
       "/efetividade-boletos": () => import("./pages/EfetividadeBoletos.tsx"),
     };
     const fn = warmImports[warm];
@@ -113,6 +118,7 @@ function AppRoutes() {
         <Routes>
           <Route path="/" element={<WrapRoute routeName="/"><Index /></WrapRoute>} />
           <Route path="/detalhamento-agentes" element={<WrapRoute routeName="/detalhamento-agentes"><DetalhamentoAgentes /></WrapRoute>} />
+          <Route path="/carteiras" element={<WrapRoute routeName="/carteiras"><Carteiras /></WrapRoute>} />
           <Route path="/efetividade-boletos" element={<WrapRoute routeName="/efetividade-boletos"><EfetividadeBoletos /></WrapRoute>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
