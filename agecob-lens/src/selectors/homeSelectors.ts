@@ -155,11 +155,16 @@ export function selectFinanceiroHandoffData(
 export function selectEficienciaHandoffData(
   rows: ProdutividadeRowWithSource[],
 ): HandoffEficienciaDatum[] {
-  return selectBuEfficiencyData(rows).map((d) => ({
-    bu: d.name,
-    cpc: d.cpc,
-    conversao: d.conversao,
-  }));
+  const map = groupByBu(rows);
+  return BU_ORDER.filter((bu) => map.has(bu)).map((bu) => {
+    const t = aggregateTotals(map.get(bu) ?? []);
+    return {
+      bu,
+      cpc: calcCpc(t),
+      conversao: calcConversao(t),
+      boletosEmitidos: t.qtd_boletos_emitidos,
+    };
+  });
 }
 
 // ── Funnel data (raw counts per BU) ──────────────────────────────

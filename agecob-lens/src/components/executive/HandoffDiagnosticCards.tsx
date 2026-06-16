@@ -23,6 +23,8 @@ interface DiagnosticCard {
   conversao: number;
   conversaoBench: number | null;
   conversaoAbove: boolean;
+  /** Sem boletos vencidos no período → conversão não é mensurável (mostra "—", não 0%). */
+  conversaoNd: boolean;
   diagnosis: string;
   action: string;
 }
@@ -62,6 +64,14 @@ const DIAGNOSIS_MAP = {
     diagnosis: "Revisão Completa",
     action: "Revisar qualidade da base e treinar equipe.",
   },
+  cpcAboveConvNd: {
+    diagnosis: "CPC saudável",
+    action: "Conversão sem boletos vencidos hoje — reavaliar quando as parcelas vencerem.",
+  },
+  cpcBelowConvNd: {
+    diagnosis: "Foco em CPC",
+    action: "CPC baixo (alcança poucos titulares). Melhorar discagem. Conversão sem boletos vencidos hoje.",
+  },
 };
 
 // ── Helpers ──────────────────────────────────────────────────────
@@ -79,11 +89,14 @@ function buildCards(
     const cpcBench = bench?.cpc ?? null;
     const conversaoBench = bench?.conversao ?? null;
     // compare against benchmark when available, fall back to overall avg
+    const conversaoNd = (d.boletosEmitidos ?? 0) === 0;
     const cpcAbove = cpcBench != null ? d.cpc >= cpcBench : cpcRef > 0 ? d.cpc >= cpcRef : true;
     const convAbove = conversaoBench != null ? d.conversao >= conversaoBench : conversaoRef > 0 ? d.conversao >= conversaoRef : true;
-    const key = cpcAbove
-      ? convAbove ? "bothAbove" : "cpcAboveConvBelow"
-      : convAbove ? "cpcBelowConvAbove" : "bothBelow";
+    const key = conversaoNd
+      ? cpcAbove ? "cpcAboveConvNd" : "cpcBelowConvNd"
+      : cpcAbove
+        ? convAbove ? "bothAbove" : "cpcAboveConvBelow"
+        : convAbove ? "cpcBelowConvAbove" : "bothBelow";
     const { diagnosis, action } = DIAGNOSIS_MAP[key];
     const funnel = funnelMap.get(d.bu);
     return {
@@ -99,6 +112,7 @@ function buildCards(
       conversao: d.conversao,
       conversaoBench,
       conversaoAbove: convAbove,
+      conversaoNd,
       diagnosis,
       action,
     };
@@ -186,6 +200,8 @@ function DiagnosticCardItem({ card }: { card: DiagnosticCard }) {
           value={card.conversao}
           bench={card.conversaoBench}
           above={card.conversaoAbove}
+          nd={card.conversaoNd}
+          ndNote="Sem boletos vencidos hoje"
         />
       </div>
 
@@ -220,14 +236,30 @@ function MetricBadge({
   value,
   bench,
   above,
+  nd = false,
+  ndNote,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   value: number;
   bench: number | null;
   above: boolean;
+  nd?: boolean;
+  ndNote?: string;
 }) {
   const TrendIcon = above ? TrendingUp : TrendingDown;
+  if (nd) {
+    return (
+      <div className="flex flex-col gap-0.5">
+        <span className="text-[10px] uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+          <Icon className="h-3 w-3" />
+          {label}
+        </span>
+        <span className="text-lg font-bold tabular-nums leading-tight text-muted-foreground">—</span>
+        {ndNote && <span className="text-[10px] text-muted-foreground/70">{ndNote}</span>}
+      </div>
+    );
+  }
   return (
     <div className="flex flex-col gap-0.5">
       <span className="text-[10px] uppercase tracking-wider text-muted-foreground flex items-center gap-1">

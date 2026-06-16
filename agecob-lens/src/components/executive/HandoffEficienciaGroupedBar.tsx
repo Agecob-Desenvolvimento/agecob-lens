@@ -17,6 +17,8 @@ export interface HandoffEficienciaDatum {
   bu: string;
   cpc: number;
   conversao: number;
+  /** Boletos vencidos no período (denominador da conversão). 0 = conversão N/A (nada venceu ainda). */
+  boletosEmitidos?: number;
 }
 
 export interface HandoffEficienciaSummary {
