@@ -120,8 +120,14 @@ export function PerformanceHeatmap({ agents, highlightId }: PerformanceHeatmapPr
       setSortDir(key === "nome" ? "asc" : "desc");
       return;
     }
-    if (sortDir === (key === "nome" ? "asc" : "desc")) {
-      setSortDir(sortDir === "desc" ? "asc" : "desc");
+    // Agente: só A→Z; o próximo clique remove o filtro (sem passo desc).
+    if (key === "nome") {
+      setSortCol(null);
+      setSortDir("desc");
+      return;
+    }
+    if (sortDir === "desc") {
+      setSortDir("asc");
     } else {
       setSortCol(null);
       setSortDir("desc");

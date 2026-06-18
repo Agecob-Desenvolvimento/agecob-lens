@@ -6,6 +6,8 @@ export interface BoletoKpi {
   value: number | string;
   color: string;
   sub?: string;
+  /** Tipo do valor — controla ordem e tamanho do card (BRL > percent > count). */
+  unit?: "BRL" | "percent" | "count";
 }
 
 export const MOCK_BOLETOS_KPIS: BoletoKpi[] = [

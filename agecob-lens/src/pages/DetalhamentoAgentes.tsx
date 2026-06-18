@@ -1,5 +1,6 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useState } from "react";
 import { SidebarProvider } from "@/components/ui/sidebar";
+import type { HomeKpiDetalheKind } from "@/hooks/useHomeKpiDetalhe";
 import { AppSidebar } from "@/components/AppSidebar";
 import ExecutiveHeader from "@/components/executive/ExecutiveHeader";
 import BlockHeader from "@/components/executive/BlockHeader";
@@ -15,17 +16,25 @@ import { useGlobalFilters } from "@/contexts/GlobalFiltersContext";
 const FunilConversao = lazy(() => import("@/components/detalhamento/FunilConversao").then((m) => ({ default: m.FunilConversao })));
 const RadarDesempenho = lazy(() => import("@/components/detalhamento/RadarDesempenho").then((m) => ({ default: m.RadarDesempenho })));
 const PerformanceHeatmap = lazy(() => import("@/components/detalhamento/PerformanceHeatmap").then((m) => ({ default: m.PerformanceHeatmap })));
-const ImprovedScatterPlot = lazy(() => import("@/components/detalhamento/ImprovedScatterPlot").then((m) => ({ default: m.ImprovedScatterPlot })));
 const RankingPrioridade = lazy(() => import("@/components/detalhamento/RankingPrioridade").then((m) => ({ default: m.RankingPrioridade })));
-const ParetoChart = lazy(() => import("@/components/detalhamento/ParetoChart").then((m) => ({ default: m.ParetoChart })));
 const AgenteDetalheSection = lazy(() => import("@/components/detalhamento/AgenteDetalheSection"));
+const HomeKpiDetalheSheet = lazy(() => import("@/components/executive/HomeKpiDetalheSheet").then((m) => ({ default: m.HomeKpiDetalheSheet })));
 
 const CHART_FALLBACK = <div className="h-64 animate-pulse bg-muted rounded-lg" />;
+
+// Sidebar global (todas carteiras), reusa o da Home. Só os 4 KPIs equivalentes.
+const KPI_KIND_BY_ID: Record<string, HomeKpiDetalheKind> = {
+  valor_acordos: "acordos",
+  primeira_parcela: "primeira_parcela",
+  qtd_excecoes: "excecoes",
+  qtd_rejeitados: "rejeitados",
+};
 
 export default function DetalhamentoAgentes() {
   const vm = useDetalhamentoViewModel();
   const { selectedDatabase } = useGlobalFilters();
   const { portfolios, loading: portfolioLoading } = usePortfolioList(selectedDatabase);
+  const [kpiSheetKind, setKpiSheetKind] = useState<HomeKpiDetalheKind | null>(null);
 
   return (
     <SidebarProvider>
@@ -58,6 +67,8 @@ export default function DetalhamentoAgentes() {
                 secondary={vm.kpiSecondary}
                 deltas={vm.insight.kpiDeltas}
                 benchmarks={vm.kpiBenchmarks}
+                clickableIds={Object.keys(KPI_KIND_BY_ID)}
+                onCardClick={(id) => setKpiSheetKind(KPI_KIND_BY_ID[id])}
               />
 
               {/* Bloco 1 — Diagnóstico Individual */}
@@ -96,16 +107,10 @@ export default function DetalhamentoAgentes() {
                   description="Onde cada agente está no time — padrões visuais e validação estatística."
                 />
                 <Suspense fallback={CHART_FALLBACK}>
-                  <div className="space-y-3">
-                    <PerformanceHeatmap
-                      agents={vm.heatmapAgents}
-                      highlightId={vm.selectedAgent ?? undefined}
-                    />
-                    <ImprovedScatterPlot
-                      points={vm.scatterPoints}
-                      highlightId={vm.selectedAgent ?? undefined}
-                    />
-                  </div>
+                  <PerformanceHeatmap
+                    agents={vm.heatmapAgents}
+                    highlightId={vm.selectedAgent ?? undefined}
+                  />
                 </Suspense>
               </section>
 
@@ -117,15 +122,12 @@ export default function DetalhamentoAgentes() {
                   description="Quem atender primeiro — fila de prioridade e concentração de resultado."
                 />
                 <Suspense fallback={CHART_FALLBACK}>
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                    <RankingPrioridade
-                      entries={vm.rankingEntries}
-                      highlightAgentId={vm.selectedAgent ?? undefined}
-                      highlightRank={vm.insight.agentRank}
-                      totalAgents={vm.insight.totalAgents}
-                    />
-                    <ParetoChart points={vm.paretoPoints} />
-                  </div>
+                  <RankingPrioridade
+                    entries={vm.rankingEntries}
+                    highlightAgentId={vm.selectedAgent ?? undefined}
+                    highlightRank={vm.insight.agentRank}
+                    totalAgents={vm.insight.totalAgents}
+                  />
                 </Suspense>
               </section>
 
@@ -139,6 +141,9 @@ export default function DetalhamentoAgentes() {
           </div>
         </div>
       </div>
+      <Suspense fallback={null}>
+        <HomeKpiDetalheSheet kind={kpiSheetKind} onClose={() => setKpiSheetKind(null)} />
+      </Suspense>
     </SidebarProvider>
   );
 }

@@ -30,8 +30,10 @@ from dominios.acordos.queries import (
 )
 from dominios.graficos.queries import (
     build_acordos_detalhe_query,
+    build_acordos_detalhe_global_query,
     build_acordos_por_portfolio_query,
     build_excecoes_detalhe_query,
+    build_excecoes_detalhe_global_query,
     build_excecoes_por_agente_query,
     build_excecoes_por_portfolio_query,
     build_excecoes_sem_portfolio_query,
@@ -42,6 +44,7 @@ from dominios.graficos.queries import (
     build_quebrados_detalhe_query,
     build_quebrados_por_portfolio_query,
     build_rejeitados_detalhe_query,
+    build_rejeitados_detalhe_global_query,
     build_rejeitados_por_portfolio_query,
     build_real_por_portfolio_query,
     build_excecoes_detalhe_agente_query,
@@ -760,6 +763,63 @@ def get_rejeitados_detalhe(
         params=portfolio_params,
         filters_extra={"portfolio": portfolio, "date": f"{parsed_from}/{parsed_to_excl}" if parsed_from else "today"},
         cache_key_suffix=f"|portfolio:{portfolio}{period_suffix}",
+    )
+
+
+@router.get("/acordos-detalhe-todos/{db}")
+def get_acordos_detalhe_todos(
+    db: str,
+    dateFrom: Optional[str] = Query(default=None),
+    dateTo: Optional[str] = Query(default=None),
+    request: Request = None,
+) -> Dict[str, Any]:
+    validated_db = validate_database_or_todos(db)
+    parsed_from, parsed_to_excl = _parse_period(dateFrom, dateTo)
+    period_suffix = f"|period:{parsed_from or 'hoje'}-{parsed_to_excl or 'hoje'}"
+    return _run_dashboard_chart(
+        validated_db, build_acordos_detalhe_global_query,
+        "dashboard/acordos-detalhe-todos", request,
+        query_args=(parsed_from, parsed_to_excl),
+        filters_extra={"date": f"{parsed_from}/{parsed_to_excl}" if parsed_from else "today"},
+        cache_key_suffix=period_suffix,
+    )
+
+
+@router.get("/excecoes-detalhe-todos/{db}")
+def get_excecoes_detalhe_todos(
+    db: str,
+    dateFrom: Optional[str] = Query(default=None),
+    dateTo: Optional[str] = Query(default=None),
+    request: Request = None,
+) -> Dict[str, Any]:
+    validated_db = validate_database_or_todos(db)
+    parsed_from, parsed_to_excl = _parse_period(dateFrom, dateTo)
+    period_suffix = f"|period:{parsed_from or 'hoje'}-{parsed_to_excl or 'hoje'}"
+    return _run_dashboard_chart(
+        validated_db, build_excecoes_detalhe_global_query,
+        "dashboard/excecoes-detalhe-todos", request,
+        query_args=(parsed_from, parsed_to_excl),
+        filters_extra={"date": f"{parsed_from}/{parsed_to_excl}" if parsed_from else "today"},
+        cache_key_suffix=period_suffix,
+    )
+
+
+@router.get("/rejeitados-detalhe-todos/{db}")
+def get_rejeitados_detalhe_todos(
+    db: str,
+    dateFrom: Optional[str] = Query(default=None),
+    dateTo: Optional[str] = Query(default=None),
+    request: Request = None,
+) -> Dict[str, Any]:
+    validated_db = validate_database_or_todos(db)
+    parsed_from, parsed_to_excl = _parse_period(dateFrom, dateTo)
+    period_suffix = f"|period:{parsed_from or 'hoje'}-{parsed_to_excl or 'hoje'}"
+    return _run_dashboard_chart(
+        validated_db, build_rejeitados_detalhe_global_query,
+        "dashboard/rejeitados-detalhe-todos", request,
+        query_args=(parsed_from, parsed_to_excl),
+        filters_extra={"date": f"{parsed_from}/{parsed_to_excl}" if parsed_from else "today"},
+        cache_key_suffix=period_suffix,
     )
 
 

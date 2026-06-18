@@ -190,10 +190,6 @@ export function useHomeViewModel(): HomeViewModel {
   // KPI secondaries
   const kpiSecondary = useMemo(() => {
     const conv = calcConversao(totals);
-    const excecoesPct = totals.valor_acordos > 0 ? (totals.valor_excecoes * 100) / totals.valor_acordos : 0;
-    const excecoesPctPrev = prevTotals.valor_acordos > 0 ? (prevTotals.valor_excecoes * 100) / prevTotals.valor_acordos : 0;
-    const excecoesPctParcela = totals.valor_primeira_parcela > 0 ? (totals.valor_excecoes * 100) / totals.valor_primeira_parcela : 0;
-    const excecoesPctParcelaPrev = prevTotals.valor_primeira_parcela > 0 ? (prevTotals.valor_excecoes * 100) / prevTotals.valor_primeira_parcela : 0;
     const mk = (value: number, prevValue: number, betterWhen: "up" | "down") => {
       const d = selectPeriodDelta(value, prevValue);
       return d != null ? { value: d, label: periodLabel, betterWhen } : undefined;
@@ -213,8 +209,8 @@ export function useHomeViewModel(): HomeViewModel {
       { label: "Efetividade de Caixa", value: indiceConversaoCaixa ?? 0, unit: "percent" as const, baseline: mk(indiceConversaoCaixa ?? 0, indiceConversaoCaixaPrev ?? 0, "up"), benchmarks: bm(bench?.efetividade_caixa), base: { num: ppValorRecebida, den: ppValorEmitida, noun: "1ª parcela", unit: "value" } },
       { label: "CPC", value: totals.qtd_contatos, unit: "count" as const, baseline: mk(totals.qtd_contatos, prevTotals.qtd_contatos, "up"), base: { num: totals.qtd_contatos, den: totals.qtd_alo, noun: "alôs" } },
       { label: "Conversão %", value: conv, unit: "percent" as const, baseline: mkBench(conv, bench?.taxa_conversao?.mean, "up"), base: { num: totals.qtd_boletos_pagos, den: totals.qtd_boletos_emitidos, noun: "boletos" } },
-      { label: "% Exc. s/ 1ª Parcela", value: excecoesPctParcela, unit: "percent" as const, baseline: mk(excecoesPctParcela, excecoesPctParcelaPrev, "down"), caption: "do valor da 1ª parcela" },
-      { label: "% Exc. s/ Valor Acordos", value: excecoesPct, unit: "percent" as const, baseline: mk(excecoesPct, excecoesPctPrev, "down"), caption: "do valor total de acordos", benchmarks: bm(bench?.pct_excecoes) },
+      { label: "Rejeitados", value: totals.qtd_rejeitados, unit: "count" as const, baseline: mk(totals.qtd_rejeitados, prevTotals.qtd_rejeitados, "down"), caption: "acordos rejeitados" },
+      { label: "Exceções", value: totals.qtd_excecoes, unit: "count" as const, baseline: mk(totals.qtd_excecoes, prevTotals.qtd_excecoes, "down"), caption: "acordos em exceção" },
       { label: "Qtd Acordos", value: totals.qtd_acordos, unit: "count" as const, caption: `${diasUteisPeriodo} dias úteis` },
       { label: "Gap de Performance", value: gapDePerformance, unit: "BRL" as const, caption: "Top agente vs piso da equipe" },
       { label: "Qtd Acionamentos", value: totals.qtd_acionamentos, unit: "count" as const, baseline: mk(totals.qtd_acionamentos, prevTotals.qtd_acionamentos, "up") },
