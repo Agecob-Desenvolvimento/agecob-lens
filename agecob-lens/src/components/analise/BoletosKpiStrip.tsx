@@ -1,6 +1,7 @@
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { fmtNum } from "@/lib/metrics";
+import { usePeriodicBlink } from "@/hooks/usePeriodicBlink";
 import type { BoletoKpi } from "./analiseMocks";
 
 interface BoletosKpiStripProps {
@@ -17,11 +18,14 @@ const rankOf = (k: BoletoKpi) => (k.unit ? UNIT_RANK[k.unit] : 3);
 
 export function BoletosKpiStrip({ kpis, clickableLabels, onKpiClick }: BoletosKpiStripProps) {
   const ordered = [...kpis].sort((a, b) => rankOf(a) - rankOf(b));
+  const blink = usePeriodicBlink();
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
       {ordered.map((k, i) => {
         const interactive = !!onKpiClick && !!clickableLabels?.includes(k.label);
         const isBRL = k.unit === "BRL";
+        // Pisca os cards de contagem clicáveis e os de valor (BRL).
+        const blinking = (interactive || isBRL) && blink;
         return (
           <Card
             key={i}
@@ -30,9 +34,10 @@ export function BoletosKpiStrip({ kpis, clickableLabels, onKpiClick }: BoletosKp
             tabIndex={interactive ? 0 : undefined}
             onKeyDown={interactive ? (e) => (e.key === "Enter" || e.key === " ") && onKpiClick!(k.label) : undefined}
             className={cn(
-              "min-w-0 rounded-lg border-border bg-card transition-colors",
+              "min-w-0 rounded-lg border-border bg-card transition-all duration-300",
               isBRL ? "xl:col-span-2 p-5" : "xl:col-span-1 p-4",
               interactive && "cursor-pointer hover:bg-muted/50",
+              blinking && "ring-2 ring-sky-400 ring-offset-1",
             )}
           >
             <div className="flex items-center justify-between">
