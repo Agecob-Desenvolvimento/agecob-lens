@@ -18,9 +18,10 @@ const Index = lazy(() => import("./pages/Index.tsx"));
 const DetalhamentoAgentes = lazy(() => import("./pages/DetalhamentoAgentes.tsx"));
 const Carteiras = lazy(() => import("./pages/Carteiras.tsx"));
 const EfetividadeBoletos = lazy(() => import("./pages/EfetividadeBoletos.tsx"));
+const ModoTV = lazy(() => import("./pages/ModoTV.tsx"));
 const NotFound = lazy(() => import("./pages/NotFound.tsx"));
 
-const ALL_ROUTES = ["/", "/detalhamento-agentes", "/carteiras", "/efetividade-boletos"];
+const ALL_ROUTES = ["/", "/detalhamento-agentes", "/carteiras", "/efetividade-boletos", "/modo-tv"];
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -120,6 +121,7 @@ function AppRoutes() {
           <Route path="/detalhamento-agentes" element={<WrapRoute routeName="/detalhamento-agentes"><DetalhamentoAgentes /></WrapRoute>} />
           <Route path="/carteiras" element={<WrapRoute routeName="/carteiras"><Carteiras /></WrapRoute>} />
           <Route path="/efetividade-boletos" element={<WrapRoute routeName="/efetividade-boletos"><EfetividadeBoletos /></WrapRoute>} />
+          <Route path="/modo-tv" element={<WrapRoute routeName="/modo-tv"><ModoTV /></WrapRoute>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </V2Gate>

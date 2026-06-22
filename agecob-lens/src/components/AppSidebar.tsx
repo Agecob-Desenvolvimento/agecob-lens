@@ -1,4 +1,4 @@
-import { LayoutDashboard, Users, TrendingUp, Target } from "lucide-react";
+import { LayoutDashboard, Users, TrendingUp, Target, Tv } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
 import {
@@ -94,6 +94,25 @@ export function AppSidebar() {
                   </div>
                 );
               })}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup className="mt-auto">
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild tooltip="Modo TV — painel para televisão">
+                  <NavLink
+                    to="/modo-tv"
+                    className="text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-colors"
+                    activeClassName="!bg-sidebar-accent !text-sidebar-foreground font-semibold"
+                  >
+                    <Tv className="h-4 w-4" />
+                    <span>Modo TV</span>
+                  </NavLink>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
