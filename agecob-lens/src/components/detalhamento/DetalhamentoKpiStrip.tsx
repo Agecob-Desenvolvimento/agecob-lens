@@ -2,6 +2,7 @@ import { useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { fmtNum, fmtPct, formatBRLCompact } from "@/lib/metrics";
 import { KpiDeltaBadge, type DeltaDirection } from "@/components/executive/KpiDeltaBadge";
+import { usePeriodicBlink } from "@/hooks/usePeriodicBlink";
 import { cn } from "@/lib/utils";
 
 /** KPI ids where a falling value is good (delta colors invert). */
@@ -40,6 +41,9 @@ export interface DetalhamentoKpiStripProps {
   deltas?: Record<string, number>;
   /** Office-average reference per KPI id. Renders a green/amber sub-line. */
   benchmarks?: Record<string, KpiBenchmark>;
+  /** Ids dos cards que abrem a sidebar de detalhe (clicáveis + pulso). */
+  clickableIds?: string[];
+  onCardClick?: (id: string) => void;
 }
 
 function formatValue(kpi: KpiDatum): string {
@@ -74,17 +78,25 @@ interface KpiCardProps {
   delta?: number;
   bench?: KpiBenchmark;
   tier: "primary" | "secondary";
+  onClick?: () => void;
+  blink?: boolean;
 }
 
-function KpiCard({ kpi, delta, bench, tier }: KpiCardProps) {
+function KpiCard({ kpi, delta, bench, tier, onClick, blink }: KpiCardProps) {
   const primary = tier === "primary";
   return (
     <div
       className={cn(
-        "rounded-lg border border-border transition-colors",
+        "rounded-lg border border-border transition-all duration-300",
         primary ? "bg-card" : "bg-muted/30 hover:bg-card",
+        onClick && "cursor-pointer hover:bg-muted/50",
+        blink && "ring-2 ring-sky-400 ring-offset-1",
       )}
       style={{ padding: primary ? "14px 16px" : "10px 12px" }}
+      onClick={onClick}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={onClick ? (e) => (e.key === "Enter" || e.key === " ") && onClick() : undefined}
     >
       <div className={LABEL_CLS}>{kpi.label}</div>
       <div
@@ -112,20 +124,28 @@ function KpiCard({ kpi, delta, bench, tier }: KpiCardProps) {
   );
 }
 
-export function DetalhamentoKpiStrip({ primary, secondary, deltas, benchmarks }: DetalhamentoKpiStripProps) {
+export function DetalhamentoKpiStrip({ primary, secondary, deltas, benchmarks, clickableIds, onCardClick }: DetalhamentoKpiStripProps) {
   const [showSecondary, setShowSecondary] = useState(false);
+  const blink = usePeriodicBlink();
+  const clickFor = (id: string) =>
+    onCardClick && clickableIds?.includes(id) ? () => onCardClick(id) : undefined;
   return (
     <div className="flex flex-col gap-2">
       <div className="grid grid-cols-4 gap-2">
-        {primary.map((kpi) => (
-          <KpiCard
-            key={kpi.id}
-            kpi={kpi}
-            delta={deltas?.[kpi.id]}
-            bench={benchmarks?.[kpi.id]}
-            tier="primary"
-          />
-        ))}
+        {primary.map((kpi) => {
+          const onClick = clickFor(kpi.id);
+          return (
+            <KpiCard
+              key={kpi.id}
+              kpi={kpi}
+              delta={deltas?.[kpi.id]}
+              bench={benchmarks?.[kpi.id]}
+              tier="primary"
+              onClick={onClick}
+              blink={!!onClick && blink}
+            />
+          );
+        })}
       </div>
 
       <button
@@ -143,15 +163,20 @@ export function DetalhamentoKpiStrip({ primary, secondary, deltas, benchmarks }:
 
       {showSecondary && (
         <div className="grid grid-cols-6 gap-2">
-          {secondary.map((kpi) => (
-            <KpiCard
-              key={kpi.id}
-              kpi={kpi}
-              delta={deltas?.[kpi.id]}
-              bench={benchmarks?.[kpi.id]}
-              tier="secondary"
-            />
-          ))}
+          {secondary.map((kpi) => {
+            const onClick = clickFor(kpi.id);
+            return (
+              <KpiCard
+                key={kpi.id}
+                kpi={kpi}
+                delta={deltas?.[kpi.id]}
+                bench={benchmarks?.[kpi.id]}
+                tier="secondary"
+                onClick={onClick}
+                blink={!!onClick && blink}
+              />
+            );
+          })}
         </div>
       )}
     </div>

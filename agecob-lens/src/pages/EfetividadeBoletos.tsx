@@ -27,6 +27,7 @@ function tipoToApi(t: (typeof TIPOS)[number]): TipoParcela {
 
 const KIND_BY_LABEL: Record<string, BoletosDetalheKind> = {
   "Boletos a Vencer": "a_vencer",
+  "Valor Boletos Vencendo": "a_vencer",
   "Vencidos não Pagos": "vencidos_nao_pagos",
   "Boletos Quebrados": "quebrados",
   "Pagos no Prazo": "pagos_prazo",

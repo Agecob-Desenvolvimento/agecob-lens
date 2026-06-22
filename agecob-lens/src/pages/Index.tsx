@@ -1,9 +1,10 @@
-import { lazy, Suspense, useEffect, useMemo } from "react";
+import { lazy, Suspense, useMemo, useState } from "react";
 import { AppSidebar } from "@/components/AppSidebar";
 import { useGlobalFilters } from "@/contexts/GlobalFiltersContext";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { useRefreshGuard } from "@/hooks/useRefreshGuard";
 import { useHomeViewModel } from "@/hooks/useHomeViewModel";
+import type { HomeKpiDetalheKind } from "@/hooks/useHomeKpiDetalhe";
 import { trackEvent } from "@/services/analytics";
 import ExecutiveHeader from "@/components/executive/ExecutiveHeader";
 import HomeKpiStrip from "@/components/executive/HomeKpiStrip";
@@ -21,26 +22,19 @@ const HandoffPortfolioRentabilidade = lazy(() => import("@/components/executive/
 
 const CHART_FALLBACK = <div className="h-64 animate-pulse bg-muted rounded-lg" />;
 
-const PortfolioSection = lazy(() => import("@/components/analise/PortfolioSection").then((m) => ({ default: m.PortfolioSection })));
+const HomeKpiDetalheSheet = lazy(() => import("@/components/executive/HomeKpiDetalheSheet").then((m) => ({ default: m.HomeKpiDetalheSheet })));
+
+const KPI_KIND_BY_LABEL: Record<string, HomeKpiDetalheKind> = {
+  "Valor de Acordos": "acordos",
+  "1ª Parcela": "primeira_parcela",
+  Rejeitados: "rejeitados",
+  "Exceções": "excecoes",
+};
+
 export default function Index() {
   const { selectedDatabase, dateFrom, dateTo } = useGlobalFilters();
   const vm = useHomeViewModel();
-
-  useEffect(() => {
-    if (vm.kpiSecondary.length === 0) return;
-    const totalsExcecoes = vm.kpiSecondary.find((k) => k.label === "% Exc. s/ Valor Acordos");
-    if (!totalsExcecoes) return;
-    const ratio = totalsExcecoes.value;
-    let severity: "critical" | "warning" | null = null;
-    if (ratio > 0 && ratio < 5) severity = "critical";
-    else if (ratio >= 5 && ratio < 10) severity = "warning";
-    if (!severity) return;
-    trackEvent("first_installment_ratio_alert", {
-      severity,
-      ratio_pct: Number(ratio.toFixed(2)),
-      database: selectedDatabase,
-    });
-  }, [vm.kpiSecondary, selectedDatabase]);
+  const [kpiSheetKind, setKpiSheetKind] = useState<HomeKpiDetalheKind | null>(null);
 
   const { guardedRefresh, refreshing, remainingMs } = useRefreshGuard(async () => {
     const startedAt = performance.now();
@@ -49,21 +43,6 @@ export default function Index() {
     trackEvent("refresh_success", { page: "/", duration_ms: Math.round(performance.now() - startedAt) });
     window.dispatchEvent(new CustomEvent("dashboard:refresh", { detail: { route: "/" } }));
   });
-
-  // Remap data shapes for PortfolioSection (all BRL-valued)
-  const psPortfolioValor = useMemo(
-    () => vm.portfolio1aParcela.map((d) => ({ nome: d.label, valor: d.value })),
-    [vm.portfolio1aParcela],
-  );
-  const psExcecoes = useMemo(
-    () => vm.excecoesPorPortfolioValor.map((d) => ({ nome: d.label, valor: d.value })),
-    [vm.excecoesPorPortfolioValor],
-  );
-  const psRejeitados = useMemo(
-    () => vm.rejeitadosPorPortfolioValor.map((d) => ({ nome: d.label, valor: d.value })),
-    [vm.rejeitadosPorPortfolioValor],
-  );
-  const psLoading = vm.loadingAcdPort || vm.loadingExcPort || vm.loadingRejPort;
 
   const reportSections = useMemo<ReportSection[]>(() => {
     const unitLabel = (u: string) => (u === "BRL" ? "R$" : u === "percent" ? "%" : "qtd");
@@ -183,7 +162,12 @@ export default function Index() {
               <RitmoDiaCard db={selectedDatabase} />
             </Suspense>
 
-            <HomeKpiStrip primary={vm.kpiPrimary} secondary={vm.kpiSecondary} />
+            <HomeKpiStrip
+              primary={vm.kpiPrimary}
+              secondary={vm.kpiSecondary}
+              clickableLabels={Object.keys(KPI_KIND_BY_LABEL)}
+              onKpiClick={(label) => setKpiSheetKind(KPI_KIND_BY_LABEL[label])}
+            />
 
 
             <section className="space-y-4">
@@ -212,22 +196,13 @@ export default function Index() {
               </Suspense>
             </section>
 
-            <section className="space-y-4">
-              <SectionHeader title="Portfólio" description="Acordos, exceções e rejeitados agrupados por portfólio (CAMPO010)." />
-              <Suspense fallback={CHART_FALLBACK}>
-                <PortfolioSection
-                  portfolioValor={psPortfolioValor}
-                  excecoesPorPortfolio={psExcecoes}
-                  rejeitadosPorPortfolio={psRejeitados}
-                  loading={psLoading}
-                />
-              </Suspense>
-            </section>
-
             </div>
           </div>
         </div>
       </div>
+      <Suspense fallback={null}>
+        <HomeKpiDetalheSheet kind={kpiSheetKind} onClose={() => setKpiSheetKind(null)} />
+      </Suspense>
     </SidebarProvider>
   );
 }

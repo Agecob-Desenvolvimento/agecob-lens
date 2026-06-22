@@ -1,35 +1,33 @@
 import { useState } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { AcordoRow, TONE } from "@/components/analise/AcordoRiscoPanel";
-import { useBoletosDetalhe } from "@/hooks/useBoletosDetalhe";
+import { useHomeKpiDetalhe, type HomeKpiDetalheKind } from "@/hooks/useHomeKpiDetalhe";
 import { mapAcordosQuebrados } from "@/selectors/quebradosSelectors";
 import { formatBRLCompact } from "@/lib/metrics";
-import type { BoletosDetalheKind } from "@/services/api";
-import type { TipoParcela } from "@/hooks/useEfetividadeViewModel";
 
-const KIND_CFG: Record<BoletosDetalheKind, { title: string; tone: keyof typeof TONE; empty: string }> = {
-  a_vencer: { title: "Boletos a Vencer", tone: "rose", empty: "Nenhum boleto a vencer no período." },
-  vencidos_nao_pagos: { title: "Vencidos não Pagos", tone: "orange", empty: "Nenhum boleto vencido não pago no período." },
-  quebrados: { title: "Boletos Quebrados", tone: "rose", empty: "Nenhum boleto quebrado no período." },
-  pagos_prazo: { title: "Pagos no Prazo", tone: "emerald", empty: "Nenhum boleto pago no prazo no período." },
+type SumField = "valor_total" | "valor_primeira_parcela";
+
+const KIND_CFG: Record<HomeKpiDetalheKind, { title: string; tone: keyof typeof TONE; empty: string; sum: SumField }> = {
+  excecoes: { title: "Exceções", tone: "orange", empty: "Nenhuma exceção no período.", sum: "valor_total" },
+  rejeitados: { title: "Rejeitados", tone: "rose", empty: "Nenhum rejeitado no período.", sum: "valor_total" },
+  acordos: { title: "Valor de Acordos", tone: "emerald", empty: "Nenhum acordo gerado no período.", sum: "valor_total" },
+  primeira_parcela: { title: "1ª Parcela", tone: "emerald", empty: "Nenhum acordo gerado no período.", sum: "valor_primeira_parcela" },
 };
 
-/** Right sidebar listing boletos de um KPI (a vencer / vencidos não pagos / quebrados).
- *  Each row expands into the same detail blocks as AcordoRiscoPanel. */
-export function BoletosDetalheSheet({
+/** Right sidebar listing all rejeitados / exceções acordos of the period (todas
+ *  as carteiras). Each row expands into the same detail blocks as AcordoRiscoPanel. */
+export function HomeKpiDetalheSheet({
   kind,
   onClose,
-  tipo,
 }: {
-  kind: BoletosDetalheKind | null;
+  kind: HomeKpiDetalheKind | null;
   onClose: () => void;
-  tipo: TipoParcela;
 }) {
-  const { rows, loading, error } = useBoletosDetalhe(kind, tipo);
+  const { rows, loading, error } = useHomeKpiDetalhe(kind);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const acordos = mapAcordosQuebrados(rows, "—");
-  const valorTotal = acordos.reduce((acc, a) => acc + a.valorAcordo, 0);
   const cfg = kind ? KIND_CFG[kind] : null;
+  const valorTotal = rows.reduce((acc, r) => acc + (Number(r[cfg?.sum ?? "valor_total"]) || 0), 0);
   const t = TONE[cfg?.tone ?? "rose"];
 
   return (
@@ -40,7 +38,7 @@ export function BoletosDetalheSheet({
             {cfg?.title}
             {!loading && !error && acordos.length > 0 && (
               <span className="font-normal text-muted-foreground">
-                {" "}· {acordos.length} boleto(s) · {formatBRLCompact(valorTotal)}
+                {" "}· {acordos.length} acordo(s) · {formatBRLCompact(valorTotal)}
               </span>
             )}
           </SheetTitle>
@@ -75,4 +73,4 @@ export function BoletosDetalheSheet({
   );
 }
 
-export default BoletosDetalheSheet;
+export default HomeKpiDetalheSheet;

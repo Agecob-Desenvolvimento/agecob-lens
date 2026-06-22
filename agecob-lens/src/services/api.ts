@@ -633,6 +633,42 @@ export async function fetchRejeitadosDetalhe(
   );
 }
 
+export async function fetchExcecoesDetalheGlobal(
+  db: DatabaseOption,
+  dateFrom?: string,
+  dateTo?: string,
+): Promise<ApiEnvelope<QuebradoDetalheRow>> {
+  const query = new URLSearchParams();
+  if (dateFrom) query.set("dateFrom", dateFrom);
+  if (dateTo) query.set("dateTo", dateTo);
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<ApiEnvelope<QuebradoDetalheRow>>(`/dashboard/excecoes-detalhe-todos/${db}${suffix}`);
+}
+
+export async function fetchRejeitadosDetalheGlobal(
+  db: DatabaseOption,
+  dateFrom?: string,
+  dateTo?: string,
+): Promise<ApiEnvelope<QuebradoDetalheRow>> {
+  const query = new URLSearchParams();
+  if (dateFrom) query.set("dateFrom", dateFrom);
+  if (dateTo) query.set("dateTo", dateTo);
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<ApiEnvelope<QuebradoDetalheRow>>(`/dashboard/rejeitados-detalhe-todos/${db}${suffix}`);
+}
+
+export async function fetchAcordosDetalheGlobal(
+  db: DatabaseOption,
+  dateFrom?: string,
+  dateTo?: string,
+): Promise<ApiEnvelope<QuebradoDetalheRow>> {
+  const query = new URLSearchParams();
+  if (dateFrom) query.set("dateFrom", dateFrom);
+  if (dateTo) query.set("dateTo", dateTo);
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<ApiEnvelope<QuebradoDetalheRow>>(`/dashboard/acordos-detalhe-todos/${db}${suffix}`);
+}
+
 export async function fetchAcordosDetalhe(
   db: DatabaseOption,
   portfolio: string,

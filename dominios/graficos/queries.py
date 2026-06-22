@@ -462,6 +462,80 @@ def _build_detalhe_por_agente(db: str, status_sql: str, date_from: str = None, d
     return wrap_todos_or_single(db, _base, agg, order_by=order, date_from=date_from, date_to_exclusive=date_to_exclusive)
 
 
+def _build_detalhe_global(db: str, status_sql: str, date_from: str = None, date_to_exclusive: str = None) -> str:
+    """
+    Lista detalhe (1 linha por acordo) de TODAS as carteiras, filtrado por status.
+    Sem parâmetro de portfólio. Inclui `portfolio_name` (OUTER APPLY, não derruba
+    acordos sem carteira mapeada) pra UI distinguir a carteira de cada linha.
+    """
+    def _base(database: str) -> str:
+        return f"""
+            SELECT
+                R.NR_RECEBIMENTO,
+                R.ID_CARTEIRA,
+                R.VALOR AS valor_primeira_parcela,
+                COALESCE((
+                    SELECT SUM(R2.VALOR)
+                    FROM {database}.dbo.REC_MASTER R2 (NOLOCK)
+                    WHERE R2.NR_RECEBIMENTO = R.NR_RECEBIMENTO
+                      AND R2.ID_CARTEIRA = R.ID_CARTEIRA
+                ), R.VALOR) AS valor_total,
+                U.NOME AS agente,
+                U.MATRICULA AS matricula,
+                CASE
+                    WHEN LEN(D.CPF_CNPJ) >= 5
+                    THEN LEFT(D.CPF_CNPJ, 3) + '.***.***-' + RIGHT(D.CPF_CNPJ, 2)
+                    ELSE D.CPF_CNPJ
+                END AS cpf_mask,
+                D.NOME_RAZAO AS nome_devedor,
+                DA.{settings.PORTFOLIO_COLUMN} AS portfolio_name,
+                CONVERT(varchar(10), R.DT_EMISSAO, 120) AS data_acordo,
+                CONVERT(varchar(10), R.DT_VENCIMENTO, 120) AS data_vencimento,
+                (
+                    SELECT COUNT(1)
+                    FROM {database}.dbo.REC_MASTER R3 (NOLOCK)
+                    WHERE R3.NR_RECEBIMENTO = R.NR_RECEBIMENTO
+                      AND R3.ID_CARTEIRA = R.ID_CARTEIRA
+                ) AS total_parcelas
+            FROM {database}.dbo.REC_MASTER R (NOLOCK)
+            JOIN {database}.dbo.USU_MASTER U (NOLOCK) ON R.ID_USUARIO = U.ID_USUARIO
+            LEFT JOIN {database}.dbo.DEV_MASTER D (NOLOCK) ON R.ID_DEV = D.ID_DEV
+            OUTER APPLY (
+                SELECT TOP 1 DA2.{settings.PORTFOLIO_COLUMN}
+                FROM {database}.dbo.REC_DIVIDAS RD (NOLOCK)
+                JOIN {database}.dbo.DIV_AUX DA2 (NOLOCK) ON RD.ID_DIVIDA = DA2.ID_DIVIDA
+                WHERE RD.NR_RECEBIMENTO = R.NR_RECEBIMENTO
+                  AND RD.ID_CARTEIRA = R.ID_CARTEIRA
+                  AND DA2.{settings.PORTFOLIO_COLUMN} IS NOT NULL
+            ) DA
+            WHERE R.DT_EMISSAO >= @Hoje AND R.DT_EMISSAO < @Amanha
+              AND R.PARCELA = {settings.PRIMEIRA_PARCELA}
+              AND R.ID_REC_STATUS IN {status_sql}
+              {settings.FILTRO_AGENTES_EXCLUIDOS_SQL}
+        """
+
+    agg = """
+        SELECT NR_RECEBIMENTO, ID_CARTEIRA, valor_primeira_parcela, valor_total, agente, matricula, cpf_mask, nome_devedor, portfolio_name, data_acordo, data_vencimento, total_parcelas
+    """
+    order = "ORDER BY valor_primeira_parcela DESC"
+    return wrap_todos_or_single(db, _base, agg, order_by=order, date_from=date_from, date_to_exclusive=date_to_exclusive)
+
+
+def build_excecoes_detalhe_global_query(db: str, date_from: str = None, date_to_exclusive: str = None) -> str:
+    """Detalhe das exceções (ID_REC_STATUS = 5) de todas as carteiras."""
+    return _build_detalhe_global(db, settings.STATUS_EXCECAO_SQL, date_from, date_to_exclusive)
+
+
+def build_rejeitados_detalhe_global_query(db: str, date_from: str = None, date_to_exclusive: str = None) -> str:
+    """Detalhe dos rejeitados (ID_REC_STATUS = 7) de todas as carteiras."""
+    return _build_detalhe_global(db, settings.STATUS_REJEITADO_SQL, date_from, date_to_exclusive)
+
+
+def build_acordos_detalhe_global_query(db: str, date_from: str = None, date_to_exclusive: str = None) -> str:
+    """Detalhe dos acordos gerados (STATUS_GERADOS = 1,2,3,10,12) de todas as carteiras."""
+    return _build_detalhe_global(db, settings.STATUS_GERADOS_SQL, date_from, date_to_exclusive)
+
+
 def build_excecoes_detalhe_query(db: str, date_from: str = None, date_to_exclusive: str = None) -> str:
     """Detalhe das exceções (ID_REC_STATUS = 5) de um portfólio (param `?`)."""
     return _build_detalhe_por_portfolio(db, settings.STATUS_EXCECAO_SQL, date_from, date_to_exclusive)

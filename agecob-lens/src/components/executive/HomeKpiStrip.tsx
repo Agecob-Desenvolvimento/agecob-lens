@@ -1,5 +1,6 @@
 import { ArrowDownRight, ArrowRight, ArrowUpRight } from "lucide-react";
 import { Card } from "@/components/ui/card";
+import { usePeriodicBlink } from "@/hooks/usePeriodicBlink";
 import { cn } from "@/lib/utils";
 import {
   fmtNum,
@@ -52,6 +53,9 @@ export interface HomeKpiSecondary {
 export interface HomeKpiStripProps {
   primary: HomeKpiPrimary[];
   secondary: HomeKpiSecondary[];
+  /** Labels dos cards (primary ou secondary) que devem abrir a sidebar de detalhe. */
+  clickableLabels?: string[];
+  onKpiClick?: (label: string) => void;
 }
 
 function deriveDirection(value: number): Direction {
@@ -91,36 +95,43 @@ const ICON = {
   flat: ArrowRight,
 } as const;
 
-export function HomeKpiStrip({ primary, secondary }: HomeKpiStripProps) {
+export function HomeKpiStrip({ primary, secondary, clickableLabels, onKpiClick }: HomeKpiStripProps) {
+  const blink = usePeriodicBlink();
+  const clickFor = (label: string) =>
+    onKpiClick && clickableLabels?.includes(label) ? () => onKpiClick(label) : undefined;
   return (
     <div className="space-y-2">
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-        {primary.map((kpi) => (
-          <PrimaryCard key={kpi.label} kpi={kpi} />
-        ))}
-        {secondary.map((kpi) => (
-          <SecondaryCard key={kpi.label} kpi={kpi} />
-        ))}
+        {primary.map((kpi) => {
+          const onClick = clickFor(kpi.label);
+          return <PrimaryCard key={kpi.label} kpi={kpi} onClick={onClick} blink={!!onClick && blink} />;
+        })}
+        {secondary.map((kpi) => {
+          const onClick = clickFor(kpi.label);
+          return <SecondaryCard key={kpi.label} kpi={kpi} onClick={onClick} blink={!!onClick && blink} />;
+        })}
       </div>
-      <p className="text-[10px] leading-relaxed text-muted-foreground/80">
-        Em alguns KPIs aparece a linha{" "}
-        <span className="font-semibold text-foreground">Média do escritório</span>:
-        referência interna calculada sobre o histórico de 9 meses por banco.
-        Compare o número do KPI —{" "}
-        <span className="text-success-fg font-medium">verde</span> = acima da referência,{" "}
-        <span className="text-amber-600 font-medium">âmbar</span> = abaixo.
-      </p>
     </div>
   );
 }
 
-function PrimaryCard({ kpi }: { kpi: HomeKpiPrimary }) {
+function PrimaryCard({ kpi, onClick, blink }: { kpi: HomeKpiPrimary; onClick?: () => void; blink?: boolean }) {
   const unitLabel = kpi.unit === "BRL" ? "BRL" : "";
   const baseline = kpi.baseline;
   const direction = baseline ? deriveDirection(baseline.value) : null;
 
   return (
-    <Card className="xl:col-span-2 min-w-0 rounded-lg border-border bg-card p-5">
+    <Card
+      className={cn(
+        "xl:col-span-2 min-w-0 rounded-lg border-border bg-card p-5 transition-all duration-300",
+        onClick && "cursor-pointer hover:bg-muted/50",
+        blink && "ring-2 ring-sky-400 ring-offset-1",
+      )}
+      onClick={onClick}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={onClick ? (e) => (e.key === "Enter" || e.key === " ") && onClick() : undefined}
+    >
       <div className="flex items-center justify-between">
         <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
           {kpi.label}
@@ -164,7 +175,7 @@ function PrimaryCard({ kpi }: { kpi: HomeKpiPrimary }) {
   );
 }
 
-function SecondaryCard({ kpi }: { kpi: HomeKpiSecondary }) {
+function SecondaryCard({ kpi, onClick, blink }: { kpi: HomeKpiSecondary; onClick?: () => void; blink?: boolean }) {
   const baseline = kpi.baseline;
   const direction = baseline ? deriveDirection(baseline.value) : null;
   const tone = baseline && direction ? deltaTone(direction, baseline.betterWhen) : "muted";
@@ -176,7 +187,18 @@ function SecondaryCard({ kpi }: { kpi: HomeKpiSecondary }) {
   const baseReduzida = base != null && !baseIsValue && base.den > 0 && base.den < 30;
 
   return (
-    <Card className="xl:col-span-1 min-w-0 rounded-lg border-border bg-card p-4" title={baseTooltip}>
+    <Card
+      className={cn(
+        "xl:col-span-1 min-w-0 rounded-lg border-border bg-card p-4 transition-all duration-300",
+        onClick && "cursor-pointer hover:bg-muted/50",
+        blink && "ring-2 ring-sky-400 ring-offset-1",
+      )}
+      title={baseTooltip}
+      onClick={onClick}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={onClick ? (e) => (e.key === "Enter" || e.key === " ") && onClick() : undefined}
+    >
       <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
         {kpi.label}
       </div>

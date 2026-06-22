@@ -71,15 +71,15 @@ const MESES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "O
 function efResumoToKpis(kpis: EfResumoKpis | undefined, bestDay: EfResumoDayRow | null, worstDay: EfResumoDayRow | null): BoletoKpi[] {
   if (!kpis) return [];
   return [
-    { label: "Boletos Gerados", value: kpis.generated, color: "#0f172a" },
-    { label: "Boletos a Vencer", value: kpis.to_mature, color: "#0f172a", sub: kpis.generated > 0 ? `${((kpis.to_mature / kpis.generated) * 100).toFixed(1).replace(".", ",")}% em aberto` : undefined },
-    { label: "Vencidos não Pagos", value: kpis.overdue_unpaid, color: "#dc2626", sub: kpis.generated > 0 ? `${((kpis.overdue_unpaid / kpis.generated) * 100).toFixed(1).replace(".", ",")}% do período` : undefined },
-    { label: "Valor Boletos Vencendo", value: `R$ ${kpis.amount_maturing.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`, color: "#0f172a" },
-    { label: "Pagos no Prazo", value: kpis.paid_on_time, color: "#0f172a" },
-    { label: "Boletos Quebrados", value: kpis.broken, color: "#dc2626", sub: kpis.generated > 0 ? `${((kpis.broken / kpis.generated) * 100).toFixed(1).replace(".", ",")}%` : undefined },
-    { label: "% Conversão", value: `${kpis.conversion_pct.toFixed(2).replace(".", ",")}%`, color: "#f59e0b" },
-    { label: "Efetividade", value: `${kpis.effectiveness_pct.toFixed(2).replace(".", ",")}%`, color: "#f59e0b" },
-    { label: "Valor Recebido", value: `R$ ${kpis.amount_received.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`, color: "#16a34a" },
+    { label: "Boletos a Vencer", value: kpis.to_mature, color: "#0f172a", unit: "count", sub: kpis.generated > 0 ? `${((kpis.to_mature / kpis.generated) * 100).toFixed(1).replace(".", ",")}% em aberto` : undefined },
+    { label: "Vencidos não Pagos", value: kpis.overdue_unpaid, color: "#dc2626", unit: "count", sub: kpis.generated > 0 ? `${((kpis.overdue_unpaid / kpis.generated) * 100).toFixed(1).replace(".", ",")}% do período` : undefined },
+    { label: "Valor Boletos Vencendo", value: `R$ ${kpis.amount_maturing.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`, color: "#0f172a", unit: "BRL" },
+    { label: "Pagos no Prazo", value: kpis.paid_on_time, color: "#0f172a", unit: "count" },
+    { label: "Boletos Quebrados", value: kpis.broken, color: "#dc2626", unit: "count", sub: kpis.generated > 0 ? `${((kpis.broken / kpis.generated) * 100).toFixed(1).replace(".", ",")}%` : undefined },
+    { label: "% Conversão", value: `${kpis.conversion_pct.toFixed(2).replace(".", ",")}%`, color: "#f59e0b", unit: "percent" },
+    { label: "Efetividade", value: `${kpis.effectiveness_pct.toFixed(2).replace(".", ",")}%`, color: "#f59e0b", unit: "percent" },
+    { label: "Valor Recebido", value: `R$ ${kpis.amount_received.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`, color: "#16a34a", unit: "BRL" },
+    { label: "Boletos Gerados", value: kpis.generated, color: "#0f172a", unit: "count" },
     { label: "Melhor Dia", value: bestDay ? `${bestDay.dia.slice(5)} – ${bestDay.effectiveness_pct}%` : "—", color: "#16a34a" },
   ];
 }
