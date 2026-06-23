@@ -219,7 +219,7 @@ O `atualizar.bat` já força `--workers 4` via `nssm set` antes de reiniciar.
 | Rejeitados (`ID_REC_STATUS`) | `IN (7)` (REJEITADO — supervisor/banco negou) |
 | Boletos quebrados (`ID_REC_STATUS`) | `IN (2)` |
 | Boleto pago no prazo | `VR_PAGO > 0 AND DT_PAGAMENTO <= DATEADD(DAY, 5, DT_VENCIMENTO)` |
-| Conversão | `Σ boletos_pagos_no_prazo / Σ boletos_vencidos × 100` (vencido = `DT_VENCIMENTO < hoje`, acordo gerado — inclui quebras) |
+| Conversão | `Σ boletos_pagos_no_prazo / Σ qtd_contatos (CPC) × 100` (pago = `VR_PAGO > 0 AND DT_PAGAMENTO <= DATEADD(DAY, 5, DT_VENCIMENTO)`; denominador é CPC, não emitidos) |
 | Pré-filtro CTE | `IN (1, 2, 3, 5, 10, 12)` — gerados + exceção |
 | Portfólio | `DIV_AUX.CAMPO010` |
 | Filtro de data | `DT_EMISSAO >= @Hoje AND DT_EMISSAO < @Amanha` |

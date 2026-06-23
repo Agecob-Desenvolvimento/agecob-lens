@@ -94,13 +94,7 @@ ID_REC_STATUS IN (1, 3, 12)
 ID_REC_STATUS IN (1, 2, 3, 10, 12)
 ```
 
-Aprovados (1,3,12) + QUEBRA (2) + QUEBRA AUTOMÁTICA (10). **Esta é a base dos KPIs
-de valor gerado**: `valor_acordos`, `valor_primeira_parcela`, `qtd_acordos`, ticket,
-e os boletos de conversão/efetividade. Um acordo gerado hoje conta no valor gerado
-mesmo que depois quebre — quebrar é desfecho posterior. Conversão = boletos pagos /
-emitidos agora inclui boletos de quebras no denominador (nunca no de pagos), o que
-corrige a inflação anterior. Pré-filtro das CTEs (`STATUS_UNIVERSO_ACORDOS`) =
-gerados + exceção = `(1, 2, 3, 5, 10, 12)`.
+Aprovados (1,3,12) + QUEBRA (2) + QUEBRA AUTOMÁTICA (10). **Base dos KPIs de valor gerado**: `valor_acordos`, `valor_primeira_parcela`, `qtd_acordos`, ticket, boletos de conversão/efetividade. Acordo gerado hoje conta no valor gerado mesmo que depois quebre — quebrar é desfecho posterior. Conversão = boletos pagos / CPC (Σ qtd_contatos), nunca / emitidos. Pré-filtro das CTEs (`STATUS_UNIVERSO_ACORDOS`) = gerados + exceção = `(1, 2, 3, 5, 10, 12)`.
 
 ## Exception Status
 
@@ -108,7 +102,7 @@ gerados + exceção = `(1, 2, 3, 5, 10, 12)`.
 ID_REC_STATUS = 5
 ```
 
-Note: the REC_MASTER enum names status `5` as PENDENTE. The business calls it "Exceção" (Exception). Same value — do not confuse with a separate "exception" status.
+Note: REC_MASTER enum names status `5` as PENDENTE. Business calls it "Exceção" (Exception). Same value — don't confuse with separate "exception" status.
 
 ## Rejected Status
 
@@ -132,9 +126,7 @@ ID_REC_STATUS IN (1, 3, 5, 12)
 
 ## Funil de contato — Alô vs Contato (RPC) — ADR-006
 
-O `CTO_COMPLEMENTO.CONTATO` (bit) é **largo demais** para RPC: marca disparo de
-WhatsApp, envio de boleto e ligação interrompida como "contato". Catálogo
-auditado no banco (2026-06). Por isso o funil tem **duas camadas distintas**:
+`CTO_COMPLEMENTO.CONTATO` (bit) é **largo demais** para RPC: marca disparo de WhatsApp, envio de boleto, ligação interrompida como "contato". Catálogo auditado no banco (2026-06). Por isso funil tem **duas camadas distintas**:
 
 Vocabulário da UI (importante — não inverter):
 
@@ -152,8 +144,8 @@ Funil canônico: **Acionamento → Contato (atende) → CPC (pessoa certa) → A
 
 `CPC` = Σ `qtd_contatos` (count = RPC, NOT %). "Taxa de contato" = Σ `qtd_alo` /
 Σ `qtd_acionamentos`. "Taxa de CPC" = Σ `qtd_contatos` / Σ `qtd_alo`. Conversão =
-Σ `qtd_boletos_pagos` / Σ `qtd_boletos_emitidos` (boleto pago no prazo /
-boleto **vencido**, `DT_VENCIMENTO < hoje`).
+Σ `qtd_boletos_pagos` / Σ `qtd_contatos` (boleto pago no prazo sobre **CPC**, NÃO
+boletos emitidos).
 
 ## First Installment
 
@@ -256,7 +248,7 @@ Expected structure (exactly — there is NO `success` field):
 }
 ```
 
-`meta.pagination` is added only when pagination applies. Do not invent fields (no `success`, no top-level status). Match `build_response_envelope` in `core/utils/response_envelope.py`.
+`meta.pagination` added only when pagination applies. Don't invent fields (no `success`, no top-level status). Match `build_response_envelope` in `core/utils/response_envelope.py`.
 
 ---
 
@@ -350,7 +342,7 @@ Columns returned per agreement row:
 | `data_vencimento` | REC_MASTER.DT_VENCIMENTO | Due date |
 | `total_parcelas` | COUNT of REC_MASTER rows for same NR/ID_CARTEIRA | Total installment count |
 
-All implemented via `_build_detalhe_por_portfolio()` in `dominios/graficos/queries.py`.
+Implemented via `_build_detalhe_por_portfolio()` in `dominios/graficos/queries.py`.
 
 ## Agent-level detail
 
@@ -358,7 +350,7 @@ Endpoint pattern: `GET /dashboard/{type}-detalhe-agente/{db}/{agente}`
 
 Same columns as portfolio-level, filtered by `U.NOME = ?` instead of portfolio. Implemented via `_build_detalhe_por_agente()`.
 
-Frontend lazy-loads via `AgenteDetalheSection` component (in DetalhamentoAgentes page, inside Suspense). Queries have `staleTime: 120_000` (2 min cache).
+Frontend lazy-loads via `AgenteDetalheSection` (in DetalhamentoAgentes page, inside Suspense). Queries have `staleTime: 120_000` (2 min cache).
 
 ---
 
@@ -366,7 +358,7 @@ Frontend lazy-loads via `AgenteDetalheSection` component (in DetalhamentoAgentes
 
 | Metric | Old Formula | New Formula |
 |---|---|---|
-| **Conversão %** | `qtd_acordos / qtd_contatos` | `qtd_boletos_pagos / qtd_boletos_emitidos × 100` (pago em ≤5d do venc. / boleto vencido `DT_VENCIMENTO < hoje`) |
+| **Conversão %** | `qtd_acordos / qtd_contatos` → `qtd_boletos_pagos / qtd_boletos_emitidos × 100` | `qtd_boletos_pagos / qtd_contatos × 100` (pago em ≤5d do venc. sobre **CPC**, 2026-06-23) |
 | **Efetividade de Caixa** | — (new) | `valor_1ª_parcela / valor_acordos × 100` |
 | **% Exc. s/ 1ª Parcela** | — (new) | `valor_exceções / valor_1ª_parcela × 100` |
 | **% Exc. s/ Valor Acordos** | `valor_exceções / valor_acordos × 100` (unchanged, renamed) | same |

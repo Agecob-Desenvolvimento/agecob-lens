@@ -241,7 +241,7 @@ def test_agent_entries_agrega_origens_e_recalcula_taxas():
     assert adri["qtd_acordos"] == 12
     assert adri["valor_acordos"] == 48300.0
     assert adri["ticket_medio"] == 4025.0
-    assert adri["conversao_pct"] == 37.5       # 3/8
+    assert adri["conversao_pct"] == 3.09       # 3 pagos / 97 CPC
     assert adri["data_referencia"] == "2026-06-10"
     # ordenado por valor_acordos desc
     assert [a["login"] for a in SAMPLE_AGENTS] == ["ADRI", "RVON"]
@@ -267,7 +267,7 @@ def test_tool_list_agents_performance():
         "list_agents_performance", {"order_by": "conversao_pct", "limit": 1}, SAMPLE_ENTRIES, _AGENTS
     )
     assert len(by_conv) == 1
-    assert by_conv[0]["login"] == "RVON"  # 100% > 37.5%
+    assert by_conv[0]["login"] == "RVON"  # 10% (2/20) > 3.09% (3/97)
 
     # order_by fora do enum (ex.: campo string) é rejeitado, não quebra o sort
     invalid = dispatch_tool("list_agents_performance", {"order_by": "login"}, SAMPLE_ENTRIES, _AGENTS)

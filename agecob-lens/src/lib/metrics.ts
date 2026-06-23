@@ -94,10 +94,10 @@ export function calcTaxaContato(t: Pick<MetricTotals, "qtd_alo" | "qtd_acionamen
   return ((t.qtd_alo ?? 0) * 100) / t.qtd_acionamentos;
 }
 
-/** Conversão = boletos pagos no prazo (5d do venc.) / boletos emitidos */
-export function calcConversao(t: Pick<MetricTotals, "qtd_boletos_pagos" | "qtd_boletos_emitidos">): number {
-  if (t.qtd_boletos_emitidos <= 0) return 0;
-  return (t.qtd_boletos_pagos * 100) / t.qtd_boletos_emitidos;
+/** Conversão = boletos pagos no prazo (5d do venc.) / CPC (qtd_contatos) */
+export function calcConversao(t: Pick<MetricTotals, "qtd_boletos_pagos" | "qtd_contatos">): number {
+  if (t.qtd_contatos <= 0) return 0;
+  return (t.qtd_boletos_pagos * 100) / t.qtd_contatos;
 }
 
 /** Ticket médio = valor_acordos / qtd_acordos */

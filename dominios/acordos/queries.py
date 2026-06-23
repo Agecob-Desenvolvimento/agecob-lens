@@ -285,8 +285,8 @@ def build_tabela_performance_periodo_query(
                 SUM(qtd_boletos_emitidos) AS qtd_boletos_emitidos,
                 SUM(qtd_boletos_pagos)    AS qtd_boletos_pagos,
                 CAST(
-                    CASE WHEN SUM(qtd_boletos_emitidos) > 0
-                         THEN SUM(qtd_boletos_pagos) * 100.0 / SUM(qtd_boletos_emitidos)
+                    CASE WHEN SUM(qtd_contatos) > 0
+                         THEN SUM(qtd_boletos_pagos) * 100.0 / SUM(qtd_contatos)
                          ELSE 0.0
                     END AS DECIMAL(6,1)
                 ) AS conversao_pct,
@@ -321,8 +321,8 @@ def build_tabela_performance_periodo_query(
             qtd_boletos_emitidos,
             qtd_boletos_pagos,
             CAST(
-                CASE WHEN qtd_boletos_emitidos > 0
-                     THEN qtd_boletos_pagos * 100.0 / qtd_boletos_emitidos
+                CASE WHEN qtd_contatos > 0
+                     THEN qtd_boletos_pagos * 100.0 / qtd_contatos
                      ELSE 0.0
                 END AS DECIMAL(6,1)
             ) AS conversao_pct,

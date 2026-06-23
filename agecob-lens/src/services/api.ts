@@ -1,5 +1,6 @@
 export type DatabaseOption = "COBwebRCBAUTOS" | "COBwebRCBCONSUMER" | "todos";
 import { trackApiMetric } from "@/services/analytics";
+import { demoAnonymize, getDemoSnapshot, isDemoMode, setDemoSnapshot } from "@/services/demoMask";
 
 export interface ApiMeta {
   generated_at: string;
@@ -116,6 +117,12 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   const key = `${method} ${path}`;
   const runId = `web-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
+  // Modo demo: serve snapshot cacheado instantaneamente (sem rede) p/ gravação fluida.
+  if (method === "GET" && isDemoMode()) {
+    const snap = getDemoSnapshot(key);
+    if (snap.hit) return Promise.resolve(snap.data as T);
+  }
+
   if (!options.skipInflightDedup && method === "GET") {
     const existing = inflight.get(key);
     if (existing) {
@@ -206,7 +213,9 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     }
 
     if (resolvedData !== null) {
-      return resolvedData;
+      const out = demoAnonymize(resolvedData);
+      if (method === "GET") setDemoSnapshot(key, out);
+      return out;
     }
 
     if (triedAnyResponse) {

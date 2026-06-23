@@ -80,7 +80,7 @@ def _agent_entries_from_rows(
             "valor_primeira_parcela": round(bucket["valor_primeira_parcela"], 2),
             "qtd_boletos_emitidos": bucket["qtd_boletos_emitidos"],
             "qtd_boletos_pagos": bucket["qtd_boletos_pagos"],
-            "conversao_pct": _ratio_pct(bucket["qtd_boletos_pagos"], bucket["qtd_boletos_emitidos"]),
+            "conversao_pct": _ratio_pct(bucket["qtd_boletos_pagos"], bucket["qtd_contatos"]),
             "qtd_excecoes": bucket["qtd_excecoes"],
             "valor_excecoes": round(bucket["valor_excecoes"], 2),
             "data_referencia": data_referencia,

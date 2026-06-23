@@ -36,7 +36,7 @@ function row(
 const rows: ProdutividadeRowWithSource[] = [
   row({ NOME: "A", source: "COBwebRCBAUTOS", qtd_acionamentos: 20, qtd_alo: 20, qtd_contatos: 10, qtd_acordos: 4 }),
   row({ NOME: "B", source: "COBwebRCBAUTOS", qtd_acionamentos: 5, qtd_alo: 5, qtd_contatos: 5, qtd_acordos: 2 }),
-  row({ NOME: "C", source: "COBwebRCBCONSUMER", qtd_acionamentos: 50, qtd_alo: 50, qtd_contatos: 40, qtd_acordos: 10 }),
+  row({ NOME: "C", source: "COBwebRCBCONSUMER", qtd_acionamentos: 50, qtd_alo: 50, qtd_contatos: 40, qtd_acordos: 10, qtd_boletos_pagos: 10 }),
   row({ NOME: "D", source: "COBwebRCBCONSUMER", qtd_acionamentos: 0, qtd_alo: 0, qtd_contatos: 0, qtd_acordos: 0 }),
 ];
 
