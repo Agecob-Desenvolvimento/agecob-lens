@@ -28,8 +28,8 @@ Cada agente (cobrador) é um `AgentEntry` com esta forma:
 - `qtd_contatos`: **CPC** — falou com a pessoa certa. CPC é CONTAGEM, nunca %.
 - `taxa_contato_pct` = alô / acionamentos; `taxa_cpc_pct` = CPC / alô.
 - `qtd_acordos`, `valor_acordos`, `ticket_medio` (= valor / qtd), `valor_primeira_parcela`.
-- `qtd_boletos_emitidos`, `qtd_boletos_pagos`, `conversao_pct` = pagos no prazo / emitidos
-  (boleto vencido de acordo gerado — no grão de 1 dia tende a 0%, não é alarme).
+- `qtd_boletos_emitidos`, `qtd_boletos_pagos`, `conversao_pct` = pagos no prazo / CPC
+  (qtd_contatos; boleto pago em ≤5d do venc. sobre CPC — no grão de 1 dia tende a baixo, não é alarme).
 - `qtd_excecoes`, `valor_excecoes`.
 - `data_referencia`: data final do período analisado.
 

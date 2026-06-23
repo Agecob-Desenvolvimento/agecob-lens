@@ -194,8 +194,8 @@ export function useHomeViewModel(): HomeViewModel {
       const d = selectPeriodDelta(value, prevValue);
       return d != null ? { value: d, label: periodLabel, betterWhen } : undefined;
     };
-    // Conversão (pagos/emitidos) é ~0% no grão diário (boletos de hoje ainda não
-    // venceram); comparar período-a-período não faz sentido. Baseline vs benchmark.
+    // Conversão (pagos/CPC) tende a ser baixa no grão diário (boletos de hoje ainda
+    // não foram pagos); comparar período-a-período não faz sentido. Baseline vs benchmark.
     const mkBench = (value: number, mean: number | null | undefined, betterWhen: "up" | "down") => {
       if (mean == null || mean <= 0) return undefined;
       return { value: (value - mean) / mean, label: "média do escritório", betterWhen, baselineValue: mean };
@@ -208,7 +208,7 @@ export function useHomeViewModel(): HomeViewModel {
     return [
       { label: "Efetividade de Caixa", value: indiceConversaoCaixa ?? 0, unit: "percent" as const, baseline: mk(indiceConversaoCaixa ?? 0, indiceConversaoCaixaPrev ?? 0, "up"), benchmarks: bm(bench?.efetividade_caixa), base: { num: ppValorRecebida, den: ppValorEmitida, noun: "1ª parcela", unit: "value" } },
       { label: "CPC", value: totals.qtd_contatos, unit: "count" as const, baseline: mk(totals.qtd_contatos, prevTotals.qtd_contatos, "up"), base: { num: totals.qtd_contatos, den: totals.qtd_alo, noun: "alôs" } },
-      { label: "Conversão %", value: conv, unit: "percent" as const, baseline: mkBench(conv, bench?.taxa_conversao?.mean, "up"), base: { num: totals.qtd_boletos_pagos, den: totals.qtd_boletos_emitidos, noun: "boletos" } },
+      { label: "Conversão %", value: conv, unit: "percent" as const, baseline: mkBench(conv, bench?.taxa_conversao?.mean, "up"), base: { num: totals.qtd_boletos_pagos, den: totals.qtd_contatos, noun: "CPC" } },
       { label: "Rejeitados", value: totals.qtd_rejeitados, unit: "count" as const, baseline: mk(totals.qtd_rejeitados, prevTotals.qtd_rejeitados, "down"), caption: "acordos rejeitados" },
       { label: "Exceções", value: totals.qtd_excecoes, unit: "count" as const, baseline: mk(totals.qtd_excecoes, prevTotals.qtd_excecoes, "down"), caption: "acordos em exceção" },
       { label: "Qtd Acordos", value: totals.qtd_acordos, unit: "count" as const, caption: `${diasUteisPeriodo} dias úteis` },

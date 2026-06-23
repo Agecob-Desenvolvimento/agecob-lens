@@ -465,7 +465,7 @@ SELECT
     U.NOME,
     SUM(E.qtd_contatos) * 100.0 / NULLIF(SUM(E.qtd_alo), 0) AS avg_taxa_contato,
     ISNULL(SUM(A.qtd_boletos_pagos), 0) * 100.0
-        / NULLIF(SUM(A.qtd_boletos_emitidos), 0) AS avg_taxa_conversao,
+        / NULLIF(SUM(E.qtd_contatos), 0) AS avg_taxa_conversao,
     ISNULL(SUM(A.valor_p1_recebido), 0) * 100.0
         / NULLIF(SUM(A.valor_p1), 0) AS avg_efetividade_caixa,
     ISNULL(SUM(A.valor_excecoes), 0) * 100.0

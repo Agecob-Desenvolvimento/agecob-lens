@@ -23,7 +23,6 @@ import {
   type TvModeViewModel,
   type TvRitmoBanda,
   type TvTickerItem,
-  type TvTone,
 } from "@/components/tv/tvShared";
 
 const TV_PLACEHOLDERS = [
@@ -80,12 +79,10 @@ export function useTvModeViewModel(): TvModeViewModel {
     const conv = kpiVal("Conversão %");
     const valorAcordos = typeof home.kpiPrimary[0]?.value === "number" ? home.kpiPrimary[0].value : null;
     const ticket = qtdAcordos && qtdAcordos > 0 && valorAcordos != null ? valorAcordos / qtdAcordos : null;
-    const convBaseline = kpiObj("Conversão %")?.baseline;
-    const convTone: TvTone = convBaseline ? (convBaseline.value >= 0 ? "good" : "bad") : "neutral";
     const kpis: TvKpi[] = [
       { id: "acordos", label: "Acordos", value: tvNum(qtdAcordos), sub: "no período", tone: "neutral" },
       { id: "cpc", label: "CPC", value: tvNum(cpcCount), sub: "contatos (RPC)", tone: "neutral" },
-      { id: "conversao", label: "Conversão", value: tvPct(conv), sub: "pagos / emitidos", tone: convTone },
+      { id: "conversao", label: "Conversão", value: tvPct(conv), sub: "pagos / CPC", tone: "neutral" },
       { id: "ticket", label: "Ticket médio", value: tvBRLk(ticket), sub: `${tvNum(qtdAcordos)} acordos`, tone: "neutral" },
     ];
 
@@ -123,11 +120,7 @@ export function useTvModeViewModel(): TvModeViewModel {
     const top = home.top10PrimeiraParcela[0];
     if (top) ticker.push({ kind: "win", text: `${top.label} lidera a 1ª parcela · ${tvBRLk(top.value)}` });
     if (conv != null)
-      ticker.push(
-        convTone === "good"
-          ? { kind: "up", text: `Conversão em ${tvPct(conv)} · acima da média do escritório` }
-          : { kind: "alert", text: `Conversão em ${tvPct(conv)} · abaixo da média do escritório` },
-      );
+      ticker.push({ kind: "info", text: `Conversão em ${tvPct(conv)} · pagos / CPC` });
     if (buTotal && bu[0]) {
       const share = Math.round(((bu[0].valor ?? 0) / buTotal) * 100);
       ticker.push({ kind: "info", text: `${bu[0].bu} responde por ${share}% da 1ª parcela` });

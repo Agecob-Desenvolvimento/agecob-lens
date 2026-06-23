@@ -1,5 +1,6 @@
 import { LayoutDashboard, Users, TrendingUp, Target, Tv } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
+import { isDemoMode } from "@/services/demoMask";
 import { useLocation } from "react-router-dom";
 import {
   Sidebar,
@@ -127,7 +128,7 @@ export function AppSidebar() {
             v{__COMMIT_SHA__}
           </span>
           <span className="text-[11px] font-medium text-slate-400">
-            Grupo Agecob
+            {isDemoMode() ? "Grupo Demo" : "Grupo Agecob"}
           </span>
         </div>
       </SidebarFooter>

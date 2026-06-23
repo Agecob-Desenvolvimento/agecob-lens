@@ -4,6 +4,7 @@
  */
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { TV, TONE, TV_MONO, tvBRLk, tvNum, type TvKpi, useTvData } from "./tvShared";
+import { isDemoMode } from "@/services/demoMask";
 
 export function Eyebrow({
   children,
@@ -58,7 +59,7 @@ export function TvBrand({ sub = "Dashboard · Modo TV" }: { sub?: string }) {
     <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
       <div style={{ width: 14, height: 44, background: TV.gold, borderRadius: 2 }} />
       <div style={{ lineHeight: 1 }}>
-        <div style={{ fontWeight: 800, fontSize: 32, letterSpacing: "0.06em", color: TV.t1 }}>AGECOB</div>
+        <div style={{ fontWeight: 800, fontSize: 32, letterSpacing: "0.06em", color: TV.t1 }}>{isDemoMode() ? "AGDASH" : "AGECOB"}</div>
         <div style={{ marginTop: 6, fontSize: 16, letterSpacing: "0.18em", textTransform: "uppercase", color: TV.t3 }}>{sub}</div>
       </div>
     </div>
