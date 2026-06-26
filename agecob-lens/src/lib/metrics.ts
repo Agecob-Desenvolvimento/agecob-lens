@@ -6,6 +6,12 @@ import type { MetricUnit } from "@/types/executive";
  * Definitions match docs/redesign_executivo_dashboard_v2.md.
  */
 
+/**
+ * Dias úteis por mês para ratear meta mensal → meta diária (meta_dia = meta_mensal / 18).
+ * Valor fixo definido pela gestão — não calculado do calendário.
+ */
+export const DIAS_UTEIS_MES = 18;
+
 export interface MetricTotals {
   qtd_acionamentos: number;
   qtd_alo: number;

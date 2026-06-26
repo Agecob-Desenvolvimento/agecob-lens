@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/dialog";
 import { AlertTriangle, Upload, FileText, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { formatBRLCompact } from "@/lib/metrics";
+import { formatBRLCompact, DIAS_UTEIS_MES } from "@/lib/metrics";
 import { uploadMetasPDF } from "@/services/api";
 import type { MetaFiltrada } from "@/hooks/useMetasData";
 import { toast } from "@/hooks/use-toast";
@@ -54,6 +54,8 @@ export interface MetaVsRealPanelProps {
   mesSelecionado: MesValue;
   onMesChange: (mes: MesValue) => void;
   dadosReais?: Record<string, RealPorPortfolio>;
+  /** Σ 1ª parcela gerada HOJE nas carteiras exibidas — base da meta do dia */
+  geracaoHojeTotal?: number | null;
   loading?: boolean;
   /** Trimestre das metas carregadas (ex: "2T26"); null se nenhuma metas */
   periodoMetas: string | null;
@@ -94,6 +96,7 @@ export function MetaVsRealPanel({
   mesSelecionado,
   onMesChange,
   dadosReais,
+  geracaoHojeTotal,
   loading,
   periodoMetas,
   trimestreAtual,
@@ -101,6 +104,13 @@ export function MetaVsRealPanel({
   const mesLabel = MESES.find((m) => m.value === mesSelecionado)?.label ?? mesSelecionado;
   const hasRealData = dadosReais != null && Object.keys(dadosReais).length > 0;
   const semMetas = metasFiltradas.length === 0;
+
+  // Meta do dia (agregado): Σ meta_caixa das carteiras exibidas ÷ 18 dias úteis.
+  // % = 1ª parcela gerada hoje / meta-dia. Mesmo conjunto de carteiras no num. e denom.
+  const totalMetaCaixa = metasFiltradas.reduce((s, m) => s + m.meta_caixa, 0);
+  const metaDia = totalMetaCaixa > 0 ? totalMetaCaixa / DIAS_UTEIS_MES : null;
+  const pctMetaDia =
+    metaDia != null && geracaoHojeTotal != null ? (geracaoHojeTotal / metaDia) * 100 : null;
   // Pede atualização quando o PDF carregado não é do trimestre corrente (ou não há PDF)
   const desatualizado = periodoMetas !== trimestreAtual;
 
@@ -154,6 +164,32 @@ export function MetaVsRealPanel({
       </CardHeader>
 
       <CardContent className="space-y-2">
+        {metaDia != null && (
+          <div className="flex items-center justify-between gap-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+            <div className="flex flex-col">
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                Meta do dia · 1ª parcela gerada hoje
+              </span>
+              <span className="text-[10px] text-slate-400">
+                meta caixa do mês ÷ {DIAS_UTEIS_MES} dias úteis
+              </span>
+            </div>
+            <div className="flex items-baseline gap-2 text-right tabular-nums">
+              <span
+                className={cn(
+                  "text-lg font-bold leading-none",
+                  pctMetaDia != null ? achievementTextColor(pctMetaDia) : "text-slate-400",
+                )}
+              >
+                {pctMetaDia != null ? `${Math.round(pctMetaDia)}%` : "—"}
+              </span>
+              <span className="text-[11px] text-slate-500">
+                {formatBRLCompact(geracaoHojeTotal ?? null)} / meta/dia {formatBRLCompact(metaDia)}
+              </span>
+            </div>
+          </div>
+        )}
+
         {desatualizado && (
           <div className="flex items-start gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
             <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" aria-hidden />

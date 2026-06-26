@@ -12,8 +12,9 @@ import { useQuery } from "@tanstack/react-query";
 import { useGlobalFilters } from "@/contexts/GlobalFiltersContext";
 import { useHomeViewModel } from "@/hooks/useHomeViewModel";
 import { useMetasData } from "@/hooks/useMetasData";
-import { fetchRitmoDia } from "@/services/api";
+import { fetchRitmoDia, fetchPrimeiraParcelaDia } from "@/services/api";
 import { countBusinessDays, firstOfMonthStr, lastOfMonthStr, todayStr } from "@/lib/dates";
+import { DIAS_UTEIS_MES } from "@/lib/metrics";
 import {
   tvBRLk,
   tvNum,
@@ -47,6 +48,13 @@ export function useTvModeViewModel(): TvModeViewModel {
   const currentMonthKey = todayStr().slice(0, 7).replace("-", "");
   const { mediaRow: metaTotalMes } = useMetasData(null, currentMonthKey);
 
+  // 1ª parcela gerada HOJE (sempre o dia, independe do filtro global período) —
+  // numerador da meta do dia. O `realizado` do hero é do período (mês-até-hoje).
+  const { data: ppHojeEnv } = useQuery({
+    queryKey: ["tv", "pp-dia-hoje", selectedDatabase, todayStr()] as const,
+    queryFn: () => fetchPrimeiraParcelaDia(selectedDatabase, undefined, todayStr(), todayStr()),
+  });
+
   return useMemo<TvModeViewModel>(() => {
     const allKpis = [...home.kpiPrimary, ...home.kpiSecondary];
     const kpiObj = (label: string) => allKpis.find((k) => k.label === label);
@@ -63,6 +71,10 @@ export function useTvModeViewModel(): TvModeViewModel {
     const diasDecorridos = countBusinessDays(dateFrom, dateTo);
     const diasMes = countBusinessDays(firstOfMonthStr(), lastOfMonthStr());
     const projecao = realizado != null && diasDecorridos > 0 ? (realizado / diasDecorridos) * diasMes : null;
+    // Meta do dia = meta de caixa do mês rateada por dias úteis. % = 1ª parcela
+    // gerada HOJE / meta-dia (não o realizado do período, que é mês-até-hoje).
+    const metaDia = metaCaixaMes && metaCaixaMes > 0 ? metaCaixaMes / DIAS_UTEIS_MES : null;
+    const ppHoje = ppHojeEnv?.data?.[0] ? Number(ppHojeEnv.data[0].total_valor) || 0 : null;
     const valor = {
       realizado,
       meta: metaCaixaMes,
@@ -71,6 +83,8 @@ export function useTvModeViewModel(): TvModeViewModel {
       projecao,
       pctMeta: metaCaixaMes && realizado != null ? realizado / metaCaixaMes : null,
       projPctMeta: metaCaixaMes && projecao != null ? projecao / metaCaixaMes : null,
+      metaDia,
+      pctMetaDia: metaDia && ppHoje != null ? ppHoje / metaDia : null,
     };
 
     // KPIs (real, totais do período) — CPC = contatos (count, dicionário oficial)
@@ -145,5 +159,5 @@ export function useTvModeViewModel(): TvModeViewModel {
       ticker,
       placeholders: TV_PLACEHOLDERS,
     };
-  }, [home, ritmoResp, metaTotalMes, dateFrom, dateTo]);
+  }, [home, ritmoResp, metaTotalMes, ppHojeEnv, dateFrom, dateTo]);
 }

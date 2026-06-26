@@ -107,13 +107,13 @@ export function HeroValor({ scale = 1, align = "left" }: { scale?: number; align
         <DeltaChip value={v.vsOntem} size={30 * scale} />
       </div>
 
-      <div style={{ display: "flex", alignItems: "center", gap: 14, fontSize: 22 * scale, color: TV.t2, justifyContent: centered ? "center" : "flex-start" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 30 * scale, fontSize: 22 * scale, color: TV.t2, justifyContent: centered ? "center" : "flex-start" }}>
         <span>
           Meta do mês <strong style={{ color: TV.t1, fontWeight: 700 }}>{tvBRLk(v.meta)}</strong>
         </span>
-        <span style={{ color: TV.t3 }}>·</span>
-        <span>
-          vs. ontem mesma hora <strong style={{ color: TV.t1, fontWeight: 700 }}>{tvBRLk(v.ontemMesmaHora)}</strong>
+        <span style={{ width: 1, height: 26 * scale, background: TV.lineHi, flexShrink: 0 }} />
+        <span style={{ color: TV.t3 }}>
+          vs. ontem mesma hora <strong style={{ color: TV.t2, fontWeight: 700 }}>{tvBRLk(v.ontemMesmaHora)}</strong>
         </span>
       </div>
 
@@ -122,6 +122,14 @@ export function HeroValor({ scale = 1, align = "left" }: { scale?: number; align
         <div style={{ display: "flex", justifyContent: "space-between", marginTop: 10, fontSize: 16 * scale, color: TV.t3 }}>
           <span>{v.pctMeta == null ? "—" : Math.round(v.pctMeta * 100) + "%"} da meta do mês</span>
           <span>faltam {v.meta == null ? "—" : tvBRLk(Math.max(0, v.meta - (v.realizado ?? 0)))}</span>
+        </div>
+      </div>
+
+      <div style={{ width: "100%", maxWidth: centered ? 720 * scale : "none" }}>
+        <MetaBar pct={v.pctMetaDia} color={TV.cyan} height={14 * scale} />
+        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 10, fontSize: 16 * scale, color: TV.t3 }}>
+          <span>{v.pctMetaDia == null ? "—" : Math.round(v.pctMetaDia * 100) + "%"} da meta do dia</span>
+          <span>meta/dia {tvBRLk(v.metaDia)}</span>
         </div>
       </div>
 

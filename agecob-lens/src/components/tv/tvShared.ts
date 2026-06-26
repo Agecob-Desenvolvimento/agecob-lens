@@ -68,6 +68,10 @@ export interface TvHeroValor {
   pctMeta: number | null;
   /** projecao / meta (placeholder) */
   projPctMeta: number | null;
+  /** meta diária = meta de caixa do mês / 18 dias úteis */
+  metaDia: number | null;
+  /** realizado / metaDia */
+  pctMetaDia: number | null;
 }
 
 export interface TvKpi {
