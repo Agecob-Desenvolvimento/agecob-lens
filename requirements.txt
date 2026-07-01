@@ -10,4 +10,4 @@ anthropic
 openai
 pdfplumber
 python-multipart
-sentry-sdk[fastapi]
+sentry-sdk[fastapi]>=2.44.0

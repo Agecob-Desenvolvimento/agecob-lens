@@ -207,6 +207,7 @@ ENABLE_INDEX_ADMIN: bool = (os.getenv("ENABLE_INDEX_ADMIN") or "false").strip().
 # Sentry (erros + performance) — vazio desliga
 SENTRY_DSN: str = (os.getenv("SENTRY_DSN") or "").strip()
 SENTRY_TRACES_SAMPLE_RATE: float = float(os.getenv("SENTRY_TRACES_SAMPLE_RATE") or "0.1")
+SENTRY_ENABLE_LOGS: bool = (os.getenv("SENTRY_ENABLE_LOGS") or "true").strip().lower() == "true"
 
 # ─────────────────────────────────────────────────────────────────
 # AGENTE DE CHAT (/agente/chat)

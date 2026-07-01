@@ -1,5 +1,5 @@
 export type DatabaseOption = "COBwebRCBAUTOS" | "COBwebRCBCONSUMER" | "todos";
-import { trackApiMetric } from "@/services/analytics";
+import { logEvent, trackApiMetric } from "@/services/analytics";
 import { demoAnonymize, getDemoSnapshot, isDemoMode, setDemoSnapshot } from "@/services/demoMask";
 
 export interface ApiMeta {
@@ -162,6 +162,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
           lastError = new Error(
             `Unexpected content-type for ${base}${path}: ${contentType || "unknown"}`,
           );
+          logEvent("warn", "api candidate failed", { path, base, error: String(lastError) });
           continue;
         }
 
@@ -171,9 +172,11 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
           break;
         } catch (err) {
           lastError = err;
+          logEvent("warn", "api candidate failed", { path, base, error: String(err) });
         }
       } catch (err) {
         lastError = err;
+        logEvent("warn", "api candidate failed", { path, base, error: String(err) });
       }
     }
     if (!res) {

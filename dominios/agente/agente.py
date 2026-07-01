@@ -13,7 +13,7 @@ from typing import Any, Callable, Dict, List, Optional
 from fastapi import HTTPException
 
 import config.settings as settings
-from core.telemetry.agent_logger import _agent_ndjson
+from core.telemetry.agent_logger import _agent_ndjson, _sentry_log
 from dominios.agente.agentes import build_agent_entries
 from dominios.agente.conversao import build_conversao_view
 from dominios.agente.cruzamento import build_cruzamento, build_ranking_agentes
@@ -138,7 +138,8 @@ def _build_providers(
             envelope = ritmo_dia(db)
         except HTTPException as exc:
             return {"error": str(exc.detail)}
-        except Exception:
+        except Exception as exc:
+            _sentry_log("error", "Falha ao calcular o ritmo do dia (tool do agente).", database=db, error=str(exc))
             return {"error": "Falha ao calcular o ritmo do dia."}
         return {**envelope["data"], "meta": envelope["meta"]}
 
@@ -238,6 +239,7 @@ def _loop_anthropic(
             {"provider": "anthropic", "error": str(exc), "model": settings.AGENT_MODEL},
             run_id=run_id,
         )
+        _sentry_log("error", "Falha ao consultar provedor de IA.", provider="anthropic", error=str(exc), model=settings.AGENT_MODEL)
         raise HTTPException(
             status_code=502,
             detail="Falha ao consultar o serviço de IA. Tente novamente.",
@@ -312,6 +314,7 @@ def _loop_deepseek(
             {"provider": "deepseek", "error": str(exc), "model": settings.AGENT_MODEL},
             run_id=run_id,
         )
+        _sentry_log("error", "Falha ao consultar provedor de IA.", provider="deepseek", error=str(exc), model=settings.AGENT_MODEL)
         raise HTTPException(
             status_code=502,
             detail="Falha ao consultar o serviço de IA. Tente novamente.",

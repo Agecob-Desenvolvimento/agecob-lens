@@ -10,7 +10,7 @@ from api.dependencias import (
     rate_limit_dashboard,
     require_auth,
 )
-from core.telemetry.agent_logger import _agent_ndjson, _capture_exception
+from core.telemetry.agent_logger import _agent_ndjson, _capture_exception, _sentry_log
 
 
 async def api_prefix_middleware(request: Request, call_next):
@@ -67,6 +67,7 @@ async def security_middleware(request: Request, call_next):
                 run_id=run_id,
             )
             # endregion
+            _sentry_log("warning", "Auth rejeitada.", path=path, status=exc.status_code)
             return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
 
         limited = rate_limit_dashboard(request, path)
@@ -80,6 +81,7 @@ async def security_middleware(request: Request, call_next):
                 run_id=run_id,
             )
             # endregion
+            _sentry_log("warning", "Rate limit atingido.", path=path)
             return limited
         # region agent log
         _agent_ndjson(

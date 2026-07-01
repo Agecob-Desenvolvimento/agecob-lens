@@ -3,6 +3,7 @@ import time
 from typing import Any, Callable, Dict, Optional, Tuple
 
 import config.settings as settings
+from core.telemetry.agent_logger import _sentry_metric
 
 
 class CacheManager:
@@ -36,13 +37,16 @@ class CacheManager:
         Concurrent calls with the same key share one fetcher() execution
         (single-flight) instead of each firing its own duplicate query.
         """
+        prefix = key.split("|", 1)[0]
         hit = self.get(key)
         if hit is not None:
+            _sentry_metric("count", "cache.hit", 1, cache_key_prefix=prefix)
             return hit
 
         with self._lock:
             entry = self._store.get(key)
             if entry is not None and entry[0] >= time.time():
+                _sentry_metric("count", "cache.hit", 1, cache_key_prefix=prefix)
                 return entry[1]
             inflight = self._inflight.get(key)
             if inflight is None:
@@ -53,11 +57,13 @@ class CacheManager:
                 is_leader = False
 
         if not is_leader:
+            _sentry_metric("count", "cache.hit", 1, cache_key_prefix=prefix)
             inflight["event"].wait()
             if inflight["ok"]:
                 return inflight["value"]
             raise inflight["error"]
 
+        _sentry_metric("count", "cache.miss", 1, cache_key_prefix=prefix)
         try:
             value = fetcher()
             self.set(key, value)

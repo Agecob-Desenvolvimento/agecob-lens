@@ -14,6 +14,8 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import HTTPException
 
+from core.telemetry.agent_logger import _sentry_log
+
 CONVERSAO_VISOES = ("mensal", "diaria", "por_agente")
 
 _VISAO_KEYS = {
@@ -137,6 +139,7 @@ def build_conversao_view(db: str, visao: str, agente: Optional[str] = None) -> D
     try:
         envelope = get_efetividade(_VISAO_KEYS[visao], db)
     except HTTPException as exc:
+        _sentry_log("warning", "Falha ao ler efetividade (tool do agente).", database=db, visao=visao, error=str(exc.detail))
         return {"error": str(exc.detail)}
     rows = envelope.get("data") or []
     if not rows:

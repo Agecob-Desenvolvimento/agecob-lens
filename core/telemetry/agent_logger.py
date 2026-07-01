@@ -21,8 +21,27 @@ def _init_sentry() -> None:
         dsn=settings.SENTRY_DSN,
         environment=settings.APP_ENV,
         traces_sample_rate=settings.SENTRY_TRACES_SAMPLE_RATE,
+        enable_logs=settings.SENTRY_ENABLE_LOGS,
     )
     _SENTRY_INITIALIZED = True
+
+
+def _sentry_log(level: str, message: str, **attributes: Any) -> None:
+    """Log estruturado no Sentry (se ligado). level: debug/info/warning/error/fatal."""
+    if not _SENTRY_INITIALIZED:
+        return
+    import sentry_sdk
+
+    getattr(sentry_sdk.logger, level)(message, attributes=attributes)
+
+
+def _sentry_metric(kind: str, name: str, value: float, unit: str = "none", **attributes: Any) -> None:
+    """Metrica trace-connected no Sentry (se ligado). kind: count/gauge/distribution."""
+    if not _SENTRY_INITIALIZED:
+        return
+    import sentry_sdk
+
+    getattr(sentry_sdk.metrics, kind)(name, value, unit=unit, attributes=attributes)
 
 
 def _capture_exception(exc: BaseException, run_id: Optional[str] = None) -> None:

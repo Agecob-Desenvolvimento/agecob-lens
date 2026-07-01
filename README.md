@@ -131,6 +131,9 @@ DROP INDEX IX_REC_MASTER_DT_EMISSAO ON dbo.REC_MASTER;
 | `REQUIRE_API_AUTH` | false | Exige auth em `/dashboard/*`, `/health/*`, `/admin/*` |
 | `ENABLE_AGENT_TELEMETRY` | false | Habilita rotas de telemetria |
 | `ENABLE_INDEX_ADMIN` | false | Habilita `/admin/indexes/*` |
+| `SENTRY_DSN` | — | Sentry (erros + performance) — vazio desliga |
+| `SENTRY_TRACES_SAMPLE_RATE` | 0.1 | Taxa de amostragem de transactions |
+| `SENTRY_ENABLE_LOGS` | true | Habilita Sentry Logs estruturados (`sentry_sdk.logger`) |
 
 Use `.env.example` como base.
 

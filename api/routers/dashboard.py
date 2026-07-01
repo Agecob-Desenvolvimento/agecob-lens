@@ -12,7 +12,7 @@ from fastapi import APIRouter, File, Query, Request, UploadFile
 import config.settings as settings
 from core.cache.cache_manager import cache_manager
 from core.database.query_executor import run_query
-from core.telemetry.agent_logger import _agent_ndjson
+from core.telemetry.agent_logger import _agent_ndjson, _sentry_metric
 from core.utils.pagination import extract_total_rows, normalize_pagination
 from core.utils.response_envelope import build_response_envelope, print_rows_preview
 from core.utils.sql_helpers import (
@@ -172,6 +172,7 @@ def _get_dashboard_agentes_unificado(
             run_id=run_id,
         )
     t_done = time.perf_counter()
+    total_ms = round((t_done - t_recv) * 1000, 1)
     _agent_ndjson(
         "TIMING",
         "dashboard.py:_get_dashboard_agentes_unificado",
@@ -183,10 +184,11 @@ def _get_dashboard_agentes_unificado(
             "receive_to_cache_ms": round((t_cache_start - t_recv) * 1000, 1),
             "cache_or_compute_ms": round((t_cache_done - t_cache_start) * 1000, 1),
             "build_envelope_ms": round((t_done - t_cache_done) * 1000, 1),
-            "total_ms": round((t_done - t_recv) * 1000, 1),
+            "total_ms": total_ms,
         },
         run_id=run_id,
     )
+    _sentry_metric("distribution", "dashboard.request_duration_ms", total_ms, unit="millisecond", context=context)
     return envelope
 
 
