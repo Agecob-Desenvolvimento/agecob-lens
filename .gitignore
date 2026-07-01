@@ -34,6 +34,8 @@ agecob-lens/docs/aa.txt
 
 # Relatórios exportados (podem conter PII — CPF completo). Não versionar.
 relatorio_*.csv
+relatorio-carteiras-*.csv
+relatorio-carteiras-*.csv.txt
 
 # Claude Code local state
 .claude/settings.local.json
