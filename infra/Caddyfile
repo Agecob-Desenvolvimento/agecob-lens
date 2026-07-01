@@ -1,0 +1,85 @@
+# AgDash reverse proxy — TLS + Basic Auth na frente do uvicorn (bind localhost).
+#
+# Por que proxy: o uvicorn passa a ouvir só em 127.0.0.1, então a LAN não alcança
+# a API direto. O Caddy vira a única porta de entrada da rede: termina TLS e exige
+# Basic Auth. Fluxo: Browser -> Basic Auth -> Caddy injeta X-API-Key + Bearer ->
+# uvicorn. O bundle do frontend NÃO carrega token algum — credencial vive só aqui
+# e no .env do backend.
+#
+# Setup:
+#   1. Gerar hash da senha:  caddy hash-password --plaintext '<senha>'
+#   2. Colar o hash em basic_auth abaixo.
+#   3. Definir as variáveis de ambiente (devem bater com API_KEY/API_TOKEN do .env):
+#        set AGECOB_API_KEY=<API_KEY do backend>
+#        set AGECOB_API_TOKEN=<API_TOKEN do backend>
+#   4. Backend: REQUIRE_API_AUTH=true e uvicorn --host 127.0.0.1 (ver README).
+#   5. Criar a pasta de log:  mkdir logs
+#   6. Rodar: caddy run --config infra/Caddyfile   (ou caddy start como serviço)
+#   7. Em cada dispositivo cliente, confiar na CA local uma vez:  caddy trust
+
+{
+	admin off
+	# Necessário para o rate_limit comentado lá embaixo (só após build com xcaddy).
+	# order rate_limit before basic_auth
+}
+
+# Trocar dashboard.local pelo hostname ou IP do servidor na LAN.
+dashboard.local {
+	# CA interna do Caddy. Rode `caddy trust` nos clientes p/ evitar aviso de cert.
+	tls internal
+
+	# Security headers em todas as respostas.
+	header {
+		# HSTS só tem efeito em hostname (ignorado se o site for IP literal).
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		# CSP: SPA Vite sem <script> inline e sem eval (auditado no build). connect-src
+		# 'self' bloqueia telemetria externa (PostHog/Sentry) de propósito — se ativar
+		# analytics, adicionar os domínios em connect-src. Validar no console no 1º load.
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+		# Esconde versão do Caddy.
+		-Server
+	}
+
+	# Log de acesso JSON (registra também Basic Auth falho). Requer a pasta logs/.
+	log {
+		output file logs/caddy-access.log {
+			roll_size 10MiB
+			roll_keep 10
+		}
+		format json
+	}
+
+	# Porta de login. O browser manda a credencial só para o Caddy, nunca para o JS.
+	basic_auth {
+		admin COLE_O_HASH_BCRYPT_AQUI
+	}
+
+	# Limite do corpo da requisição: anti memory-exhaustion via upload (/metas/upload).
+	# Caddy responde 413 antes de repassar ao uvicorn. Ajustar se as metas crescerem.
+	request_body {
+		max_size 10MB
+	}
+
+	# Injeta as credenciais da API no upstream para o SPA não embutir token nenhum.
+	# header_up Authorization sobrescreve o header Basic de entrada com o Bearer.
+	reverse_proxy 127.0.0.1:8000 {
+		header_up X-API-Key {env.AGECOB_API_KEY}
+		header_up Authorization "Bearer {env.AGECOB_API_TOKEN}"
+	}
+
+	# Rate limit anti-brute-force no Basic Auth. NÃO existe no binário oficial —
+	# requer build custom:  xcaddy build --with github.com/mholt/caddy-ratelimit
+	# Depois: descomentar o `order` no bloco global acima E o bloco abaixo.
+	# rate_limit {
+	#     zone login {
+	#         key    {remote_host}
+	#         events 10
+	#         window 1m
+	#     }
+	# }
+	# Mitigação atual sem o módulo: bcrypt cost 14 (~0.5-1s por tentativa) já torna
+	# brute force inviável, e cada falha fica registrada no log de acesso acima.
+}

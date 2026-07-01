@@ -319,6 +319,7 @@ export function useHomeViewModel(): HomeViewModel {
     funnelData,
     cpcAvg,
     convAvg,
+    produtividadeRows: rows,
     top10PrimeiraParcela,
     portfolio1aParcela,
     excecoesPorPortfolio,

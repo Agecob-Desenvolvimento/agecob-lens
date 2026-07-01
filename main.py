@@ -5,13 +5,21 @@ from fastapi.middleware.cors import CORSMiddleware
 from api.middleware import api_prefix_middleware, security_middleware
 from api.routers import dashboard, efetividade, admin, health, ritmo_dia, regressao, agente
 from api.static import setup_static_routes
-from core.telemetry.agent_logger import _start_agent_log_cleanup_worker, _agent_ndjson
+from core.telemetry.agent_logger import _init_sentry, _start_agent_log_cleanup_worker, _agent_ndjson
 from dominios.efetividade.etl import efetividade_etl
 
+_init_sentry()
+
+# Swagger/OpenAPI desligados em produção (REQUIRE_API_AUTH=true) para não expor o
+# schema da API na LAN. Em dev seguem disponíveis.
+_DOCS_ENABLED = not settings.REQUIRE_API_AUTH
 app = FastAPI(
     title="Dashboard API",
     description="API local para expor dados de dashboard a partir do SQL Server.",
     version="1.1.0",
+    docs_url="/docs" if _DOCS_ENABLED else None,
+    redoc_url="/redoc" if _DOCS_ENABLED else None,
+    openapi_url="/openapi.json" if _DOCS_ENABLED else None,
 )
 
 app.add_middleware(
@@ -45,8 +53,6 @@ async def _agent_debug_startup() -> None:
         "main.py:startup",
         "worker_started",
         {
-            "api_key_len": len(settings.API_KEY),
-            "token_len": len(settings.API_TOKEN),
             "log_cleanup_interval_seconds": settings.LOG_CLEANUP_INTERVAL_SECONDS,
             "require_api_auth": settings.REQUIRE_API_AUTH,
             "agent_telemetry_enabled": settings.ENABLE_AGENT_TELEMETRY,

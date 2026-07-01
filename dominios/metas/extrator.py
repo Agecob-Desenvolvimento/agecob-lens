@@ -254,8 +254,13 @@ def salvar_resultado(dados: dict, pdf_path: str) -> str:
     """
     OUTPUT_DIR.mkdir(exist_ok=True)
 
-    with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
+    # Escrita atômica: grava em tmp e renomeia (os.replace) para nunca deixar
+    # ultimas_metas.json parcial se o processo morrer no meio (A-7.7). pid no nome
+    # evita colisão de tmp entre uploads concorrentes.
+    tmp_file = OUTPUT_DIR / f"_ultimas_metas.{os.getpid()}.tmp"
+    with open(tmp_file, "w", encoding="utf-8") as f:
         json.dump(dados, f, ensure_ascii=False, indent=2)
+    os.replace(tmp_file, OUTPUT_FILE)
 
     periodo = dados["meta"]["periodo"]
     snapshot = OUTPUT_DIR / f"metas_{periodo}.json"

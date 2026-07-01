@@ -204,6 +204,10 @@ ENABLE_VALIDATED_ROUTES: bool = (os.getenv("ENABLE_VALIDATED_ROUTES") or "true")
 ENABLE_AGENT_TELEMETRY: bool = (os.getenv("ENABLE_AGENT_TELEMETRY") or "false").strip().lower() == "true"
 ENABLE_INDEX_ADMIN: bool = (os.getenv("ENABLE_INDEX_ADMIN") or "false").strip().lower() == "true"
 
+# Sentry (erros + performance) — vazio desliga
+SENTRY_DSN: str = (os.getenv("SENTRY_DSN") or "").strip()
+SENTRY_TRACES_SAMPLE_RATE: float = float(os.getenv("SENTRY_TRACES_SAMPLE_RATE") or "0.1")
+
 # ─────────────────────────────────────────────────────────────────
 # AGENTE DE CHAT (/agente/chat)
 # ─────────────────────────────────────────────────────────────────

@@ -1039,6 +1039,18 @@ async def upload_metas_pdf(
             run_id=run_id,
         )
 
+    # CSRF: multipart não dispara preflight CORS, então um <form> cross-origin
+    # poderia submeter com a credencial Basic Auth em cache. Rejeita Origin fora da
+    # whitelist nesta rota de efeito colateral (F-09). Sem Origin (não-browser) passa.
+    origin = (request.headers.get("origin") or "").strip() if request else ""
+    if origin and origin not in settings._CORS_ORIGINS:
+        return build_response_envelope(
+            rows=[],
+            sources=[],
+            errors=[{"message": "Origin não autorizado para esta operação."}],
+            run_id=run_id,
+        )
+
     # Salva em arquivo temporário
     tmp_path = Path(f"dados_metas/_upload_{run_id}.pdf")
     tmp_path.parent.mkdir(exist_ok=True)

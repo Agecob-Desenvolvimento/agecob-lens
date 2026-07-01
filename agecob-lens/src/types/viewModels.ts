@@ -9,6 +9,7 @@ import type { HomeKpiPrimary, HomeKpiSecondary } from "@/components/executive/Ho
 import type { HandoffFinanceiroDatum } from "@/components/executive/HandoffFinanceiroGroupedBar";
 import type { HandoffEficienciaDatum } from "@/components/executive/HandoffEficienciaGroupedBar";
 import type { BarDatum, FunnelDatum, QuebradoPortfolioDatum } from "@/selectors/homeSelectors";
+import type { ProdutividadeRowWithSource } from "@/hooks/useProdutividadeData";
 import type { PrimeiraParcelaPorPortfolioRow } from "@/services/api";
 
 /** Risk dimensions per portfolio for the Rentabilidade & Risco chart. */
@@ -38,6 +39,8 @@ export interface HomeViewModel {
   funnelData: FunnelDatum[];
   cpcAvg: number;
   convAvg: number;
+  /** Agent-level rows for the active filter — raw extract for the CSV report. */
+  produtividadeRows: ProdutividadeRowWithSource[];
   top10PrimeiraParcela: BarDatum[];
   portfolio1aParcela: BarDatum[];
   excecoesPorPortfolio: BarDatum[];

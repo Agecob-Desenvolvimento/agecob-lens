@@ -82,8 +82,6 @@ export interface PortfolioRow {
 }
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "").trim();
-const API_KEY = (import.meta.env.VITE_API_KEY ?? "").trim();
-const API_TOKEN = (import.meta.env.VITE_API_TOKEN ?? "").trim();
 const inflight = new Map<string, Promise<unknown>>();
 const IS_DEV = Boolean(import.meta.env.DEV);
 const RUNTIME_ORIGIN =
@@ -137,9 +135,9 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     let triedAnyResponse = false;
     const startedAt = performance.now();
     const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
+    // Auth não vem do bundle: o proxy Caddy injeta X-API-Key + Bearer no upstream
+    // (ver infra/Caddyfile). Em dev local o backend roda com REQUIRE_API_AUTH=false.
     const headers: Record<string, string> = { "X-Run-Id": runId };
-    if (API_KEY) headers["X-API-Key"] = API_KEY;
-    if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
     // FormData: o browser define Content-Type com o boundary multipart — não forçar.
     if (options.body !== undefined && !isFormData) headers["Content-Type"] = "application/json";
 

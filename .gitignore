@@ -19,6 +19,9 @@ node_modules/
 agecob-lens/dist/
 agecob-lens/.vite/
 
+# Local tooling binaries (caddy.exe, etc) + Caddy local CA/state
+.tools/
+
 # IDE / local tooling
 .cursor/
 .vscode/

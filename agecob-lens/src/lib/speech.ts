@@ -20,7 +20,9 @@ if (isSpeechSupported()) {
 function voiceScore(v: SpeechSynthesisVoice): number {
   const n = (v.name || "").toLowerCase();
   const l = (v.lang || "").toLowerCase();
-  let s = l.startsWith("pt-br") ? 4 : 2;
+  // pt-BR tem base 100 — sempre vence qualquer pt-PT ou pt genérico,
+  // mesmo que esses sejam "Natural". Resolve Bing falando espanhol/pt-PT.
+  let s = l.startsWith("pt-br") ? 100 : l.startsWith("pt") ? 0 : -1;
   if (n.includes("natural")) s += 8;
   else if (n.includes("google") || n.includes("online")) s += 6;
   if (n.includes("desktop")) s -= 2;
