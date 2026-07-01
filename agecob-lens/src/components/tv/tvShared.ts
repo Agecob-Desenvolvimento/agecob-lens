@@ -114,6 +114,11 @@ export interface TvTickerItem {
   text: string;
 }
 
+export interface TvTopAgente {
+  label: string;
+  value: number;
+}
+
 export interface TvModeViewModel {
   loading: boolean;
   valor: TvHeroValor;
@@ -122,9 +127,9 @@ export interface TvModeViewModel {
   buTotal: number;
   ritmo: TvRitmoBanda[];
   ritmoAgg: TvRitmoAgg;
-  nowHour: number | null;
-  emOperacao: boolean;
   ticker: TvTickerItem[];
+  /** top 3 agentes do dia por 1ª parcela — usado no boletim horário da URA */
+  topAgentes: TvTopAgente[];
   /** campos sem dado real (mostrados como "—") */
   placeholders: string[];
 }

@@ -6,6 +6,16 @@
 import { useEffect, useState } from "react";
 import { TV, TvDataContext, type TvModeViewModel } from "./tvShared";
 import { VariantHeroCentral, VariantScoreboard, VariantSplitCommand } from "./TvVariants";
+import { useAcordoAnnouncer } from "@/hooks/useAcordoAnnouncer";
+
+function SpeakerIcon({ on }: { on: boolean }) {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M11 5 6 9H2v6h4l5 4V5z" />
+      {on ? <path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a9 9 0 0 1 0 14" /> : <path d="m23 9-6 6M17 9l6 6" />}
+    </svg>
+  );
+}
 
 const VARIANTS = [
   { id: "hero-central", label: "A · Hero Central", Comp: VariantHeroCentral },
@@ -25,6 +35,7 @@ const TV_KEYFRAMES = `
 export default function TvMode({ vm, onClose }: { vm: TvModeViewModel; onClose: () => void }) {
   const [idx, setIdx] = useState(0);
   const [scale, setScale] = useState(1);
+  const ura = useAcordoAnnouncer(vm.valor.metaDia, vm.ritmoAgg, vm.topAgentes);
 
   useEffect(() => {
     const fit = () => setScale(Math.min(window.innerWidth / 1920, window.innerHeight / 1080));
@@ -66,6 +77,17 @@ export default function TvMode({ vm, onClose }: { vm: TvModeViewModel; onClose: 
               />
             ))}
           </div>
+          {ura.supported && (
+            <button
+              onClick={ura.toggle}
+              title={ura.enabled ? "Desligar URA de acordos" : "Ligar URA de acordos"}
+              aria-label={ura.enabled ? "Desligar URA de acordos" : "Ligar URA de acordos"}
+              aria-pressed={ura.enabled}
+              style={{ width: 40, height: 40, borderRadius: 8, border: `1px solid ${ura.enabled ? TV.good : TV.line}`, background: ura.enabled ? "rgba(55,211,154,0.14)" : "rgba(255,255,255,0.06)", color: ura.enabled ? TV.good : TV.t2, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+            >
+              <SpeakerIcon on={ura.enabled} />
+            </button>
+          )}
           <button
             onClick={onClose}
             title="Sair (Esc)"

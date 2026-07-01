@@ -119,16 +119,16 @@ export function useTvModeViewModel(): TvModeViewModel {
       real: b.real,
       isNow: b.status === "em_andamento",
     }));
-    const espAteAgora = bandas.filter((b) => b.status !== "futuro").reduce((s, b) => s + b.esperado, 0);
+    // só horas fechadas — alinha com acumulado_atual (backend exclui a hora em andamento)
+    const espAteAgora = bandas
+      .filter((b) => b.status !== "futuro" && b.status !== "em_andamento")
+      .reduce((s, b) => s + b.esperado, 0);
     const ritmoAgg = {
       real: ritmoResp?.data.acumulado_atual ?? null,
       espAteAgora: bandas.length ? espAteAgora : null,
       proj: ritmoResp?.data.projecao_fechamento ?? null,
       meta: ritmoResp?.data.esperado_total ?? null,
     };
-    const nowHour = ritmoResp?.data.hora_atual ?? null;
-    const emOperacao = ritmoResp?.meta.em_operacao ?? false;
-
     // Ticker — destaques derivados de dados reais
     const ticker: TvTickerItem[] = [];
     const top = home.top10PrimeiraParcela[0];
@@ -154,9 +154,8 @@ export function useTvModeViewModel(): TvModeViewModel {
       buTotal,
       ritmo,
       ritmoAgg,
-      nowHour,
-      emOperacao,
       ticker,
+      topAgentes: home.top10PrimeiraParcela.slice(0, 3),
       placeholders: TV_PLACEHOLDERS,
     };
   }, [home, ritmoResp, metaTotalMes, ppHojeEnv, dateFrom, dateTo]);

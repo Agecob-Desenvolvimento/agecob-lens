@@ -161,7 +161,7 @@ export function HeroValor({ scale = 1, align = "left" }: { scale?: number; align
 }
 
 export function RitmoStrip() {
-  const { ritmo, ritmoAgg, nowHour } = useTvData();
+  const { ritmo, ritmoAgg } = useTvData();
   const max = Math.max(...ritmo.map((d) => Math.max(d.esp ?? 0, d.real ?? 0)), 1);
   const semDados = ritmo.length === 0 || ritmo.every((d) => d.real == null && d.esp == null);
   const ph = (x: number | null) => (x == null ? "—" : x);
@@ -253,12 +253,12 @@ export function RitmoStrip() {
 export function KpiTile({ kpi, big = false }: { kpi: TvKpi; big?: boolean }) {
   const c = TONE[kpi.tone] ?? TV.t1;
   return (
-    <div style={{ background: TV.card, border: `1px solid ${TV.line}`, borderRadius: 16, padding: big ? "28px 30px" : "22px 24px", display: "flex", flexDirection: "column", gap: 12, borderTop: `3px solid ${c}` }}>
-      <Eyebrow size={18} color={TV.t3}>
+    <div style={{ background: TV.card, border: `1px solid ${TV.line}`, borderRadius: 16, padding: big ? "28px 30px" : "22px 24px", display: "flex", flexDirection: "column", gap: 12 }}>
+      <Eyebrow size={18} color={TV.t1}>
         {kpi.label}
       </Eyebrow>
       <div style={{ fontWeight: 800, fontSize: big ? 84 : 60, color: TV.t1, lineHeight: 0.95, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em" }}>{kpi.value}</div>
-      <div style={{ fontSize: 18, color: c, fontWeight: 600 }}>{kpi.sub}</div>
+      <div style={{ fontSize: 21.6, color: c, fontWeight: 600 }}>{kpi.sub}</div>
     </div>
   );
 }
