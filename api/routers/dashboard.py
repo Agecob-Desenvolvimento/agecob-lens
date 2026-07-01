@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from uuid import uuid4
 
 import numpy as np
+import sentry_sdk
 from fastapi import APIRouter, File, Query, Request, UploadFile
 
 import config.settings as settings
@@ -121,33 +122,72 @@ def _get_dashboard_agentes_unificado(
     date_from: Optional[str] = None,
     date_to_exclusive: Optional[str] = None,
 ) -> Dict[str, Any]:
+    t_recv = time.perf_counter()
     run_id = getattr(request.state, "run_id", f"srv-{uuid4().hex[:12]}") if request else f"srv-{uuid4().hex[:12]}"
     validated_database = validate_database_or_todos(database_name)
 
     def _compute() -> List[Dict[str, Any]]:
-        query = build_produtividade_query(
-            validated_database,
-            use_distinct_esforco=False,
-            date_from=date_from,
-            date_to_exclusive=date_to_exclusive,
-        )
-        return run_query(
-            query,
-            settings.ALLOWED_DATABASES[0],
+        t_build = time.perf_counter()
+        with sentry_sdk.start_span(op="db.build_sql", description=context):
+            query = build_produtividade_query(
+                validated_database,
+                use_distinct_esforco=False,
+                date_from=date_from,
+                date_to_exclusive=date_to_exclusive,
+            )
+        t_build_done = time.perf_counter()
+        with sentry_sdk.start_span(op="db.execute", description=context):
+            rows = run_query(
+                query,
+                settings.ALLOWED_DATABASES[0],
+                run_id=run_id,
+                context=context,
+            )
+        t_exec_done = time.perf_counter()
+        _agent_ndjson(
+            "TIMING",
+            "dashboard.py:_get_dashboard_agentes_unificado:_compute",
+            "timing_breakdown",
+            {
+                "context": context,
+                "build_sql_ms": round((t_build_done - t_build) * 1000, 1),
+                "execute_sql_ms": round((t_exec_done - t_build_done) * 1000, 1),
+            },
             run_id=run_id,
-            context=context,
         )
+        return rows
 
     cache_key = f"produtividade|{context}|{validated_database}|{date_from or 'hoje'}|{date_to_exclusive or 'hoje'}"
-    rows = cache_manager.get_or_compute(cache_key, _compute)
+    t_cache_start = time.perf_counter()
+    with sentry_sdk.start_span(op="cache.get_or_compute", description=cache_key):
+        rows = cache_manager.get_or_compute(cache_key, _compute)
+    t_cache_done = time.perf_counter()
     sources = settings.ALLOWED_DATABASES if validated_database == "todos" else [validated_database]
     date_label = f"{date_from}/{date_to_exclusive}" if date_from else "today"
-    return build_response_envelope(
-        rows,
-        sources,
-        filters={"date": date_label, "database": validated_database},
+    with sentry_sdk.start_span(op="serialize.envelope", description=context):
+        envelope = build_response_envelope(
+            rows,
+            sources,
+            filters={"date": date_label, "database": validated_database},
+            run_id=run_id,
+        )
+    t_done = time.perf_counter()
+    _agent_ndjson(
+        "TIMING",
+        "dashboard.py:_get_dashboard_agentes_unificado",
+        "timing_breakdown",
+        {
+            "context": context,
+            "database": validated_database,
+            "cache_hit": (t_cache_done - t_cache_start) < 0.005,
+            "receive_to_cache_ms": round((t_cache_start - t_recv) * 1000, 1),
+            "cache_or_compute_ms": round((t_cache_done - t_cache_start) * 1000, 1),
+            "build_envelope_ms": round((t_done - t_cache_done) * 1000, 1),
+            "total_ms": round((t_done - t_recv) * 1000, 1),
+        },
         run_id=run_id,
     )
+    return envelope
 
 
 # ─────────────────────────────────────────────────────────────────

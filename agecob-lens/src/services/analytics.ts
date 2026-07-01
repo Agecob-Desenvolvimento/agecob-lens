@@ -1,5 +1,7 @@
 import posthog from "posthog-js";
 import * as Sentry from "@sentry/react";
+import { useEffect } from "react";
+import { useLocation, useNavigationType, createRoutesFromChildren, matchRoutes } from "react-router-dom";
 
 type EventProps = Record<string, string | number | boolean | null | undefined>;
 
@@ -29,9 +31,17 @@ export function initSentry(): void {
   Sentry.init({
     dsn: SENTRY_DSN,
     environment: import.meta.env.MODE,
-    integrations: [Sentry.browserTracingIntegration()],
+    integrations: [
+      Sentry.reactRouterBrowserTracingIntegration({
+        useEffect,
+        useLocation,
+        useNavigationType,
+        createRoutesFromChildren,
+        matchRoutes,
+      }),
+    ],
     tracesSampleRate: SENTRY_TRACES_SAMPLE_RATE,
-    tracePropagationTargets: ["localhost", /^https:\/\/dashboard\.local\/api/],
+    tracePropagationTargets: ["localhost", "192.168.0.20:8000", /^https:\/\/dashboard\.local\/api/],
   });
   sentryInitialized = true;
 }

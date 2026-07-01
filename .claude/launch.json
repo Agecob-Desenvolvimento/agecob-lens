@@ -12,7 +12,8 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
       "cwd": "agecob-lens",
-      "port": 5173
+      "port": 5173,
+      "autoPort": true
     }
   ]
 }

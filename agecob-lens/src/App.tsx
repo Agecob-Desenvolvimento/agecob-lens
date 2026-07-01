@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes, useLocation, useSearchParams } from "react-router-dom";
+import * as Sentry from "@sentry/react";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -22,6 +23,8 @@ const ModoTV = lazy(() => import("./pages/ModoTV.tsx"));
 const NotFound = lazy(() => import("./pages/NotFound.tsx"));
 
 const ALL_ROUTES = ["/", "/detalhamento-agentes", "/carteiras", "/efetividade-boletos", "/modo-tv"];
+
+const SentryRoutes = Sentry.wrapReactRouterRouting(Routes);
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -116,14 +119,14 @@ function AppRoutes() {
   return (
     <Suspense fallback={<div className="p-6 text-sm text-muted-foreground">Carregando pagina...</div>}>
       <V2Gate>
-        <Routes>
+        <SentryRoutes>
           <Route path="/" element={<WrapRoute routeName="/"><Index /></WrapRoute>} />
           <Route path="/detalhamento-agentes" element={<WrapRoute routeName="/detalhamento-agentes"><DetalhamentoAgentes /></WrapRoute>} />
           <Route path="/carteiras" element={<WrapRoute routeName="/carteiras"><Carteiras /></WrapRoute>} />
           <Route path="/efetividade-boletos" element={<WrapRoute routeName="/efetividade-boletos"><EfetividadeBoletos /></WrapRoute>} />
           <Route path="/modo-tv" element={<WrapRoute routeName="/modo-tv"><ModoTV /></WrapRoute>} />
           <Route path="*" element={<NotFound />} />
-        </Routes>
+        </SentryRoutes>
       </V2Gate>
     </Suspense>
   );
