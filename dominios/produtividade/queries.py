@@ -108,6 +108,21 @@ CTE_Financeiro_Agente AS (
     LEFT JOIN CTE_Saldo_Original S ON A.NR_RECEBIMENTO = S.NR_RECEBIMENTO
     GROUP BY A.ID_USUARIO
 ),
+-- Esforço (acionamentos/alô/contato) pré-agregado por agente. Separado da tabela
+-- final para o agente com acordo gerado hoje mas sem acionamento no mesmo dia
+-- (ex.: renegociação automática) não sumir do resultado — CTO_MASTER deixa de
+-- ser a tabela-âncora (era JOIN direto, excluía quem tinha F mas não tinha CM).
+CTE_Esforco_Agente AS (
+    SELECT
+        CM.ID_USUARIO,
+        COUNT(DISTINCT CM.ID_DEV) AS qtd_acionamentos,
+        COUNT(DISTINCT CASE WHEN CC.ALO = 1 THEN CM.ID_DEV END) AS qtd_alo,
+        COUNT(DISTINCT CASE WHEN CC.ALO = 1 AND CM.ID_COMPLEMENTO IN {settings.CPC_IDS_SQL} THEN CM.ID_DEV END) AS qtd_contatos
+    FROM CTO_MASTER CM (NOLOCK)
+    LEFT JOIN CTO_COMPLEMENTO CC (NOLOCK) ON CM.ID_COMPLEMENTO = CC.ID_COMPLEMENTO
+    WHERE CM.DATA >= @Hoje AND CM.DATA < @Amanha
+    GROUP BY CM.ID_USUARIO
+),
 -- Proxy de horas trabalhadas: janela intradiária entre o primeiro e o último
 -- acordo aprovado de cada dia (MAX-MIN de DT_EMISSAO). Somado por dia para não
 -- contar o intervalo de um dia para o outro.
@@ -148,43 +163,37 @@ SELECT
     U.CHAVE,
     U.NOME,
     -- qtd_acionamentos = devedores únicos acionados no dia (dedupe por ID_DEV)
-    COUNT(DISTINCT CM.ID_DEV) AS qtd_acionamentos,
+    ISNULL(E.qtd_acionamentos, 0) AS qtd_acionamentos,
     -- Alô = alguém atendeu (CTO_COMPLEMENTO.ALO=1). Etapa do funil entre
     -- acionamento e contato/RPC.
-    COUNT(DISTINCT CASE WHEN CC.ALO = 1 THEN CM.ID_DEV END) AS qtd_alo,
+    ISNULL(E.qtd_alo, 0) AS qtd_alo,
     -- Contato (RPC) = falou com a pessoa certa (CPC_COMPLEMENTO_IDS curado).
-    COUNT(DISTINCT CASE WHEN CC.ALO = 1 AND CM.ID_COMPLEMENTO IN {settings.CPC_IDS_SQL} THEN CM.ID_DEV END) AS qtd_contatos,
+    ISNULL(E.qtd_contatos, 0) AS qtd_contatos,
     CAST(
-        CEILING(
-            COUNT(DISTINCT CASE WHEN CC.ALO = 1 AND CM.ID_COMPLEMENTO IN {settings.CPC_IDS_SQL} THEN CM.ID_DEV END) * 100.0
-        / NULLIF(COUNT(DISTINCT CASE WHEN CC.ALO = 1 THEN CM.ID_DEV END), 0)
-        )
+        CEILING(ISNULL(E.qtd_contatos, 0) * 100.0 / NULLIF(E.qtd_alo, 0))
     AS INT) AS cpc_percentual,
-    ISNULL(MAX(F.qtd_acordos), 0) AS qtd_acordos,
-    ISNULL(MAX(BA.qtd_boletos_emitidos), 0) AS qtd_boletos_emitidos,
-    ISNULL(MAX(BA.qtd_boletos_pagos), 0) AS qtd_boletos_pagos,
+    ISNULL(F.qtd_acordos, 0) AS qtd_acordos,
+    ISNULL(BA.qtd_boletos_emitidos, 0) AS qtd_boletos_emitidos,
+    ISNULL(BA.qtd_boletos_pagos, 0) AS qtd_boletos_pagos,
     CAST(
-        ISNULL(MAX(F.qtd_acordos), 0) * 100.0
-        / NULLIF(COUNT(DISTINCT CM.ID_DEV), 0)
+        ISNULL(F.qtd_acordos, 0) * 100.0 / NULLIF(E.qtd_acionamentos, 0)
     AS DECIMAL(5,2)) AS acordos_percentual,
-    CAST(ISNULL(MAX(F.valor_acordos), 0) AS DECIMAL(18,2)) AS valor_acordos,
-    CAST(ISNULL(MAX(F.acordo_medio), 0) AS DECIMAL(18,2)) AS acordo_medio,
-    CAST(ISNULL(MAX(F.parcelamento_medio), 0) AS DECIMAL(10,2)) AS parcelamento_medio,
-    CAST(ISNULL(MAX(F.desconto_medio_percentual), 0) AS DECIMAL(10,2)) AS desconto_medio_percentual,
-    CAST(ISNULL(MAX(F.valor_primeira_parcela), 0) AS DECIMAL(18,2)) AS valor_primeira_parcela,
-    CAST(ISNULL(MAX(F.valor_p1_recebido), 0) AS DECIMAL(18,2)) AS valor_p1_recebido,
-    ISNULL(MAX(F.qtd_excecoes), 0) AS qtd_excecoes,
-    CAST(ISNULL(MAX(F.valor_excecoes), 0) AS DECIMAL(18,2)) AS valor_excecoes,
-    CAST(ISNULL(MAX(F.valor_primeira_parcela_excecoes), 0) AS DECIMAL(18,2)) AS valor_primeira_parcela_excecoes,
-    ISNULL(MAX(F.qtd_rejeitados), 0) AS qtd_rejeitados,
-    CAST(ISNULL(MAX(F.valor_rejeitados), 0) AS DECIMAL(18,2)) AS valor_rejeitados,
-    CAST(ISNULL(MAX(F.idade_media_acordos), 0) AS DECIMAL(10,1)) AS idade_media_acordos,
-    CAST(ISNULL(MAX(H.horas_trabalhadas), 0) AS DECIMAL(10,2)) AS horas_trabalhadas
-FROM CTO_MASTER CM (NOLOCK)
-JOIN USU_MASTER U (NOLOCK)
-    ON CM.ID_USUARIO = U.ID_USUARIO
-LEFT JOIN CTO_COMPLEMENTO CC (NOLOCK)
-    ON CM.ID_COMPLEMENTO = CC.ID_COMPLEMENTO
+    CAST(ISNULL(F.valor_acordos, 0) AS DECIMAL(18,2)) AS valor_acordos,
+    CAST(ISNULL(F.acordo_medio, 0) AS DECIMAL(18,2)) AS acordo_medio,
+    CAST(ISNULL(F.parcelamento_medio, 0) AS DECIMAL(10,2)) AS parcelamento_medio,
+    CAST(ISNULL(F.desconto_medio_percentual, 0) AS DECIMAL(10,2)) AS desconto_medio_percentual,
+    CAST(ISNULL(F.valor_primeira_parcela, 0) AS DECIMAL(18,2)) AS valor_primeira_parcela,
+    CAST(ISNULL(F.valor_p1_recebido, 0) AS DECIMAL(18,2)) AS valor_p1_recebido,
+    ISNULL(F.qtd_excecoes, 0) AS qtd_excecoes,
+    CAST(ISNULL(F.valor_excecoes, 0) AS DECIMAL(18,2)) AS valor_excecoes,
+    CAST(ISNULL(F.valor_primeira_parcela_excecoes, 0) AS DECIMAL(18,2)) AS valor_primeira_parcela_excecoes,
+    ISNULL(F.qtd_rejeitados, 0) AS qtd_rejeitados,
+    CAST(ISNULL(F.valor_rejeitados, 0) AS DECIMAL(18,2)) AS valor_rejeitados,
+    CAST(ISNULL(F.idade_media_acordos, 0) AS DECIMAL(10,1)) AS idade_media_acordos,
+    CAST(ISNULL(H.horas_trabalhadas, 0) AS DECIMAL(10,2)) AS horas_trabalhadas
+FROM USU_MASTER U (NOLOCK)
+LEFT JOIN CTE_Esforco_Agente E
+    ON U.ID_USUARIO = E.ID_USUARIO
 LEFT JOIN CTE_Financeiro_Agente F
     ON U.ID_USUARIO = F.ID_USUARIO
 LEFT JOIN CTE_Horas_Agente H
@@ -192,11 +201,8 @@ LEFT JOIN CTE_Horas_Agente H
 LEFT JOIN CTE_Boletos_Agente BA
     ON U.ID_USUARIO = BA.ID_USUARIO
 WHERE
-    CM.DATA >= @Hoje AND CM.DATA < @Amanha
+    (E.ID_USUARIO IS NOT NULL OR F.ID_USUARIO IS NOT NULL)
     {settings.FILTRO_AGENTES_EXCLUIDOS_SQL}
-GROUP BY
-    U.CHAVE,
-    U.NOME
 ORDER BY
     qtd_acionamentos DESC
 OPTION (USE HINT('ENABLE_PARALLEL_PLAN_PREFERENCE'), MAXDOP 0);
