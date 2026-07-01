@@ -123,18 +123,23 @@ def _get_dashboard_agentes_unificado(
 ) -> Dict[str, Any]:
     run_id = getattr(request.state, "run_id", f"srv-{uuid4().hex[:12]}") if request else f"srv-{uuid4().hex[:12]}"
     validated_database = validate_database_or_todos(database_name)
-    query = build_produtividade_query(
-        validated_database,
-        use_distinct_esforco=False,
-        date_from=date_from,
-        date_to_exclusive=date_to_exclusive,
-    )
-    rows = run_query(
-        query,
-        settings.ALLOWED_DATABASES[0],
-        run_id=run_id,
-        context=context,
-    )
+
+    def _compute() -> List[Dict[str, Any]]:
+        query = build_produtividade_query(
+            validated_database,
+            use_distinct_esforco=False,
+            date_from=date_from,
+            date_to_exclusive=date_to_exclusive,
+        )
+        return run_query(
+            query,
+            settings.ALLOWED_DATABASES[0],
+            run_id=run_id,
+            context=context,
+        )
+
+    cache_key = f"produtividade|{context}|{validated_database}|{date_from or 'hoje'}|{date_to_exclusive or 'hoje'}"
+    rows = cache_manager.get_or_compute(cache_key, _compute)
     sources = settings.ALLOWED_DATABASES if validated_database == "todos" else [validated_database]
     date_label = f"{date_from}/{date_to_exclusive}" if date_from else "today"
     return build_response_envelope(
@@ -338,22 +343,27 @@ def get_dashboard_produtividade_hoje(
     run_id = getattr(request.state, "run_id", f"srv-{uuid4().hex[:12]}") if request else f"srv-{uuid4().hex[:12]}"
     database_name = validate_database(database_name)
     parsed_from, parsed_to_excl = _parse_period(date_from, date_to)
-    prod_params = build_produtividade_hoje_params(portfolio)
-    rows = run_query(
-        build_produtividade_query(
-            database_name,
-            use_distinct_esforco=True,
-            date_from=parsed_from,
-            date_to_exclusive=parsed_to_excl,
-            portfolio=portfolio,
-        ),
-        database_name,
-        params=prod_params,
-        run_id=run_id,
-        context="dashboard/produtividade-hoje",
-    )
-    rows, validation_metrics = validate_produtividade_rows(rows, run_id=run_id)
     assessoria_applied, token = normalize_assessoria_filter(assessoria)
+
+    def _compute() -> tuple:
+        prod_params = build_produtividade_hoje_params(portfolio)
+        raw = run_query(
+            build_produtividade_query(
+                database_name,
+                use_distinct_esforco=True,
+                date_from=parsed_from,
+                date_to_exclusive=parsed_to_excl,
+                portfolio=portfolio,
+            ),
+            database_name,
+            params=prod_params,
+            run_id=run_id,
+            context="dashboard/produtividade-hoje",
+        )
+        return validate_produtividade_rows(raw, run_id=run_id)
+
+    cache_key = f"produtividade-hoje|{database_name}|{parsed_from or 'hoje'}|{parsed_to_excl or 'hoje'}|{portfolio or 'all'}|{assessoria_applied or 'all'}"
+    rows, validation_metrics = cache_manager.get_or_compute(cache_key, _compute)
     if token:
         rows = [
             row
