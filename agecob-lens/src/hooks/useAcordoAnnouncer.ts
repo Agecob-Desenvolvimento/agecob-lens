@@ -58,7 +58,7 @@ function falaTop3(top: TvTopAgente[]): string {
     .slice(0, 3)
     .map((a, i) => `Em ${ORDINAL[i]}, ${a.label}, com ${Math.round(a.value)} reais.`)
     .join(" ");
-  return ` Top 3 agentes do dia: ${partes}`;
+  return ` Os 3 melhores agentes do dia: ${partes}`;
 }
 
 // Boletim horário do ritmo do dia + top 3 agentes + frase de motivação no fim.

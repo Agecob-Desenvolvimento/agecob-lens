@@ -54,6 +54,9 @@ function voiceScore(v: SpeechSynthesisVoice): number {
   if (n.includes("natural")) s += 8;
   else if (n.includes("google") || n.includes("online")) s += 6;
   if (n.includes("desktop")) s -= 2;
+  // vozes "Multilingual" trocam sotaque/fonema por trecho conforme idioma
+  // detectado no texto — é a causa raiz de falar espanhol em certas frases.
+  if (n.includes("multilingual")) s -= 20;
   return s;
 }
 
