@@ -80,7 +80,8 @@ export function classifyCell(percentile: number, invert = false): "good" | "warn
  */
 export function buildPercentileMap(allValues: number[]): Map<number, number> {
   if (allValues.length === 0) return new Map();
-  const sorted = [...allValues].sort((a, b) => a - b);
+  // NaN nunca é === a si mesmo: sem sanitizar, o loop de ranking abaixo não avança e trava a UI.
+  const sorted = allValues.map((v) => (Number.isFinite(v) ? v : 0)).sort((a, b) => a - b);
   const n = sorted.length;
   const map = new Map<number, number>();
   let i = 0;
