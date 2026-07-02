@@ -123,11 +123,14 @@ export function useTvModeViewModel(): TvModeViewModel {
     const espAteAgora = bandas
       .filter((b) => b.status !== "futuro" && b.status !== "em_andamento")
       .reduce((s, b) => s + b.esperado, 0);
+    // meta.em_operacao=false (fora 8h-19h ou fds) → backend retorna acumulado_atual
+    // stub (0), não dado real. Sem essa checagem a URA anunciaria "0 acordos".
+    const emOperacao = ritmoResp?.meta.em_operacao ?? false;
     const ritmoAgg = {
-      real: ritmoResp?.data.acumulado_atual ?? null,
-      espAteAgora: bandas.length ? espAteAgora : null,
-      proj: ritmoResp?.data.projecao_fechamento ?? null,
-      meta: ritmoResp?.data.esperado_total ?? null,
+      real: emOperacao ? ritmoResp?.data.acumulado_atual ?? null : null,
+      espAteAgora: emOperacao && bandas.length ? espAteAgora : null,
+      proj: emOperacao ? ritmoResp?.data.projecao_fechamento ?? null : null,
+      meta: emOperacao ? ritmoResp?.data.esperado_total ?? null : null,
     };
     // Ticker — destaques derivados de dados reais
     const ticker: TvTickerItem[] = [];

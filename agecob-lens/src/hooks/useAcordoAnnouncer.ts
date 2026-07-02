@@ -16,6 +16,10 @@ import { type TvRitmoAgg, type TvTopAgente } from "@/components/tv/tvShared";
 import { cancelSpeech, isSpeechSupported, speakPtBR } from "@/lib/speech";
 
 const POLL_MS = 20000;
+// atraso do boletim horário além do :00 — garante que ao menos 1 poll já rodou
+// com o relógio do backend virado pra hora nova, senão fala o real da hora
+// anterior ainda "em andamento" (stale, sempre 0 no instante exato da virada).
+const HOUR_BOUNDARY_BUFFER_MS = 120000;
 const MAX_PER_TICK = 5; // teto de anúncios por ciclo — evita avalanche de áudio
 const RITMO_VAZIO: TvRitmoAgg = { real: null, espAteAgora: null, proj: null, meta: null };
 
@@ -170,7 +174,7 @@ export function useAcordoAnnouncer(
       timer = setTimeout(() => {
         boletim();
         agendarProximaHora();
-      }, ms);
+      }, ms + HOUR_BOUNDARY_BUFFER_MS);
     };
     boletim(); // logo ao ligar a URA
     agendarProximaHora(); // depois, a cada :00
