@@ -9,6 +9,7 @@
     "dev:staging": "vite --mode dev",
     "build": "vite build",
     "build:dev": "vite build --mode dev",
+    "check": "tsc --noEmit",
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",

@@ -15,6 +15,8 @@ pip install -r requirements.txt --quiet || (echo ERRO no pip install & pause & e
 echo [3/5] Buildando frontend...
 cd agecob-lens || (echo ERRO: agecob-lens nao existe & pause & exit /b 1)
 call npm install --quiet || (echo ERRO no npm install & cd .. & pause & exit /b 1)
+rem vite build (swc) nao checa tipos — sem este passo, erro de tipo vai pra producao (ver ee9699a/calcConversao)
+call npm run check || (echo ERRO no typecheck ^(tsc --noEmit^) & cd .. & pause & exit /b 1)
 call npm run build || (echo ERRO no npm run build & cd .. & pause & exit /b 1)
 cd ..
 
