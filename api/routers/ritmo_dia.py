@@ -1,11 +1,15 @@
 """
 Ritmo do Dia — endpoint /dashboard/ritmo-dia/{db}
 
-Usa KNN Fase 2 (modelo + scaler em deploy/) para prever acordos por banda
-horária (8h–19h). Modelo/scaler ficam em cache com TTL de 24h.
+Modelo híbrido por banco (MODEL_DOCS 5.10, decisão do gestor):
+  - AUTOS: Phase 1 refinado — lookup mediana (hora, banco) em deploy/phase1_lookup.json
+  - CONSUMER: KNN Fase 2 (modelo + scaler em deploy/) — mediana pós-filtro é 0 em
+    todas as bandas; card zerado foi rejeitado, KNN mantido até volume crescer.
+Artefatos ficam em cache com TTL de 24h.
 """
 from __future__ import annotations
 
+import json
 import logging
 import math
 import time
@@ -30,7 +34,10 @@ _BANCO_BIN = {"COBwebRCBAUTOS": 0, "COBwebRCBCONSUMER": 1}
 _DEPLOY_DIR = Path(__file__).resolve().parents[2] / "deploy"
 _MODEL_PATH = _DEPLOY_DIR / "knn_phase2_model.joblib"
 _SCALER_PATH = _DEPLOY_DIR / "knn_phase2_scaler.joblib"
+_LOOKUP_PATH = _DEPLOY_DIR / "phase1_lookup.json"
 _MODEL_TTL = 24 * 60 * 60
+
+_BANCOS_LOOKUP = {"COBwebRCBAUTOS"}  # bancos servidos pelo lookup; demais usam KNN
 
 _DS_MIN, _DS_PERIOD = 2, 5
 
@@ -42,6 +49,9 @@ class Artifacts(NamedTuple):
 _artifacts: Optional[Artifacts] = None
 _artifacts_loaded_at: float = 0.0
 _artifacts_lock = Lock()
+
+_lookup: Optional[Dict[str, object]] = None
+_lookup_loaded_at: float = 0.0
 
 _ACORDOS_TTL = 30  # segundos
 _acordos_cache: Dict[str, Tuple[date, float, Dict[int, int]]] = {}
@@ -60,6 +70,17 @@ def _load_artifacts() -> Artifacts:
         return _artifacts
 
 
+def _load_lookup() -> Dict[str, object]:
+    global _lookup, _lookup_loaded_at
+    with _artifacts_lock:
+        now = time.time()
+        if _lookup is None or now - _lookup_loaded_at > _MODEL_TTL:
+            with open(_LOOKUP_PATH, encoding="utf-8") as f:
+                _lookup = json.load(f)
+            _lookup_loaded_at = now
+        return _lookup
+
+
 def _esperado(
     model,
     scaler,
@@ -75,6 +96,17 @@ def _esperado(
     X = np.array([[hora, dias_desde, ds_sin, ds_cos, acumulado, banco_bin, acum_primeiras_2h]])
     pred = float(model.predict(scaler.transform(X))[0])
     return max(0, math.ceil(pred))
+
+
+def _esperado_lookup(lookup: Dict[str, object], banco: str, hora: int) -> int:
+    pred = float(lookup["medianas"][banco][str(hora)])
+    return max(0, math.ceil(pred))
+
+
+def _modelo_label(db: str) -> str:
+    if db == "todos":
+        return "hibrido_autos_p1_consumer_knn"
+    return "phase1_hora_banco" if db in _BANCOS_LOOKUP else "knn_phase2"
 
 
 def _obter_dias_desde_batimento(db: str) -> int:
@@ -141,18 +173,24 @@ def _coletar_dados_por_banco(db: str) -> Dict[str, Tuple[int, Dict[int, int]]]:
 def _bandas_para_banco(
     model,
     scaler,
+    lookup: Dict[str, object],
+    banco: str,
     dias_desde: int,
     dia_semana: int,
     reais: Dict[int, int],
-    banco_bin: int,
     hora_atual: int,
 ) -> List[Dict[str, object]]:
+    usa_lookup = banco in _BANCOS_LOOKUP
     acum_2h_full = int(reais.get(8, 0) + reais.get(9, 0))
     bandas: List[Dict[str, object]] = []
     acumulado = 0
     for h in range(8, 20):
-        acum_2h = 0 if h < 10 else acum_2h_full
-        esp = _esperado(model, scaler, h, dias_desde, dia_semana, acumulado, banco_bin, acum_2h)
+        if usa_lookup:
+            esp = _esperado_lookup(lookup, banco, h)
+        else:
+            acum_2h = 0 if h < 10 else acum_2h_full
+            esp = _esperado(model, scaler, h, dias_desde, dia_semana, acumulado,
+                            _BANCO_BIN[banco], acum_2h)
         if not reais and h >= hora_atual:
             real, delta, status = None, None, "futuro"
         elif h < hora_atual:
@@ -224,7 +262,7 @@ def ritmo_dia(db: str) -> Dict[str, object]:
             "meta": {
                 "generated_at": generated_at,
                 "em_operacao": False,
-                "modelo": "knn_phase2",
+                "modelo": _modelo_label(db),
             },
             "data": {"hora_atual": hora_atual, "acumulado_atual": 0, "bandas": []},
             "errors": [],
@@ -232,6 +270,7 @@ def ritmo_dia(db: str) -> Dict[str, object]:
 
     try:
         model, scaler = _load_artifacts()
+        lookup = _load_lookup()
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Falha ao carregar modelo: {exc}")
 
@@ -247,7 +286,7 @@ def ritmo_dia(db: str) -> Dict[str, object]:
             "meta": {
                 "generated_at": generated_at,
                 "em_operacao": True,
-                "modelo": "knn_phase2",
+                "modelo": _modelo_label(db),
             },
             "data": {"hora_atual": hora_atual, "acumulado_atual": 0, "bandas": []},
             "errors": [{"msg": "Falha ao consultar dados operacionais"}],
@@ -257,7 +296,7 @@ def ritmo_dia(db: str) -> Dict[str, object]:
     faixa = _faixa_de_dias(dias_desde_min)
 
     bandas_por_banco = [
-        _bandas_para_banco(model, scaler, dias_desde, dia_semana, reais, _BANCO_BIN[banco], hora_atual)
+        _bandas_para_banco(model, scaler, lookup, banco, dias_desde, dia_semana, reais, hora_atual)
         for banco, (dias_desde, reais) in por_banco.items()
     ]
     bandas = _agregar_bandas(bandas_por_banco)
@@ -275,7 +314,7 @@ def ritmo_dia(db: str) -> Dict[str, object]:
             "generated_at": generated_at,
             "faixa_batimento": faixa,
             "dias_desde_ultimo_batimento": dias_desde_min,
-            "modelo": "knn_phase2",
+            "modelo": _modelo_label(db),
             "em_operacao": True,
         },
         "data": {
