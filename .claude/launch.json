@@ -3,7 +3,7 @@
   "configurations": [
     {
       "name": "FastAPI (agecob-lens API)",
-      "runtimeExecutable": "python",
+      "runtimeExecutable": ".venv\\Scripts\\python.exe",
       "runtimeArgs": ["main.py"],
       "port": 8000
     },
