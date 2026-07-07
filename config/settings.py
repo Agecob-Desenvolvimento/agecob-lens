@@ -85,6 +85,7 @@ RECOMMENDED_INDEXES: List[Dict[str, Any]] = [
         "include_columns": [
             "NR_RECEBIMENTO", "ID_USUARIO", "ID_DEV", "ID_REC_STATUS",
             "PARCELA", "PLANO", "VALOR", "DT_VENCIMENTO", "DT_PAGAMENTO",
+            "VR_PAGO",
         ],
         "purpose": "Janela de acordos emitidos no dia (base de todo o dashboard).",
     },
@@ -113,12 +114,16 @@ RECOMMENDED_INDEXES: List[Dict[str, Any]] = [
         "purpose": "CROSS APPLY TOP 1 para trazer nome do portfolio.",
     },
     {
-        "name": "IX_CTO_MASTER_DT_CONTATO",
+        # Todas as queries filtram CTO_MASTER.DATA — o antigo IX_CTO_MASTER_DT_CONTATO
+        # (key DT_CONTATO) nunca era usado e deixava todo KPI de esforço em table scan.
+        # Se o antigo existir em prod, DBA deve dropar. ID_DEV no INCLUDE: dedupe
+        # COUNT(DISTINCT ID_DEV) sem key lookup.
+        "name": "IX_CTO_MASTER_DATA",
         "schema": "dbo",
         "table": "CTO_MASTER",
-        "key_columns": ["DT_CONTATO"],
-        "include_columns": ["ID_USUARIO", "ID_COMPLEMENTO", "ID_CTO_MASTER"],
-        "purpose": "Acionamentos do dia (produtividade).",
+        "key_columns": ["DATA"],
+        "include_columns": ["ID_USUARIO", "ID_COMPLEMENTO", "ID_DEV", "ID_CTO_MASTER"],
+        "purpose": "Acionamentos do dia (produtividade, comparacao, benchmarks).",
     },
     {
         "name": "IX_USU_MASTER_ID_USUARIO",
@@ -127,6 +132,45 @@ RECOMMENDED_INDEXES: List[Dict[str, Any]] = [
         "key_columns": ["ID_USUARIO"],
         "include_columns": ["NOME", "CHAVE"],
         "purpose": "Join por ID_USUARIO + filtro de exclusao em NOME/CHAVE.",
+    },
+    {
+        "name": "IX_REC_MASTER_DT_VENCIMENTO_COV",
+        "schema": "dbo",
+        "table": "REC_MASTER",
+        "key_columns": ["DT_VENCIMENTO"],
+        "include_columns": [
+            "ID_REC_STATUS", "PARCELA", "VALOR", "VR_PAGO",
+            "DT_PAGAMENTO", "ID_USUARIO", "NR_RECEBIMENTO", "ID_CARTEIRA",
+            "DT_EMISSAO",
+        ],
+        "purpose": "Efetividade/conversao: boleto pago no prazo, curva de quebra, boletos-detalhe.",
+    },
+    {
+        "name": "IX_REC_MASTER_DT_PAGAMENTO_COV",
+        "schema": "dbo",
+        "table": "REC_MASTER",
+        "key_columns": ["DT_PAGAMENTO"],
+        "include_columns": [
+            "ID_REC_STATUS", "PARCELA", "VALOR", "VR_PAGO",
+            "DT_VENCIMENTO", "ID_USUARIO", "NR_RECEBIMENTO", "ID_CARTEIRA",
+        ],
+        "purpose": "Valor recebido no dia / colchao.",
+    },
+    {
+        "name": "IX_DIV_MASTER_ID_DIVIDA",
+        "schema": "dbo",
+        "table": "DIV_MASTER",
+        "key_columns": ["ID_DIVIDA"],
+        "include_columns": ["VR_SALDO", "DT_VENCIMENTO"],
+        "purpose": "Saldo original / calculo de desconto via REC_DIVIDAS.",
+    },
+    {
+        "name": "IX_REC_DIVIDAS_NR_CARTEIRA",
+        "schema": "dbo",
+        "table": "REC_DIVIDAS",
+        "key_columns": ["NR_RECEBIMENTO", "ID_CARTEIRA"],
+        "include_columns": ["ID_DIVIDA"],
+        "purpose": "Join com portfolio (chave composta usada no CROSS APPLY real).",
     },
 ]
 
@@ -165,6 +209,32 @@ FILTRO_AGENTES_EXCLUIDOS_SQL: str = """
     AND UPPER(LTRIM(RTRIM(U.CHAVE))) NOT LIKE 'SUPORTE%'
     AND UPPER(LTRIM(RTRIM(U.CHAVE))) NOT LIKE 'SISTEMA%'
 """
+
+# Piso histórico das séries de efetividade (formato YYYYMMDD, comparação
+# sargável — nunca envolver a coluna em YEAR()).
+EFETIVIDADE_DATA_MINIMA: str = "20260101"
+
+# Filtro de agentes da EFETIVIDADE — diverge do FILTRO_AGENTES_EXCLUIDOS_SQL de
+# propósito: match por substring (não prefixo/exato) e exclui também SERASA e
+# NEMBUS. Unificar os dois muda os números da página Efetividade — decisão de
+# negócio pendente.
+FILTRO_AGENTES_EFETIVIDADE_SQL: str = (
+    "AND UPPER(U.CHAVE) NOT LIKE '%SERASA%' "
+    "AND UPPER(U.CHAVE) NOT LIKE '%COBDESANTOS%' "
+    "AND UPPER(U.CHAVE) NOT LIKE '%NEMBUS%' "
+    "AND UPPER(U.CHAVE) NOT LIKE '%ANTLIA%' "
+    "AND UPPER(U.CHAVE) NOT LIKE '%SUPORTE%' "
+    "AND UPPER(U.CHAVE) NOT LIKE '%INTERNA%' "
+    "AND UPPER(U.CHAVE) NOT LIKE '%SISTEMA%' "
+    "AND UPPER(U.NOME) NOT LIKE '%COBDESANTOS%' "
+    "AND UPPER(U.NOME) NOT LIKE '%NEMBUSUSER%'"
+)
+
+# Curva de quebra: aprovados + quebra manual. Status 10 (QUEBRA AUTOMÁTICA) fora
+# por decisão pendente — incluir mudaria taxa_quebra (hoje subconta auto-quebras).
+STATUS_CURVA_QUEBRA_SQL: str = _sql_in(tuple(sorted(set(
+    STATUS_APROVADOS + STATUS_QUEBRADO
+))))  # (1, 2, 3, 12)
 
 # ─────────────────────────────────────────────────────────────────
 # PATHS

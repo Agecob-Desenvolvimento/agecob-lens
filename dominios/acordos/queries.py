@@ -210,15 +210,15 @@ def build_tabela_performance_periodo_query(
                 ISNULL(R.qtd_reprovados, 0)   AS qtd_reprovados,
                 ISNULL(EX.qtd_excecoes, 0)    AS qtd_excecoes,
                 ISNULL(EX.valor_excecoes, 0)  AS valor_excecoes
-            FROM {db}.dbo.USU_MASTER U
+            FROM {db}.dbo.USU_MASTER U (NOLOCK)
             LEFT JOIN (
                 SELECT
                     CM.ID_USUARIO,
                     COUNT(DISTINCT DM.CPF_CNPJ) AS qtd_acionamentos,
                     COUNT(DISTINCT CASE WHEN CC.ALO = 1 THEN DM.CPF_CNPJ END) AS qtd_alo,
                     COUNT(DISTINCT CASE WHEN CC.ALO = 1 AND CM.ID_COMPLEMENTO IN {settings.CPC_IDS_SQL} THEN DM.CPF_CNPJ END) AS qtd_contatos
-                FROM {db}.dbo.CTO_MASTER CM
-                JOIN {db}.dbo.DEV_MASTER DM ON DM.ID_DEV = CM.ID_DEV
+                FROM {db}.dbo.CTO_MASTER CM (NOLOCK)
+                JOIN {db}.dbo.DEV_MASTER DM (NOLOCK) ON DM.ID_DEV = CM.ID_DEV
                 LEFT JOIN {db}.dbo.CTO_COMPLEMENTO CC (NOLOCK) ON CM.ID_COMPLEMENTO = CC.ID_COMPLEMENTO
                 WHERE CM.DATA >= CAST('{df}' AS DATE) AND CM.DATA < CAST('{dt}' AS DATE)
                 GROUP BY CM.ID_USUARIO
@@ -232,7 +232,7 @@ def build_tabela_performance_periodo_query(
                     SUM(CASE WHEN DT_VENCIMENTO < CAST(GETDATE() AS DATE) THEN ({settings.BOLETO_PAGO_PRAZO_SQL}) ELSE 0 END) AS qtd_boletos_pagos,
                     SUM(VALOR) AS valor_total,
                     SUM(CASE WHEN PARCELA = 0 THEN VALOR ELSE 0 END) AS soma_primeira_parcela
-                FROM {db}.dbo.REC_MASTER
+                FROM {db}.dbo.REC_MASTER (NOLOCK)
                 WHERE DT_EMISSAO >= CAST('{df}' AS DATE) AND DT_EMISSAO < CAST('{dt}' AS DATE)
                   AND ID_REC_STATUS IN {settings.STATUS_GERADOS_SQL}
                 GROUP BY ID_USUARIO
@@ -240,8 +240,8 @@ def build_tabela_performance_periodo_query(
             LEFT JOIN (
                 -- Reprovados: status cuja descrição contém REJEITADO, REPROVADO ou RECUSADO.
                 SELECT RM.ID_USUARIO, COUNT(DISTINCT RM.NR_RECEBIMENTO) AS qtd_reprovados
-                FROM {db}.dbo.REC_MASTER RM
-                JOIN {db}.dbo.REC_STATUS RS ON RM.ID_REC_STATUS = RS.ID_REC_STATUS
+                FROM {db}.dbo.REC_MASTER RM (NOLOCK)
+                JOIN {db}.dbo.REC_STATUS RS (NOLOCK) ON RM.ID_REC_STATUS = RS.ID_REC_STATUS
                 WHERE RM.DT_EMISSAO >= CAST('{df}' AS DATE) AND RM.DT_EMISSAO < CAST('{dt}' AS DATE)
                   AND (
                       RS.DESCR LIKE '%REJEITADO%'
@@ -255,7 +255,7 @@ def build_tabela_performance_periodo_query(
                     ID_USUARIO,
                     COUNT(DISTINCT NR_RECEBIMENTO) AS qtd_excecoes,
                     SUM(VALOR) AS valor_excecoes
-                FROM {db}.dbo.REC_MASTER
+                FROM {db}.dbo.REC_MASTER (NOLOCK)
                 WHERE DT_EMISSAO >= CAST('{df}' AS DATE) AND DT_EMISSAO < CAST('{dt}' AS DATE)
                   AND ID_REC_STATUS IN {settings.STATUS_EXCECAO_SQL}
                 GROUP BY ID_USUARIO
