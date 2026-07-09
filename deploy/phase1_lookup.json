@@ -3,8 +3,15 @@
   "estimador": "mediana",
   "postproc": "ceil_clip0",
   "janela_dias_uteis": 90,
-  "treino_de": "2026-02-04",
-  "treino_ate": "2026-06-16",
+  "cutoff_dias_uteis_consumer": 18,
+  "treino_de": {
+    "COBwebRCBAUTOS": "2026-02-04",
+    "COBwebRCBCONSUMER": "2025-12-04"
+  },
+  "treino_ate": {
+    "COBwebRCBAUTOS": "2026-06-16",
+    "COBwebRCBCONSUMER": "2026-05-20"
+  },
   "medianas": {
     "COBwebRCBAUTOS": {
       "8": 0.0,
