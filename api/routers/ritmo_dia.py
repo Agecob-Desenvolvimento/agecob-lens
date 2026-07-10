@@ -494,7 +494,7 @@ def ritmo_dia(db: str) -> Dict[str, object]:
     ), 2)
     valor_esperado_total = round(sum(float(b["esperado_valor"]) for b in bandas), 2)
     valor_projecao_fechamento = round(valor_acumulado_atual + sum(
-        float(b["esperado_valor"]) for b in bandas if b["status"] in ("em_andamento", "futuro")
+        float(b["esperado_valor"]) for b in bandas if b["status_valor"] in ("em_andamento", "futuro")
     ), 2)
 
     return {

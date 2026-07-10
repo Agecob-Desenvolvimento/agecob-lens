@@ -10,6 +10,8 @@ que ficou desatualizado em relacao ao artefato em producao).
 Fonte: deploy/d_valor.csv (gerado por deploy/gerar_dataset_valor.py).
 Holdout simples (ultimos 15 dias uteis) para escolha de k — nao repete o
 walk-forward de 4 folds do script de quantidade (fora de escopo aqui).
+Sem criterio formal de promocao (vs. STEP 8 do script de quantidade) — ver
+deploy/CAVEAT_PROMOCAO_MODELO_VALOR.md.
 
 Artefatos: knn_phase2_valor_model.joblib, knn_phase2_valor_scaler.joblib
 """

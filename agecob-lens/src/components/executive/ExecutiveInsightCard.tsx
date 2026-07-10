@@ -43,17 +43,27 @@ export interface InsightCta {
   href?: string;
 }
 
-interface HandoffProps {
-  variant: InsightCardVariant;
+interface HandoffCommonProps {
   title?: string;
   metric?: InsightMetric;
-  /** Segundo número, renderizado menor ao lado do primário (mesmo card). */
-  secondaryMetric?: InsightMetric;
   delta?: InsightDelta;
   description?: string;
   cta?: InsightCta;
   loading?: boolean;
 }
+
+interface CriticalHandoffProps extends HandoffCommonProps {
+  variant: "critical";
+  /** Segundo número, renderizado menor ao lado do primário (mesmo card). Só a variant "critical" renderiza. */
+  secondaryMetric?: InsightMetric;
+}
+
+interface NonCriticalHandoffProps extends HandoffCommonProps {
+  variant: "positive" | "neutral";
+  secondaryMetric?: never;
+}
+
+type HandoffProps = CriticalHandoffProps | NonCriticalHandoffProps;
 
 interface LegacyProps {
   data: InsightEngineOutput;
