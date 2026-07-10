@@ -31,6 +31,12 @@ def _stub_artifacts(monkeypatch):
         "_load_artifacts",
         lambda: rd.Artifacts(model=_FakeModel(), scaler=_FakeScaler()),
     )
+    monkeypatch.setattr(
+        rd,
+        "_load_valor_artifacts",
+        lambda: rd.Artifacts(model=_FakeModel(), scaler=_FakeScaler()),
+    )
+    monkeypatch.setattr(rd, "_coletar_valor_por_banco", lambda db: {})
 
 
 def _freeze(monkeypatch, y, m, d, hour):
@@ -55,6 +61,23 @@ def test_hora_10_classifica_bandas(monkeypatch):
     assert bandas[11]["status"] == "futuro"
     assert bandas[19]["status"] == "futuro"
     assert resp["data"]["acumulado_atual"] == 12
+
+
+def test_bandas_valor_mescladas(monkeypatch):
+    _freeze(monkeypatch, 2026, 5, 11, 10)
+    monkeypatch.setattr(rd, "_coletar_dados_por_banco", lambda db: {db: (3, {8: 7, 9: 5})})
+    monkeypatch.setattr(rd, "_coletar_valor_por_banco", lambda db: {db: {8: 1000.0, 9: 2.0}})
+    resp = rd.ritmo_dia("COBwebRCBCONSUMER")
+    bandas = {b["hora"]: b for b in resp["data"]["bandas"]}
+    assert bandas[8]["real_valor"] == 1000.0
+    assert bandas[8]["esperado_valor"] == 5.0
+    assert bandas[8]["status_valor"] == "acima"
+    assert bandas[9]["real_valor"] == 2.0
+    assert bandas[9]["status_valor"] == "abaixo"
+    assert bandas[10]["status_valor"] == "em_andamento"
+    assert bandas[11]["status_valor"] == "futuro"
+    assert resp["data"]["valor_acumulado_atual"] == 1002.0
+    assert resp["meta"]["modelo_valor"] == "knn_phase2_valor"
 
 
 def test_hora_8_inicio_dia(monkeypatch):

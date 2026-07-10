@@ -19,7 +19,7 @@ import {
   calcConversao,
   calcTicketMedio,
   calcTaxaContato,
-  calcEfetividadeCaixa,
+  calcComposicaoEntrada,
   calcExcecoesPctValor,
   calcReceitaPorHora,
   calcIdadeMediaAcordos,
@@ -183,9 +183,9 @@ const RADAR_DIMS: RadarDimSpec[] = [
     row: (r) => calcConversao({ qtd_boletos_pagos: r.qtd_boletos_pagos, qtd_contatos: r.qtd_contatos }),
   },
   {
-    dim: "Efetividade", unit: "%",
-    agg: (t) => calcEfetividadeCaixa(t),
-    row: (r) => calcEfetividadeCaixa({ valor_primeira_parcela: Number(r.valor_primeira_parcela || 0), valor_acordos: Number(r.valor_acordos || 0) }),
+    dim: "Composição Entrada", unit: "%",
+    agg: (t) => calcComposicaoEntrada(t),
+    row: (r) => calcComposicaoEntrada({ valor_primeira_parcela: Number(r.valor_primeira_parcela || 0), valor_acordos: Number(r.valor_acordos || 0) }),
   },
 ];
 

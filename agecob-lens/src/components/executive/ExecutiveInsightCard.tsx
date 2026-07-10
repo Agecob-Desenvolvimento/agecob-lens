@@ -47,6 +47,8 @@ interface HandoffProps {
   variant: InsightCardVariant;
   title?: string;
   metric?: InsightMetric;
+  /** Segundo número, renderizado menor ao lado do primário (mesmo card). */
+  secondaryMetric?: InsightMetric;
   delta?: InsightDelta;
   description?: string;
   cta?: InsightCta;
@@ -85,7 +87,7 @@ function formatMetric(m: InsightMetric): string {
   }
 }
 
-function HandoffBanner({ variant, metric, delta, description, cta }: HandoffProps) {
+function HandoffBanner({ variant, metric, secondaryMetric, delta, description, cta }: HandoffProps) {
   if (variant === "neutral") return null;
 
   const isCritical = variant === "critical";
@@ -135,6 +137,7 @@ function HandoffBanner({ variant, metric, delta, description, cta }: HandoffProp
   ) : null;
 
   const formattedMetric = metric ? formatMetric(metric) : null;
+  const formattedSecondary = secondaryMetric ? formatMetric(secondaryMetric) : null;
 
   return (
     <div
@@ -179,6 +182,16 @@ function HandoffBanner({ variant, metric, delta, description, cta }: HandoffProp
                 </span>
               )}
               {delta && <DeltaPill delta={delta} className={palette.badgePill} />}
+              {formattedSecondary && (
+                <span className="inline-flex items-baseline gap-1.5 pl-3 border-l border-danger-border/50">
+                  <span className="text-lg font-bold tabular-nums leading-none text-rose-900">
+                    {formattedSecondary}
+                  </span>
+                  {secondaryMetric?.label && (
+                    <span className="text-xs text-rose-900/70">{secondaryMetric.label}</span>
+                  )}
+                </span>
+              )}
             </div>
             {description && (
               <p className={cn("mt-2 text-[14.5px] leading-relaxed max-w-[640px]", palette.textBody)}>

@@ -21,6 +21,11 @@ export interface PortfolioRiskEntry {
 
 // ── Home (Index.tsx) ────────────────────────────────────────────
 
+type HomeInsightCard =
+  | { variant: "critical"; metric?: { value: string; label: string }; secondaryMetric?: { value: string; label: string }; description: string; cta?: { label: string; anchor?: string } }
+  | { variant: "positive"; metric?: { value: string; label: string }; description: string; cta?: { label: string; anchor?: string } }
+  | { variant: "neutral" };
+
 export interface HomeViewModel {
   loading: boolean;
   error: string | null;
@@ -30,10 +35,7 @@ export interface HomeViewModel {
   kpiSecondary: HomeKpiSecondary[];
   /** Cash conversion index: 1ª Parcela Recebida / 1ª Parcela Emitida * 100 */
   indiceConversaoCaixa: number | null;
-  insight:
-    | { variant: "critical"; metric?: { value: string; label: string }; description: string; cta?: { label: string } }
-    | { variant: "positive"; metric?: { value: string; label: string }; description: string; cta?: { label: string } }
-    | { variant: "neutral" };
+  insight: HomeInsightCard;
   financeiroData: HandoffFinanceiroDatum[];
   eficienciaData: HandoffEficienciaDatum[];
   funnelData: FunnelDatum[];
