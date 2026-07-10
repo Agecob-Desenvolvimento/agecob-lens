@@ -359,11 +359,12 @@ Frontend lazy-loads via `AgenteDetalheSection` (in DetalhamentoAgentes page, ins
 | Metric | Old Formula | New Formula |
 |---|---|---|
 | **Conversão %** | `qtd_acordos / qtd_contatos` → `qtd_boletos_pagos / qtd_boletos_emitidos × 100` | `qtd_boletos_pagos / qtd_contatos × 100` (pago em ≤5d do venc. sobre **CPC**, 2026-06-23) |
-| **Efetividade de Caixa** | — (new) | `valor_1ª_parcela / valor_acordos × 100` |
+| **Composição de Entrada** | `valor_1ª_parcela / valor_acordos × 100` (era chamada "Efetividade de Caixa" até 2026-07-10) | mesma fórmula — quanto do acordo é a entrada |
+| **Efetividade de Caixa** | — (nome reaproveitado 2026-07-10; fórmula antiga virou "Composição de Entrada" acima) | `valor_p1_recebido / valor_primeira_parcela × 100` — quanto da entrada combinada de fato entrou (recebido / emitido) |
 | **% Exc. s/ 1ª Parcela** | — (new) | `valor_exceções / valor_1ª_parcela × 100` |
 | **% Exc. s/ Valor Acordos** | `valor_exceções / valor_acordos × 100` (unchanged, renamed) | same |
 
-All defined in `lib/metrics.ts` → `calcConversao()` (single source of truth, cascades to all charts/pages).
+All defined in `lib/metrics.ts` → `calcConversao()`, `calcComposicaoEntrada()`, `calcEfetividadeCaixa()` (single source of truth, cascades to all charts/pages).
 
 # Important Nodes
 
