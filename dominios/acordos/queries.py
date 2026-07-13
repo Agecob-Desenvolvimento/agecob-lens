@@ -216,7 +216,7 @@ def build_tabela_performance_periodo_query(
                     CM.ID_USUARIO,
                     COUNT(DISTINCT DM.CPF_CNPJ) AS qtd_acionamentos,
                     COUNT(DISTINCT CASE WHEN CC.ALO = 1 THEN DM.CPF_CNPJ END) AS qtd_alo,
-                    COUNT(DISTINCT CASE WHEN CC.ALO = 1 AND CM.ID_COMPLEMENTO IN {settings.CPC_IDS_SQL} THEN DM.CPF_CNPJ END) AS qtd_contatos
+                    COUNT(DISTINCT CASE WHEN CC.ALO = 1 AND CC.COD_COMPLEMENTO IN {settings.CPC_CODS_SQL} THEN DM.CPF_CNPJ END) AS qtd_contatos
                 FROM {db}.dbo.CTO_MASTER CM (NOLOCK)
                 JOIN {db}.dbo.DEV_MASTER DM (NOLOCK) ON DM.ID_DEV = CM.ID_DEV
                 LEFT JOIN {db}.dbo.CTO_COMPLEMENTO CC (NOLOCK) ON CM.ID_COMPLEMENTO = CC.ID_COMPLEMENTO

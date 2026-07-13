@@ -133,10 +133,15 @@ Vocabulário da UI (importante — não inverter):
 | Rótulo UI | Pergunta | Definição SQL | Coluna |
 |---|---|---|---|
 | **Contato** | "Alguém atende?" (Alô) | `CTO_COMPLEMENTO.ALO = 1` | `qtd_alo` |
-| **CPC** | "Falei com a pessoa certa?" (RPC) | `CTO_MASTER.ID_COMPLEMENTO IN CPC_COMPLEMENTO_IDS` | `qtd_contatos` |
+| **CPC** | "Falei com a pessoa certa?" (RPC) | `CTO_COMPLEMENTO.COD_COMPLEMENTO IN CPC_COMPLEMENTO_CODS` | `qtd_contatos` |
 
-`CPC_COMPLEMENTO_IDS` (curado, `config/settings.py`) = `(95, 105, 108, 109, 110,
-111, 229, 230, 231, 233)` — apenas desfechos de voz com o titular. JOIN:
+`CPC_COMPLEMENTO_CODS` (curado, `config/settings.py`) = `("449", "452", "453",
+"454", "455", "459", "572")` — apenas desfechos de voz com o titular. Chave por
+`COD_COMPLEMENTO` (varchar, código de negócio), não por `ID_COMPLEMENTO`
+(surrogate key): o catálogo `CTO_COMPLEMENTO` foi resseedado em 2026-07-10
+(ver `BKP_CTO_COMPLEMENTO_20260710`), renumerando os IDs e zerando
+`qtd_contatos` em produção com a lista antiga baseada em ID. `COD_COMPLEMENTO`
+é estável entre reloads do catálogo; `ID_COMPLEMENTO` não é. JOIN:
 `CTO_MASTER.ID_COMPLEMENTO = CTO_COMPLEMENTO.ID_COMPLEMENTO`.
 
 Funil canônico: **Acionamento → Contato (atende) → CPC (pessoa certa) → Acordo →
