@@ -32,6 +32,27 @@ deriving from that name). `--node-modules` points at `agecob-lens/node_modules`
 (the real one, where react/radix/etc. actually live) — do NOT point it at the
 repo root.
 
+## Render check — skipped this sync (machine-unverified)
+
+The environment's connection to Microsoft's Playwright CDN was extremely slow
+(chromium-1217 full browser: ~180MB took ~40min; chromium_headless_shell-1217,
+needed for the actual render check, ran 60+ min without finishing — process
+was alive/healthy, not hung, just a very slow link). User explicitly chose to
+skip it (`--no-render-check`) rather than keep waiting. Consequence: **no
+component preview in this sync was machine-verified to actually render** —
+only that all 25 authored `.tsx` previews + all 246 floor cards compiled
+without esbuild errors. Grading (`package-capture.mjs`, screenshot-based
+absolute rubric) never ran either, for the same reason — no grade.json files
+exist for any of the 25 authored components.
+
+**Before the next re-sync claims these components are "verified," someone
+should**: retry `cd .ds-sync && npx playwright install chromium` (idempotent,
+resumes chromium-1217 which IS already fully downloaded — only
+chromium_headless_shell-1217 is missing) on a connection that isn't
+bandwidth-starved, then run `package-validate.mjs` (full render check) and
+`package-capture.mjs` (grade the 25 authored previews) for real. Until then,
+treat every authored preview here as "compiles, unconfirmed rendering."
+
 ## Types/declaration step — MUST run before package-build.mjs
 
 No `.d.ts` ships for `src/components/ui/` (no `tsc` build in this app —
