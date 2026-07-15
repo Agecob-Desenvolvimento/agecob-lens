@@ -282,11 +282,8 @@ export async function fetchPortfolios(
 
 // ── Metas (PDF → JSON) ────────────────────────────────────────────────────────
 
-export interface MetaMensal {
-  "202604": number;
-  "202605": number;
-  "202606": number;
-}
+// Chaves são os 3 meses do trimestre carregado (ex: "202607"), variam por PDF.
+export type MetaMensal = Record<string, number>;
 
 export interface MetaRow {
   escritorio: string | null;
@@ -302,6 +299,7 @@ export interface MetaRow {
 export interface MetasEnvelope {
   meta: {
     periodo: string;
+    meses: string[];
     extraido_em: string;
     arquivo_origem: string;
     total_registros: number;

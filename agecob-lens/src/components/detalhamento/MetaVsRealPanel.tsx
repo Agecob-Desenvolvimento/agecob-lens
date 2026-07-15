@@ -19,21 +19,10 @@ import {
 import { AlertTriangle, Upload, FileText, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatBRLCompact, DIAS_UTEIS_MES } from "@/lib/metrics";
+import { formatMesLabel } from "@/lib/dates";
 import { uploadMetasPDF } from "@/services/api";
 import type { MetaFiltrada } from "@/hooks/useMetasData";
 import { toast } from "@/hooks/use-toast";
-
-/* ------------------------------------------------------------------ *
- * Constantes
- * ------------------------------------------------------------------ */
-
-const MESES = [
-  { value: "202604", label: "Abril 2026" },
-  { value: "202605", label: "Maio 2026" },
-  { value: "202606", label: "Junho 2026" },
-] as const;
-
-type MesValue = (typeof MESES)[number]["value"];
 
 /* ------------------------------------------------------------------ *
  * Tipos
@@ -51,8 +40,10 @@ export interface MetaVsRealPanelProps {
   metasFiltradas: MetaFiltrada[];
   isMedia: boolean;
   mediaRow: MetaFiltrada | null;
-  mesSelecionado: MesValue;
-  onMesChange: (mes: MesValue) => void;
+  /** Meses disponíveis no PDF carregado (ex: ["202607","202608","202609"]) */
+  meses: string[];
+  mesSelecionado: string | null;
+  onMesChange: (mes: string) => void;
   dadosReais?: Record<string, RealPorPortfolio>;
   /** Σ 1ª parcela gerada HOJE nas carteiras exibidas — base da meta do dia */
   geracaoHojeTotal?: number | null;
@@ -93,6 +84,7 @@ export function MetaVsRealPanel({
   metasFiltradas,
   isMedia,
   mediaRow,
+  meses,
   mesSelecionado,
   onMesChange,
   dadosReais,
@@ -101,7 +93,7 @@ export function MetaVsRealPanel({
   periodoMetas,
   trimestreAtual,
 }: MetaVsRealPanelProps) {
-  const mesLabel = MESES.find((m) => m.value === mesSelecionado)?.label ?? mesSelecionado;
+  const mesLabel = mesSelecionado ? formatMesLabel(mesSelecionado) : "—";
   const hasRealData = dadosReais != null && Object.keys(dadosReais).length > 0;
   const semMetas = metasFiltradas.length === 0;
 
@@ -147,14 +139,14 @@ export function MetaVsRealPanel({
           <div className="flex items-center gap-2">
             <MetasUploadDialog stale={desatualizado} />
 
-            <Select value={mesSelecionado} onValueChange={(v) => onMesChange(v as MesValue)}>
+            <Select value={mesSelecionado ?? ""} onValueChange={onMesChange}>
               <SelectTrigger className="h-7 w-[130px] text-xs">
                 <SelectValue>{mesLabel}</SelectValue>
               </SelectTrigger>
               <SelectContent>
-                {MESES.map((m) => (
-                  <SelectItem key={m.value} value={m.value} className="text-xs">
-                    {m.label}
+                {meses.map((mes) => (
+                  <SelectItem key={mes} value={mes} className="text-xs">
+                    {formatMesLabel(mes)}
                   </SelectItem>
                 ))}
               </SelectContent>
