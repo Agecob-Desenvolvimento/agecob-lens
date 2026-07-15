@@ -26,3 +26,14 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# design-sync — generated declaration barrel + emitted .d.ts (regenerate via
+# .design-sync/NOTES.md "Types/declaration step")
+/index.ts
+/index.d.ts
+/.ds-tsconfig.json
+/.ds-types-tmp/
+src/components/ui/*.d.ts
+src/hooks/use-mobile.d.ts
+src/hooks/use-toast.d.ts
+src/lib/utils.d.ts

@@ -133,10 +133,15 @@ Vocabulário da UI (importante — não inverter):
 | Rótulo UI | Pergunta | Definição SQL | Coluna |
 |---|---|---|---|
 | **Contato** | "Alguém atende?" (Alô) | `CTO_COMPLEMENTO.ALO = 1` | `qtd_alo` |
-| **CPC** | "Falei com a pessoa certa?" (RPC) | `CTO_MASTER.ID_COMPLEMENTO IN CPC_COMPLEMENTO_IDS` | `qtd_contatos` |
+| **CPC** | "Falei com a pessoa certa?" (RPC) | `CTO_COMPLEMENTO.COD_COMPLEMENTO IN CPC_COMPLEMENTO_CODS` | `qtd_contatos` |
 
-`CPC_COMPLEMENTO_IDS` (curado, `config/settings.py`) = `(95, 105, 108, 109, 110,
-111, 229, 230, 231, 233)` — apenas desfechos de voz com o titular. JOIN:
+`CPC_COMPLEMENTO_CODS` (curado, `config/settings.py`) = `("449", "452", "453",
+"454", "455", "459", "572")` — apenas desfechos de voz com o titular. Chave por
+`COD_COMPLEMENTO` (varchar, código de negócio), não por `ID_COMPLEMENTO`
+(surrogate key): o catálogo `CTO_COMPLEMENTO` foi resseedado em 2026-07-10
+(ver `BKP_CTO_COMPLEMENTO_20260710`), renumerando os IDs e zerando
+`qtd_contatos` em produção com a lista antiga baseada em ID. `COD_COMPLEMENTO`
+é estável entre reloads do catálogo; `ID_COMPLEMENTO` não é. JOIN:
 `CTO_MASTER.ID_COMPLEMENTO = CTO_COMPLEMENTO.ID_COMPLEMENTO`.
 
 Funil canônico: **Acionamento → Contato (atende) → CPC (pessoa certa) → Acordo →
@@ -359,11 +364,12 @@ Frontend lazy-loads via `AgenteDetalheSection` (in DetalhamentoAgentes page, ins
 | Metric | Old Formula | New Formula |
 |---|---|---|
 | **Conversão %** | `qtd_acordos / qtd_contatos` → `qtd_boletos_pagos / qtd_boletos_emitidos × 100` | `qtd_boletos_pagos / qtd_contatos × 100` (pago em ≤5d do venc. sobre **CPC**, 2026-06-23) |
-| **Efetividade de Caixa** | — (new) | `valor_1ª_parcela / valor_acordos × 100` |
+| **Composição de Entrada** | `valor_1ª_parcela / valor_acordos × 100` (era chamada "Efetividade de Caixa" até 2026-07-10) | mesma fórmula — quanto do acordo é a entrada |
+| **Efetividade de Caixa** | — (nome reaproveitado 2026-07-10; fórmula antiga virou "Composição de Entrada" acima) | `valor_p1_recebido / valor_primeira_parcela × 100` — quanto da entrada combinada de fato entrou (recebido / emitido) |
 | **% Exc. s/ 1ª Parcela** | — (new) | `valor_exceções / valor_1ª_parcela × 100` |
 | **% Exc. s/ Valor Acordos** | `valor_exceções / valor_acordos × 100` (unchanged, renamed) | same |
 
-All defined in `lib/metrics.ts` → `calcConversao()` (single source of truth, cascades to all charts/pages).
+All defined in `lib/metrics.ts` → `calcConversao()`, `calcComposicaoEntrada()`, `calcEfetividadeCaixa()` (single source of truth, cascades to all charts/pages).
 
 # Important Nodes
 

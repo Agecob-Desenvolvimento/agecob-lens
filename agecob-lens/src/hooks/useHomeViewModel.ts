@@ -22,6 +22,7 @@ import {
   aggregateTotals,
   calcConversao,
   calcCpc,
+  calcEfetividadeCaixa,
   calcTicketMedio,
 } from "@/lib/metrics";
 import { generateDailyReadout } from "@/lib/insightEngine";
@@ -176,16 +177,20 @@ export function useHomeViewModel(): HomeViewModel {
   }, [totals, prevTotals, primeiraParcelaDia, primeiraParcelaDiaPrev, periodLabel]);
 
   // Cash conversion index: 1ª Parcela Recebida (VR_PAGO) / 1ª Parcela Emitida (VALOR) * 100
-  const ppValorEmitida = primeiraParcelaDia?.total_valor ?? totals.valor_primeira_parcela;
+  // Usa totals (mesma fonte de `rows`/resto do KPI strip) direto — evita o caso em
+  // que primeiraParcelaDia?.total_valor volta 0 (query separada, sem corrida com
+  // `rows`) e `??` aceita esse 0 como valor válido, zerando o índice mesmo com
+  // acordo/parcela reais no período.
+  const ppValorEmitida = totals.valor_primeira_parcela;
   const ppValorRecebida = totals.valor_primeira_parcela_recebida;
-  const ppValorEmitidaPrev = primeiraParcelaDiaPrev ?? prevTotals.valor_primeira_parcela;
+  const ppValorEmitidaPrev = prevTotals.valor_primeira_parcela;
   const ppValorRecebidaPrev = prevTotals.valor_primeira_parcela_recebida;
   const indiceConversaoCaixa = useMemo(() =>
-    ppValorEmitida > 0 ? (ppValorRecebida * 100) / ppValorEmitida : null,
-  [totals.valor_primeira_parcela_recebida, ppValorEmitida]);
+    calcEfetividadeCaixa({ valor_primeira_parcela: ppValorEmitida, valor_p1_recebido: ppValorRecebida }),
+  [ppValorEmitida, ppValorRecebida]);
   const indiceConversaoCaixaPrev = useMemo(() =>
-    ppValorEmitidaPrev > 0 ? (ppValorRecebidaPrev * 100) / ppValorEmitidaPrev : null,
-  [prevTotals.valor_primeira_parcela_recebida, ppValorEmitidaPrev]);
+    calcEfetividadeCaixa({ valor_primeira_parcela: ppValorEmitidaPrev, valor_p1_recebido: ppValorRecebidaPrev }),
+  [ppValorEmitidaPrev, ppValorRecebidaPrev]);
 
   // KPI secondaries
   const kpiSecondary = useMemo(() => {
@@ -217,18 +222,29 @@ export function useHomeViewModel(): HomeViewModel {
     ];
   }, [totals, prevTotals, diasUteisPeriodo, gapDePerformance, periodLabel, indiceConversaoCaixa, indiceConversaoCaixaPrev, bench, ppValorRecebida, ppValorEmitida]);
 
-  // Insight
+  // Insight — insight1 (primário) + insight2 (categoria distinta) num card só:
+  // insight2 vira secondaryMetric ao lado do número primário, mesma descrição.
   const readout = useMemo(() => generateDailyReadout(rows, projecaoMes), [rows, projecaoMes]);
   const insight = useMemo(() => {
     if (readout.empty) return { variant: "neutral" as const };
-    const slot = readout.insight1 ?? readout.insight2;
-    if (!slot) return { variant: "neutral" as const };
-    const variant = slot.severity === "positive" ? "positive" as const : "critical" as const;
+    const primary = readout.insight1 ?? readout.insight2;
+    if (!primary) return { variant: "neutral" as const };
+    const cta = readout.action?.headline ? { label: readout.action.headline, anchor: readout.action.anchor } : undefined;
+    if (primary.severity === "positive") {
+      return {
+        variant: "positive" as const,
+        metric: primary.headline ? { value: primary.headline, label: primary.label ?? "" } : undefined,
+        description: primary.text,
+        cta,
+      };
+    }
+    const secondary = readout.insight1 && readout.insight2 ? readout.insight2 : undefined;
     return {
-      variant,
-      metric: slot.headline ? { value: slot.headline, label: "" } : undefined,
-      description: slot.text,
-      cta: readout.action ? { label: readout.action.headline ?? readout.action.text } : undefined,
+      variant: "critical" as const,
+      metric: primary.headline ? { value: primary.headline, label: primary.label ?? "" } : undefined,
+      secondaryMetric: secondary?.headline ? { value: secondary.headline, label: secondary.label ?? "" } : undefined,
+      description: primary.text,
+      cta,
     };
   }, [readout]);
 

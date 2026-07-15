@@ -42,6 +42,35 @@ describe("ExecutiveInsightCard — handoff variants", () => {
     expect(html).not.toMatch(/#be123c|#fff1f2/);
   });
 
+  it("critical: renders secondaryMetric next to primary metric, same card", () => {
+    render(
+      <ExecutiveInsightCard
+        variant="critical"
+        metric={{ value: "1,3%", label: "Conversão" }}
+        secondaryMetric={{ value: "8,7%", label: "Efetividade de caixa" }}
+        description="Conversão baixa com alto volume de acionamentos. Verificar qualidade dos contatos."
+      />,
+    );
+
+    expect(screen.getByRole("status")).toBeInTheDocument();
+    expect(screen.getByText("1,3%")).toBeInTheDocument();
+    expect(screen.getByText("8,7%")).toBeInTheDocument();
+    expect(screen.getByText("Efetividade de caixa")).toBeInTheDocument();
+    // só 1 card no DOM pros dois números — não 2 status roles
+    expect(screen.getAllByRole("status")).toHaveLength(1);
+  });
+
+  it("critical: omits secondaryMetric block when not provided", () => {
+    render(
+      <ExecutiveInsightCard
+        variant="critical"
+        metric={{ value: "1,3%", label: "Conversão" }}
+        description="Conversão baixa com alto volume de acionamentos."
+      />,
+    );
+    expect(screen.queryByText("Efetividade de caixa")).toBeNull();
+  });
+
   it("positive: renders compact form with inline metric and underlined CTA using emerald tokens", () => {
     const onClick = vi.fn();
     const { container } = render(

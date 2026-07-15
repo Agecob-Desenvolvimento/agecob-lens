@@ -11,6 +11,7 @@ from dominios.efetividade.queries import (
     _build_ef_detalhe_sql,
     _build_ef_resumo_params,
     _build_ef_resumo_sql,
+    _ef_date_params,
 )
 from dominios.efetividade.servico import get_efetividade, resolve_ef_db
 
@@ -77,12 +78,12 @@ def get_ef_resumo(
         date_to_obj = date.fromisoformat(date_to)
     except ValueError:
         raise HTTPException(status_code=422, detail="date_from and date_to must be YYYY-MM-DD")
-    # YYYYMMDD literals embedded in SQL — safe (validated above) and unambiguous in SQL Server
+    # datas YYYYMMDD viajam como params (?) — CONVERT(DATE, ?, 112) no SQL
     date_from_lit = date_from_obj.strftime("%Y%m%d")
     date_to_lit = date_to_obj.strftime("%Y%m%d")
     db_variant = resolve_ef_db(db)
-    kpi_sql, daily_sql = _build_ef_resumo_sql(db_variant, parcela_tipo, date_from_lit, date_to_lit, id_portfolio)
-    params = _build_ef_resumo_params(db_variant, id_portfolio)
+    kpi_sql, daily_sql = _build_ef_resumo_sql(db_variant, parcela_tipo, id_portfolio)
+    params = _build_ef_resumo_params(db_variant, date_from_lit, date_to_lit, id_portfolio)
     conn_db = settings.ALLOWED_DATABASES[0]
 
     kpi_rows = run_query(kpi_sql, conn_db, params=params, context="ef-resumo/kpi")
@@ -143,9 +144,10 @@ def get_ef_boletos_detalhe(
     except ValueError:
         raise HTTPException(status_code=422, detail="date_from and date_to must be YYYY-MM-DD")
     db_variant = resolve_ef_db(db)
-    sql = _build_ef_detalhe_sql(db_variant, parcela_tipo, kind, date_from_lit, date_to_lit)
+    sql = _build_ef_detalhe_sql(db_variant, parcela_tipo, kind)
+    params = _ef_date_params(db_variant, date_from_lit, date_to_lit)
     conn_db = settings.ALLOWED_DATABASES[0]
-    rows = run_query(sql, conn_db, context=f"ef-boletos-detalhe/{kind}")
+    rows = run_query(sql, conn_db, params=params, context=f"ef-boletos-detalhe/{kind}")
     sources = settings.ALLOWED_DATABASES if db_variant == "todos" else [db_variant]
     return {
         "meta": {
@@ -178,9 +180,10 @@ def get_ef_curva_quebra(
     date_from_lit = date_from_obj.strftime("%Y%m%d")
     date_to_lit = date_to_obj.strftime("%Y%m%d")
     db_variant = resolve_ef_db(db)
-    query = _build_ef_curva_quebra_query(db_variant, date_from_lit, date_to_lit)
+    query = _build_ef_curva_quebra_query(db_variant)
+    params = _ef_date_params(db_variant, date_from_lit, date_to_lit)
     conn_db = settings.ALLOWED_DATABASES[0]
-    rows = run_query(query, conn_db, context="ef-curva-quebra")
+    rows = run_query(query, conn_db, params=params, context="ef-curva-quebra")
     sources = settings.ALLOWED_DATABASES if db_variant == "todos" else [db_variant]
     return {
         "meta": {

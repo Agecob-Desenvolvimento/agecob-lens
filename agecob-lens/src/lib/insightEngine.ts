@@ -10,6 +10,7 @@ import {
   calcCpc,
   calcConcentracao,
   calcConversao,
+  calcEfetividadeCaixa,
   calcExcecoesPctQtd,
   fmtBRL,
   fmtNum,
@@ -18,7 +19,7 @@ import {
 
 interface CandidateInsight extends InsightSlot {
   ruleId: string;
-  category: "cpc" | "conversion" | "exceptions" | "first_installment" | "concentration" | "month_projection";
+  category: "cpc" | "conversion" | "cash_effectiveness" | "exceptions" | "first_installment" | "concentration" | "month_projection";
   rank: number;
 }
 
@@ -44,6 +45,12 @@ export function generateDailyReadout(
   const totals = aggregateTotals(rows);
   const cpc = calcCpc(totals);
   const conversao = calcConversao(totals);
+  // Efetividade de caixa (1ª parcela recebida / gerada) — mesma coorte, sem
+  // mistura boleto×pessoa nem censura tão forte quanto `conversao`.
+  const efetividadeCaixa = calcEfetividadeCaixa({
+    valor_primeira_parcela: totals.valor_primeira_parcela,
+    valor_p1_recebido: totals.valor_primeira_parcela_recebida,
+  });
   const excPct = calcExcecoesPctQtd(totals);
   const concentracao = calcConcentracao(rows, 3);
   const ppRatio = totals.valor_acordos > 0
@@ -75,13 +82,30 @@ export function generateDailyReadout(
     });
   }
 
-  if (conversao < 5 && totals.qtd_acionamentos > 100) {
+  // N=30 no CPC (denominador) é gate de base mínima — abaixo disso o % oscila
+  // demais pra virar alerta crítico sozinho (1 boleto já move vários pontos).
+  if (conversao < 5 && totals.qtd_acionamentos > 100 && totals.qtd_contatos >= 30) {
     insights.push({
       ruleId: "insight_conversion_drop",
       category: "conversion",
       severity: "critical",
       headline: fmtPct(conversao),
+      label: "Conversão",
       text: "Conversão baixa com alto volume de acionamentos. Verificar qualidade dos contatos.",
+      rank: SEVERITY_RANK.critical,
+    });
+  }
+
+  // Efetividade de caixa baixa — quanto da 1ª parcela combinada de fato entrou.
+  // Gate qtd_acordos >= 20 pelo mesmo motivo do gate acima (base mínima).
+  if (efetividadeCaixa < 30 && totals.qtd_acordos >= 20) {
+    insights.push({
+      ruleId: "insight_cash_effectiveness_low",
+      category: "cash_effectiveness",
+      severity: "critical",
+      headline: fmtPct(efetividadeCaixa),
+      label: "Efetividade de caixa",
+      text: "Efetividade de caixa baixa — pouco da 1ª parcela combinada está entrando de fato.",
       rank: SEVERITY_RANK.critical,
     });
   }
@@ -172,6 +196,7 @@ export function generateDailyReadout(
           severity: "action",
           headline: fmtPct(delta),
           text: `Realocar capacidade para ${winner.label} — conversão maior.`,
+          anchor: "diagnostico-bu",
           rank: 3,
         });
       }
@@ -217,8 +242,8 @@ export function generateDailyReadout(
   }
 
   return {
-    insight1: slot1 ? { text: slot1.text, severity: slot1.severity, headline: slot1.headline } : null,
-    insight2: slot2 ? { text: slot2.text, severity: slot2.severity, headline: slot2.headline } : null,
+    insight1: slot1 ? { text: slot1.text, severity: slot1.severity, headline: slot1.headline, label: slot1.label } : null,
+    insight2: slot2 ? { text: slot2.text, severity: slot2.severity, headline: slot2.headline, label: slot2.label } : null,
     action,
     empty: false,
   };

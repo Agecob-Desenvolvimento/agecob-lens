@@ -12,6 +12,7 @@ import { GlobalFiltersProvider } from "@/contexts/GlobalFiltersContext";
 import { NotificationProvider } from "@/contexts/NotificationProvider";
 import { AgentChatProvider } from "@/contexts/AgentChatContext";
 import { RouteErrorBoundary } from "@/components/RouteErrorBoundary";
+import { reloadOnChunkError } from "@/lib/chunkErrorRecovery";
 
 const AgentChatPanel = lazy(() => import("@/components/agente/AgentChatPanel"));
 
@@ -90,14 +91,16 @@ function AppRoutes() {
     };
     const fn = warmImports[warm];
     if (fn) {
-      loadQueue.enqueue(`warm:${warm}`, warm, "normal", async () => { await fn(); return true; });
+      loadQueue
+        .enqueue(`warm:${warm}`, warm, "normal", async () => { await fn(); return true; })
+        .catch(reloadOnChunkError);
     }
   }, [location.pathname]);
 
   useEffect(() => {
     const prefetch = () => {
-      import("./pages/DetalhamentoAgentes.tsx");
-      import("./pages/EfetividadeBoletos.tsx");
+      import("./pages/DetalhamentoAgentes.tsx").catch(reloadOnChunkError);
+      import("./pages/EfetividadeBoletos.tsx").catch(reloadOnChunkError);
     };
 
     const idleCallback = (window as Window & { requestIdleCallback?: (cb: () => void) => number })
@@ -142,9 +145,11 @@ const App = () => (
           <NotificationProvider>
             <AgentChatProvider>
               <AppRoutes />
-              <Suspense fallback={null}>
-                <AgentChatPanel />
-              </Suspense>
+              <RouteErrorBoundary routeName="agent-chat-panel">
+                <Suspense fallback={null}>
+                  <AgentChatPanel />
+                </Suspense>
+              </RouteErrorBoundary>
             </AgentChatProvider>
           </NotificationProvider>
         </GlobalFiltersProvider>

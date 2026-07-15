@@ -118,10 +118,16 @@ export function calcExcecoesPctValor(t: Pick<MetricTotals, "valor_excecoes" | "v
   return (t.valor_excecoes * 100) / t.valor_acordos;
 }
 
-/** Efetividade de caixa = valor_primeira_parcela / valor_acordos * 100 */
-export function calcEfetividadeCaixa(t: Pick<MetricTotals, "valor_primeira_parcela" | "valor_acordos">): number {
+/** Composição de entrada = valor_primeira_parcela / valor_acordos * 100 (quanto do acordo é a entrada) */
+export function calcComposicaoEntrada(t: Pick<MetricTotals, "valor_primeira_parcela" | "valor_acordos">): number {
   if (t.valor_acordos <= 0) return 0;
   return (t.valor_primeira_parcela * 100) / t.valor_acordos;
+}
+
+/** Efetividade de caixa = valor_p1_recebido / valor_primeira_parcela * 100 (quanto da entrada combinada entrou) */
+export function calcEfetividadeCaixa(t: { valor_primeira_parcela: number; valor_p1_recebido: number }): number {
+  if (t.valor_primeira_parcela <= 0) return 0;
+  return (t.valor_p1_recebido * 100) / t.valor_primeira_parcela;
 }
 
 /** Taxa de exceções (sobre quantidade) = qtd_excecoes / qtd_acordos * 100 */

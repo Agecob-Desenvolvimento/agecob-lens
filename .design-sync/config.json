@@ -1,0 +1,19 @@
+{
+  "projectId": "2610eeda-cf9c-4ffa-9d93-2ef9975fb254",
+  "shape": "package",
+  "pkg": "agecob-lens",
+  "globalName": "AgecobLensUI",
+  "srcDir": "src/components/ui",
+  "tsconfig": "tsconfig.app.json",
+  "cssEntry": "dist/assets/index-BC9XJvMx.css",
+  "buildCmd": "npm run build",
+  "guidelinesGlob": ["docs/CLAUDE.md", "docs/SPECS.MD"],
+  "overrides": {
+    "Dialog": { "cardMode": "single", "viewport": "480x420" },
+    "DropdownMenu": { "cardMode": "single", "viewport": "360x320" },
+    "Popover": { "cardMode": "single", "viewport": "420x280" },
+    "Tooltip": { "cardMode": "single", "viewport": "420x280" },
+    "Sheet": { "cardMode": "single", "viewport": "480x420" },
+    "Select": { "cardMode": "single", "viewport": "320x260" }
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "modelo": "phase1_hora_banco_valor",
+  "estimador": "mediana",
+  "postproc": "round2_clip0",
+  "janela_dias_uteis": 90,
+  "treino_de": {
+    "COBwebRCBAUTOS": "2026-03-06",
+    "COBwebRCBCONSUMER": "2026-03-06"
+  },
+  "treino_ate": {
+    "COBwebRCBAUTOS": "2026-07-09",
+    "COBwebRCBCONSUMER": "2026-07-09"
+  },
+  "medianas": {
+    "COBwebRCBAUTOS": {
+      "8": 251.8,
+      "9": 835.35,
+      "10": 1327.0,
+      "11": 1477.14,
+      "12": 563.8,
+      "13": 1501.9,
+      "14": 1450.25,
+      "15": 1343.76,
+      "16": 336.89,
+      "17": 300.0,
+      "18": 0.0,
+      "19": 0.0
+    },
+    "COBwebRCBCONSUMER": {
+      "8": 0.0,
+      "9": 0.0,
+      "10": 0.0,
+      "11": 60.0,
+      "12": 0.0,
+      "13": 63.5,
+      "14": 206.19,
+      "15": 141.23,
+      "16": 27.5,
+      "17": 33.86,
+      "18": 0.0,
+      "19": 0.0
+    }
+  }
+}

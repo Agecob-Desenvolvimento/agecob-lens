@@ -1139,6 +1139,11 @@ export interface RitmoDiaBanda {
   delta: number | null;
   status: "acima" | "ok" | "abaixo" | "em_andamento" | "futuro";
   acumulado: number | null;
+  esperado_valor?: number;
+  real_valor?: number | null;
+  delta_valor?: number | null;
+  status_valor?: "acima" | "ok" | "abaixo" | "em_andamento" | "futuro";
+  acumulado_valor?: number | null;
 }
 
 export interface RitmoDiaResponse {
@@ -1146,6 +1151,7 @@ export interface RitmoDiaResponse {
     generated_at: string;
     em_operacao: boolean;
     modelo: string;
+    modelo_valor?: string;
     faixa_batimento?: string;
     dias_desde_ultimo_batimento?: number;
   };
@@ -1154,6 +1160,9 @@ export interface RitmoDiaResponse {
     acumulado_atual: number;
     esperado_total?: number;
     projecao_fechamento?: number;
+    valor_acumulado_atual?: number;
+    valor_esperado_total?: number;
+    valor_projecao_fechamento?: number;
     bandas: RitmoDiaBanda[];
   };
   errors: ApiErrorItem[];
