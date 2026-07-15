@@ -15,16 +15,10 @@ import {
   type RealPorPortfolioRow,
   type QuebradoDetalheRow,
 } from "@/services/api";
-import { todayStr } from "@/lib/dates";
+import { todayStr, formatMesLabel } from "@/lib/dates";
 import { DIAS_UTEIS_MES } from "@/lib/metrics";
 import ReportDownloadDialog from "@/components/executive/ReportDownloadDialog";
 import type { ReportSection } from "@/lib/csvReport";
-
-const MES_LABEL: Record<string, string> = {
-  "202604": "Abril 2026",
-  "202605": "Maio 2026",
-  "202606": "Junho 2026",
-};
 
 /** Trimestre corrente no formato do PDF (ex: "2T26"). */
 function trimestreAtual(): string {
@@ -46,18 +40,18 @@ export default function Carteiras() {
   const { selectedDatabase } = useGlobalFilters();
   const { portfolios, loading: portfolioLoading } = usePortfolioList(selectedDatabase);
   const [selectedPortfolio, setSelectedPortfolio] = useState<string | null>(null);
-  const [mesSelecionado, setMesSelecionado] = useState<"202604" | "202605" | "202606">("202606");
+  const [mesSelecionado, setMesSelecionado] = useState<string | null>(null);
 
-  const { metasFiltradas, isMedia, mediaRow, envelopeMeta, isLoading: metasLoading } =
-    useMetasData(selectedPortfolio, mesSelecionado);
+  const { metasFiltradas, isMedia, mediaRow, envelopeMeta, meses, mesEfetivo, isLoading: metasLoading } =
+    useMetasData(selectedPortfolio, mesSelecionado ?? undefined);
 
   // Real = acordos do MÊS selecionado (meta do PDF é mensal, não diária).
-  const { from: realFrom, to: realTo } = mesRange(mesSelecionado);
+  const { from: realFrom, to: realTo } = mesEfetivo ? mesRange(mesEfetivo) : { from: "", to: "" };
   const { data: realData } = useQuery({
     queryKey: ["real-por-portfolio", selectedDatabase, realFrom, realTo],
     queryFn: () => fetchRealPorPortfolio(selectedDatabase, realFrom, realTo),
     staleTime: 60_000,
-    enabled: metasFiltradas.length > 0 && !!selectedDatabase,
+    enabled: metasFiltradas.length > 0 && !!selectedDatabase && !!mesEfetivo,
   });
   const dadosReais = useMemo(() => {
     if (!realData?.data) return undefined;
@@ -91,7 +85,7 @@ export default function Carteiras() {
     queryKey: ["acordos-detalhe-todos", selectedDatabase, realFrom, realTo],
     queryFn: () => fetchAcordosDetalheGlobal(selectedDatabase, realFrom, realTo),
     staleTime: 60_000,
-    enabled: !!selectedDatabase,
+    enabled: !!selectedDatabase && !!mesEfetivo,
   });
   const acordosDetalhe = useMemo<QuebradoDetalheRow[]>(() => {
     const rows = acordosDetalheData?.data ?? [];
@@ -171,13 +165,13 @@ export default function Carteiras() {
   const reportMeta = useMemo(
     () => ({
       "Relatório": "Carteiras — Meta vs Real",
-      "Mês": MES_LABEL[mesSelecionado] ?? mesSelecionado,
+      "Mês": mesEfetivo ? formatMesLabel(mesEfetivo) : "—",
       "Banco": selectedDatabase,
       "Carteira": selectedPortfolio ?? "Todas",
       "Trimestre metas": envelopeMeta?.periodo ?? "—",
       "Gerado em": new Date().toLocaleString("pt-BR"),
     }),
-    [mesSelecionado, selectedDatabase, selectedPortfolio, envelopeMeta],
+    [mesEfetivo, selectedDatabase, selectedPortfolio, envelopeMeta],
   );
 
   return (
@@ -194,7 +188,7 @@ export default function Carteiras() {
                 <ReportDownloadDialog
                   meta={reportMeta}
                   sections={reportSections}
-                  filename={`relatorio-carteiras-${mesSelecionado}.csv`}
+                  filename={`relatorio-carteiras-${mesEfetivo ?? "sem-mes"}.csv`}
                 />
               </div>
 
@@ -218,7 +212,8 @@ export default function Carteiras() {
                   mediaRow={mediaRow}
                   metasFiltradas={metasFiltradas}
                   isMedia={isMedia}
-                  mesSelecionado={mesSelecionado}
+                  meses={meses}
+                  mesSelecionado={mesEfetivo}
                   onMesChange={setMesSelecionado}
                   dadosReais={dadosReais}
                   geracaoHojeTotal={geracaoHojeTotal}

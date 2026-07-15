@@ -13,7 +13,7 @@ import { useGlobalFilters } from "@/contexts/GlobalFiltersContext";
 import { useHomeViewModel } from "@/hooks/useHomeViewModel";
 import { useMetasData } from "@/hooks/useMetasData";
 import { fetchRitmoDia, fetchPrimeiraParcelaDia } from "@/services/api";
-import { countBusinessDays, firstOfMonthStr, lastOfMonthStr, todayStr } from "@/lib/dates";
+import { countBusinessDays, currentMonthKey, firstOfMonthStr, lastOfMonthStr, todayStr } from "@/lib/dates";
 import { DIAS_UTEIS_MES } from "@/lib/metrics";
 import {
   tvBRLk,
@@ -45,8 +45,7 @@ export function useTvModeViewModel(): TvModeViewModel {
   // Meta de caixa do mês corrente — soma office de todos os portfólios (canônico via
   // useMetasData; o PDF trimestral é o único alvo real). Metas não têm dimensão BU,
   // então o atingimento é mais fiel com o filtro "Todas".
-  const currentMonthKey = todayStr().slice(0, 7).replace("-", "");
-  const { mediaRow: metaTotalMes } = useMetasData(null, currentMonthKey);
+  const { mediaRow: metaTotalMes } = useMetasData(null, currentMonthKey());
 
   // 1ª parcela gerada HOJE (sempre o dia, independe do filtro global período) —
   // numerador da meta do dia. O `realizado` do hero é do período (mês-até-hoje).

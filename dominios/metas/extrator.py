@@ -29,29 +29,47 @@ RE_MES = re.compile(r"^\d{6}$")
 GRUPOS = ("Veículos", "CDC / SR")
 NUM_COLUNAS = 16  # 3 dimensões + headcount + 4 métricas × 3 meses
 
+# Detecção de formato numérico: PDFs de trimestres diferentes já vieram com
+# separador de milhar diferente (2T26: vírgula "1,540,337"; 3T26: ponto
+# "1.428.833"). Presença de milhar duplo (≥ 1 milhão) desambigua o formato.
+RE_MILHAR_US = re.compile(r"\d{1,3}(,\d{3}){2,}")
+RE_MILHAR_BR = re.compile(r"\d{1,3}(\.\d{3}){2,}")
+
 OUTPUT_DIR = Path("dados_metas")
 OUTPUT_FILE = OUTPUT_DIR / "ultimas_metas.json"
 ERROR_LOG = OUTPUT_DIR / "erro_extracao.log"
 
 
-# ── Parsing numérico (formato US: vírgula = milhar, ponto = decimal) ─────────
+# ── Parsing numérico (formato detectado por documento: US = vírgula milhar /
+#    ponto decimal, BR = ponto milhar / vírgula decimal) ─────────────────────
 
-def _parse_num(raw: str | None) -> float | None:
+def _detectar_formato(data_rows: list[list[str]]) -> str:
+    for row in data_rows:
+        for cell in row:
+            s = cell.replace(" ", "")
+            if RE_MILHAR_BR.search(s):
+                return "br"
+            if RE_MILHAR_US.search(s):
+                return "us"
+    return "us"
+
+
+def _parse_num(raw: str | None, formato: str = "us") -> float | None:
     if raw is None:
         return None
     # pdfplumber quebra números com espaço interno ("1 46,411" = 146,411)
     s = str(raw).strip().replace(" ", "")
     if s in ("", "-", "—", "–", "N/A", "n/a"):
         return None
-    s = s.replace(",", "")
+    s = s.replace(".", "").replace(",", ".") if formato == "br" else s.replace(",", "")
     try:
         return float(s)
     except ValueError:
         return None
 
 
-def _parse_int(raw: str | None) -> int | None:
-    val = _parse_num(raw)
+def _parse_int(raw: str | None, formato: str = "us") -> int | None:
+    val = _parse_num(raw, formato)
     if val is None:
         return None
     return int(val)
@@ -119,7 +137,7 @@ def _fix_dimensoes(cells: list[str]) -> tuple[str, str | None]:
     return portfolio, (grupo or None)
 
 
-def _parse_row(cells: list[str], meses: list[str]) -> dict | None:
+def _parse_row(cells: list[str], meses: list[str], formato: str = "us") -> dict | None:
     if len(cells) < NUM_COLUNAS:
         return None
     portfolio, grupo = _fix_dimensoes(cells)
@@ -129,18 +147,18 @@ def _parse_row(cells: list[str], meses: list[str]) -> dict | None:
         "escritorio": cells[0] or None,
         "portfolio": portfolio,
         "grupo": grupo,
-        "qtd_negociadores": _parse_num(cells[3]),
+        "qtd_negociadores": _parse_num(cells[3], formato),
         "meta_caixa": {
-            meses[i]: _parse_num(cells[4 + i]) or 0.0 for i in range(3)
+            meses[i]: _parse_num(cells[4 + i], formato) or 0.0 for i in range(3)
         },
         "meta_retomadas_qtd": {
-            meses[i]: _parse_int(cells[7 + i]) or 0 for i in range(3)
+            meses[i]: _parse_int(cells[7 + i], formato) or 0 for i in range(3)
         },
         "meta_retomadas_valor": {
-            meses[i]: _parse_num(cells[10 + i]) or 0.0 for i in range(3)
+            meses[i]: _parse_num(cells[10 + i], formato) or 0.0 for i in range(3)
         },
         "meta_pnt": {
-            meses[i]: _parse_num(cells[13 + i]) or 0.0 for i in range(3)
+            meses[i]: _parse_num(cells[13 + i], formato) or 0.0 for i in range(3)
         },
     }
 
@@ -179,9 +197,14 @@ def _validar_total_geral(linhas: list[dict], total_geral: dict, meses: list[str]
 
 def _extrair_periodo(pdf_path: str) -> str:
     nome = os.path.splitext(os.path.basename(pdf_path))[0]
-    match = re.search(r"(\dT\d{2})", nome, re.IGNORECASE)
+    # (?!\d) evita casar só os 2 primeiros dígitos de um ano de 4 dígitos
+    # (ex: "3T2026" virando "3T20" em vez de "3T26").
+    match = re.search(r"(\dT)(\d{2,4})(?!\d)", nome, re.IGNORECASE)
     if match:
-        return match.group(1).upper()
+        trimestre, ano = match.group(1), match.group(2)
+        if len(ano) == 4:
+            ano = ano[2:]
+        return f"{trimestre.upper()}{ano}"
     now = datetime.now()
     q = (now.month - 1) // 3 + 1
     return f"{q}T{str(now.year)[2:]}"
@@ -202,12 +225,13 @@ def processar_pdf(pdf_path: str, nome_origem: str | None = None) -> dict:
     """
     origem = nome_origem or pdf_path
     meses, data_rows = _extrair_linhas(pdf_path)
+    formato = _detectar_formato(data_rows)
 
     linhas_meta: list[dict] = []
     total_geral: dict | None = None
 
     for cells in data_rows:
-        parsed = _parse_row(cells, meses)
+        parsed = _parse_row(cells, meses, formato)
         if not parsed:
             continue
         if RE_TOTAL.match(parsed["portfolio"]):
@@ -234,6 +258,7 @@ def processar_pdf(pdf_path: str, nome_origem: str | None = None) -> dict:
     return {
         "meta": {
             "periodo": periodo,
+            "meses": list(meses),
             "extraido_em": datetime.now(tz=timezone.utc).isoformat(),
             "arquivo_origem": os.path.basename(origem),
             "total_registros": len(linhas_meta),

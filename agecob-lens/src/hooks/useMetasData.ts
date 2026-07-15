@@ -10,6 +10,7 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchMetas, type MetaRow, type MetasEnvelope } from "@/services/api";
+import { currentMonthKey } from "@/lib/dates";
 
 export interface MetaFiltrada {
   portfolio: string;
@@ -27,12 +28,14 @@ export interface UseMetasDataResult {
   /** Linha de média no topo — só preenchida no modo "Todos" */
   mediaRow: MetaFiltrada | null;
   envelopeMeta: MetasEnvelope["meta"] | null;
+  /** Meses disponíveis no PDF carregado (ex: ["202607","202608","202609"]) */
+  meses: string[];
+  /** Mês efetivamente em uso (parâmetro `mesSelecionado` ou o último do trimestre) */
+  mesEfetivo: string | null;
   isLoading: boolean;
   error: Error | null;
   isMedia: boolean;
 }
-
-const DEFAULT_MES = "202606";
 
 /** Headcount é fracionário no PDF (alocação rateada). Formata pt-BR. */
 function fmtHc(n: number): string {
@@ -53,7 +56,7 @@ function rowToMeta(m: MetaRow, mes: keyof MetaRow["meta_pnt"]): MetaFiltrada {
 
 export function useMetasData(
   portfolio: string | null,
-  mesSelecionado: string = DEFAULT_MES,
+  mesSelecionado?: string,
 ): UseMetasDataResult {
   const { data, isLoading, error } = useQuery({
     queryKey: ["metas"],
@@ -67,11 +70,17 @@ export function useMetasData(
         metasFiltradas: [],
         mediaRow: null,
         envelopeMeta: data?.meta ?? null,
+        meses: data?.meta.meses ?? [],
+        mesEfetivo: null,
         isMedia: false,
       };
     }
 
-    const mes = mesSelecionado as keyof MetaRow["meta_pnt"];
+    const meses = data.meta.meses;
+    const mesAtual = currentMonthKey();
+    const mesDefault = meses.includes(mesAtual) ? mesAtual : meses[meses.length - 1];
+    const mesEfetivo = mesSelecionado ?? mesDefault;
+    const mes = mesEfetivo as keyof MetaRow["meta_pnt"];
 
     if (portfolio !== null) {
       // Modo portfolio específico: metas exatas
@@ -83,6 +92,8 @@ export function useMetasData(
         metasFiltradas: filtradas,
         mediaRow: null,
         envelopeMeta: data.meta,
+        meses,
+        mesEfetivo,
         isMedia: false,
       };
     }
@@ -120,6 +131,8 @@ export function useMetasData(
       metasFiltradas: todas,
       mediaRow,
       envelopeMeta: data.meta,
+      meses,
+      mesEfetivo,
       isMedia: true,
     };
   }, [data, portfolio, mesSelecionado]);

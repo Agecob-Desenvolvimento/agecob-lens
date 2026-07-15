@@ -8,6 +8,7 @@
   "cssEntry": "dist/assets/index-BC9XJvMx.css",
   "buildCmd": "npm run build",
   "guidelinesGlob": ["docs/CLAUDE.md", "docs/SPECS.MD"],
+  "readmeHeader": ".design-sync/conventions.md",
   "overrides": {
     "Dialog": { "cardMode": "single", "viewport": "480x420" },
     "DropdownMenu": { "cardMode": "single", "viewport": "360x320" },
