@@ -87,15 +87,21 @@ export function useHomeViewModel(): HomeViewModel {
   }, [ppMesEnv]);
 
   // Internal benchmarks (top-10 historical mean) — per bank, long cache.
+  // Deferidos até os KPIs principais carregarem (!loading): são consulta pesada
+  // (lookback de 3 meses) e só alimentam baselines secundários. Adiar libera slots
+  // de conexão (browser HTTP/1.1 ~6 por origem + pool DB) para os endpoints de KPI
+  // chegarem antes; benchmarks carregam depois, com folga.
   const { data: benchAutosEnv } = useQuery({
     queryKey: ["benchmarks", "COBwebRCBAUTOS"] as const,
     queryFn: () => fetchBenchmarks("COBwebRCBAUTOS"),
     staleTime: 3_600_000,
+    enabled: !loading,
   });
   const { data: benchConsumerEnv } = useQuery({
     queryKey: ["benchmarks", "COBwebRCBCONSUMER"] as const,
     queryFn: () => fetchBenchmarks("COBwebRCBCONSUMER"),
     staleTime: 3_600_000,
+    enabled: !loading,
   });
   const bench = useMemo(() => {
     const benchAutos = benchAutosEnv?.data as BenchmarkData | undefined;
