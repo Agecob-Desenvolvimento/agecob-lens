@@ -4,7 +4,7 @@ set NSSM=C:\nssm\nssm.exe
 
 echo Atualizando Agecob Dashboard...
 
-cd /d C:\agecob || (echo ERRO: C:\agecob nao existe & pause & exit /b 1)
+cd /d C:\agecob-new || (echo ERRO: C:\agecob-new nao existe & pause & exit /b 1)
 
 echo [1/5] Baixando atualizacoes do GitHub...
 git pull || (echo ERRO no git pull & pause & exit /b 1)
@@ -39,7 +39,7 @@ if not exist "%NSSM%" (
     exit /b 1
 )
 rem Backend FastAPI serve API + dist/ (StaticFiles). Porta unica 8000.
-"%NSSM%" set AgecobAPI AppDirectory C:\agecob
+"%NSSM%" set AgecobAPI AppDirectory C:\agecob-new
 "%NSSM%" set AgecobAPI AppParameters "-m uvicorn main:app --host 0.0.0.0 --port 8000 --workers 4"
 rem NSSM antigo nao tem AppKillProcessTree. AppStopMethodSkip=0 = tenta CTRL_C+WM_CLOSE+TerminateProcess em sequencia.
 "%NSSM%" set AgecobAPI AppStopMethodSkip 0
