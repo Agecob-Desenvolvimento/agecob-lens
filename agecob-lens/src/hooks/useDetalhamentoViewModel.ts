@@ -96,7 +96,7 @@ function rowsToHeatmap(rows: ProdutividadeRowWithSource[]): AgentRow[] {
     mat: r.CHAVE,
     acionamentos: r.qtd_acionamentos,
     alo: r.qtd_alo,
-    conversao: calcConversao({ qtd_boletos_pagos: r.qtd_boletos_pagos, qtd_contatos: r.qtd_contatos }),
+    conversao: calcConversao({ qtd_acordos: r.qtd_acordos, qtd_contatos: r.qtd_contatos }),
     valorAcordos: Number(r.valor_acordos || 0),
     contatos: r.qtd_contatos,
     qtdAcordos: r.qtd_acordos,
@@ -115,7 +115,7 @@ function rowsToScatter(rows: ProdutividadeRowWithSource[]): ScatterPoint[] {
     const acionamentos = r.qtd_acionamentos;
     const contatos = r.qtd_contatos;
     const cpc = calcCpc({ qtd_contatos: contatos, qtd_alo: r.qtd_alo });
-    const conv = calcConversao({ qtd_boletos_pagos: r.qtd_boletos_pagos, qtd_contatos: r.qtd_contatos });
+    const conv = calcConversao({ qtd_acordos: r.qtd_acordos, qtd_contatos: r.qtd_contatos });
     const eficiencia = Math.sqrt(cpc * conv) / 100;
     const excecoesPct = Number(r.valor_excecoes && r.valor_acordos ? (r.valor_excecoes * 100) / r.valor_acordos : 0);
     return {
@@ -134,7 +134,7 @@ function rowsToRanking(rows: ProdutividadeRowWithSource[]): RankingEntry[] {
   return [...rows]
     .map((r) => {
       const cpc = calcCpc({ qtd_contatos: r.qtd_contatos, qtd_alo: r.qtd_alo });
-      const conv = calcConversao({ qtd_boletos_pagos: r.qtd_boletos_pagos, qtd_contatos: r.qtd_contatos });
+      const conv = calcConversao({ qtd_acordos: r.qtd_acordos, qtd_contatos: r.qtd_contatos });
       return {
         id: r.CHAVE, nome: r.NOME, mat: r.CHAVE,
         cpc, conversao: conv, reprov: 0, acordos: r.qtd_acordos, trend7d: [],
@@ -180,7 +180,7 @@ const RADAR_DIMS: RadarDimSpec[] = [
   {
     dim: "Conversão", unit: "%",
     agg: (t) => calcConversao(t),
-    row: (r) => calcConversao({ qtd_boletos_pagos: r.qtd_boletos_pagos, qtd_contatos: r.qtd_contatos }),
+    row: (r) => calcConversao({ qtd_acordos: r.qtd_acordos, qtd_contatos: r.qtd_contatos }),
   },
   {
     dim: "Composição Entrada", unit: "%",
@@ -269,7 +269,7 @@ function buildInsight(
   // Compute percentiles for key metrics across all agents
   const allValor = rows.map((r) => Number(r.valor_acordos || 0)).sort((a, b) => a - b);
   const allCpc = rows.map((r) => calcCpc({ qtd_contatos: r.qtd_contatos, qtd_alo: r.qtd_alo })).sort((a, b) => a - b);
-  const allConv = rows.map((r) => calcConversao({ qtd_boletos_pagos: r.qtd_boletos_pagos, qtd_contatos: r.qtd_contatos })).sort((a, b) => a - b);
+  const allConv = rows.map((r) => calcConversao({ qtd_acordos: r.qtd_acordos, qtd_contatos: r.qtd_contatos })).sort((a, b) => a - b);
   const allExc = rows.map((r) => Number(r.valor_excecoes && r.valor_acordos ? (r.valor_excecoes * 100) / r.valor_acordos : 0)).sort((a, b) => a - b);
 
   const pctRank = (sorted: number[], v: number): number => {
@@ -298,7 +298,7 @@ function buildInsight(
   const allRanked = [...rows]
     .map((r) => {
       const cpc = calcCpc({ qtd_contatos: r.qtd_contatos, qtd_alo: r.qtd_alo });
-      const conv = calcConversao({ qtd_boletos_pagos: r.qtd_boletos_pagos, qtd_contatos: r.qtd_contatos });
+      const conv = calcConversao({ qtd_acordos: r.qtd_acordos, qtd_contatos: r.qtd_contatos });
       const score = Math.round((1 - Math.min(cpc / 100, 1)) * 50 + (1 - Math.min(conv / 100, 1) / 3) * 35);
       return { id: r.CHAVE, score };
     })

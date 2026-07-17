@@ -250,7 +250,7 @@ dependency scanning, monitoramento): [`docs/security-hardening.md`](docs/securit
 | Rejeitados (`ID_REC_STATUS`) | `IN (7)` (REJEITADO — supervisor/banco negou) |
 | Boletos quebrados (`ID_REC_STATUS`) | `IN (2)` |
 | Boleto pago no prazo | `VR_PAGO > 0 AND DT_PAGAMENTO <= DATEADD(DAY, 5, DT_VENCIMENTO)` |
-| Conversão | `Σ boletos_pagos_no_prazo / Σ qtd_contatos (CPC) × 100` (pago = `VR_PAGO > 0 AND DT_PAGAMENTO <= DATEADD(DAY, 5, DT_VENCIMENTO)`; denominador é CPC, não emitidos) |
+| Conversão | `Σ qtd_acordos / Σ qtd_contatos (CPC) × 100` — acordos gerados sobre CPC; denominador é CPC, não emitidos |
 | Pré-filtro CTE | `IN (1, 2, 3, 5, 10, 12)` — gerados + exceção |
 | Portfólio | `DIV_AUX.CAMPO010` |
 | Filtro de data | `DT_EMISSAO >= @Hoje AND DT_EMISSAO < @Amanha` |

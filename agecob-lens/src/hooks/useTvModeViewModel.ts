@@ -12,13 +12,15 @@ import { useQuery } from "@tanstack/react-query";
 import { useGlobalFilters } from "@/contexts/GlobalFiltersContext";
 import { useHomeViewModel } from "@/hooks/useHomeViewModel";
 import { useMetasData } from "@/hooks/useMetasData";
+import { useProdutividadeData } from "@/hooks/useProdutividadeData";
 import { fetchRitmoDia, fetchPrimeiraParcelaDia } from "@/services/api";
 import { countBusinessDays, currentMonthKey, firstOfMonthStr, lastOfMonthStr, todayStr } from "@/lib/dates";
-import { DIAS_UTEIS_MES } from "@/lib/metrics";
+import { DIAS_UTEIS_MES, calcConversao } from "@/lib/metrics";
 import {
   tvBRLk,
   tvNum,
   tvPct,
+  type TvAgenteRow,
   type TvBu,
   type TvKpi,
   type TvModeViewModel,
@@ -36,6 +38,10 @@ const TV_PLACEHOLDERS = [
 export function useTvModeViewModel(): TvModeViewModel {
   const { selectedDatabase, dateFrom, dateTo } = useGlobalFilters();
   const home = useHomeViewModel();
+
+  // Agentes do período — mesma fonte do "Heatmap de Performance" (detalhamento),
+  // consumido pelo Modo TV Operacional.
+  const { rows: agentesRows } = useProdutividadeData(selectedDatabase, { dateFrom, dateTo });
 
   const { data: ritmoResp } = useQuery({
     queryKey: ["tv", "ritmo-dia", selectedDatabase] as const,
@@ -95,7 +101,7 @@ export function useTvModeViewModel(): TvModeViewModel {
     const kpis: TvKpi[] = [
       { id: "acordos", label: "Acordos", value: tvNum(qtdAcordos), sub: "no período", tone: "neutral" },
       { id: "cpc", label: "CPC", value: tvNum(cpcCount), sub: "contatos (RPC)", tone: "neutral" },
-      { id: "conversao", label: "Conversão", value: tvPct(conv), sub: "pagos / CPC", tone: "neutral" },
+      { id: "conversao", label: "Conversão", value: tvPct(conv), sub: "acordos / CPC", tone: "neutral" },
       { id: "ticket", label: "Ticket médio", value: tvBRLk(ticket), sub: `${tvNum(qtdAcordos)} acordos`, tone: "neutral" },
     ];
 
@@ -136,7 +142,7 @@ export function useTvModeViewModel(): TvModeViewModel {
     const top = home.top10PrimeiraParcela[0];
     if (top) ticker.push({ kind: "win", text: `${top.label} lidera a 1ª parcela · ${tvBRLk(top.value)}` });
     if (conv != null)
-      ticker.push({ kind: "info", text: `Conversão em ${tvPct(conv)} · pagos / CPC` });
+      ticker.push({ kind: "info", text: `Conversão em ${tvPct(conv)} · acordos / CPC` });
     if (buTotal && bu[0]) {
       const share = Math.round(((bu[0].valor ?? 0) / buTotal) * 100);
       ticker.push({ kind: "info", text: `${bu[0].bu} responde por ${share}% da 1ª parcela` });
@@ -148,6 +154,20 @@ export function useTvModeViewModel(): TvModeViewModel {
     }
     if (ticker.length === 0) ticker.push({ kind: "info", text: "Aguardando dados do dia" });
 
+    // Agentes (Modo TV Operacional) — conversão via métrica canônica (acordos / CPC)
+    const agentes: TvAgenteRow[] = agentesRows.map((r) => ({
+      id: r.CHAVE,
+      nome: r.NOME,
+      login: r.CHAVE,
+      acion: r.qtd_acionamentos,
+      contato: r.qtd_alo,
+      cpc: r.qtd_contatos,
+      conv: calcConversao({ qtd_acordos: r.qtd_acordos, qtd_contatos: r.qtd_contatos }),
+      acordos: r.qtd_acordos,
+      vlrAcordos: Number(r.valor_acordos || 0),
+      parc1: Number(r.valor_primeira_parcela || 0),
+    }));
+
     return {
       loading: home.loading,
       valor,
@@ -158,7 +178,8 @@ export function useTvModeViewModel(): TvModeViewModel {
       ritmoAgg,
       ticker,
       topAgentes: home.top10PrimeiraParcela.slice(0, 3),
+      agentes,
       placeholders: TV_PLACEHOLDERS,
     };
-  }, [home, ritmoResp, metaTotalMes, ppHojeEnv, dateFrom, dateTo]);
+  }, [home, ritmoResp, metaTotalMes, ppHojeEnv, dateFrom, dateTo, agentesRows]);
 }

@@ -446,7 +446,8 @@ CTE_Acordos_Diario AS (
         R.ID_USUARIO,
         CAST(R.DT_EMISSAO AS DATE) AS dia,
         SUM(R.VALOR) AS valor_total_acordos,
-        COUNT(DISTINCT R.NR_RECEBIMENTO) AS qtd_acordos,
+        COUNT(DISTINCT CASE WHEN R.ID_REC_STATUS IN {settings.STATUS_GERADOS_SQL}
+            THEN R.NR_RECEBIMENTO END) AS qtd_acordos,
         SUM(CASE WHEN R.ID_REC_STATUS IN {settings.STATUS_GERADOS_SQL}
                  AND R.PARCELA = {settings.PRIMEIRA_PARCELA}
             THEN R.VALOR ELSE 0 END) AS valor_p1,
@@ -456,9 +457,6 @@ CTE_Acordos_Diario AS (
         SUM(CASE WHEN R.ID_REC_STATUS IN {settings.STATUS_GERADOS_SQL}
                  AND R.DT_VENCIMENTO < @Hoje
             THEN 1 ELSE 0 END) AS qtd_boletos_emitidos,
-        SUM(CASE WHEN R.ID_REC_STATUS IN {settings.STATUS_GERADOS_SQL}
-                 AND R.DT_VENCIMENTO < @Hoje
-            THEN {settings.BOLETO_PAGO_PRAZO_SQL} ELSE 0 END) AS qtd_boletos_pagos,
         SUM(CASE WHEN R.ID_REC_STATUS IN {settings.STATUS_EXCECAO_SQL}
             THEN R.VALOR ELSE 0 END) AS valor_excecoes
     FROM dbo.REC_MASTER R (NOLOCK)
@@ -470,7 +468,7 @@ SELECT
     U.CHAVE,
     U.NOME,
     SUM(E.qtd_contatos) * 100.0 / NULLIF(SUM(E.qtd_alo), 0) AS avg_taxa_contato,
-    ISNULL(SUM(A.qtd_boletos_pagos), 0) * 100.0
+    ISNULL(SUM(A.qtd_acordos), 0) * 100.0
         / NULLIF(SUM(E.qtd_contatos), 0) AS avg_taxa_conversao,
     ISNULL(SUM(A.valor_p1_recebido), 0) * 100.0
         / NULLIF(SUM(A.valor_p1), 0) AS avg_efetividade_caixa,

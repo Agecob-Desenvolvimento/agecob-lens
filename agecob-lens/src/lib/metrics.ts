@@ -100,10 +100,10 @@ export function calcTaxaContato(t: Pick<MetricTotals, "qtd_alo" | "qtd_acionamen
   return ((t.qtd_alo ?? 0) * 100) / t.qtd_acionamentos;
 }
 
-/** Conversão = boletos pagos no prazo (5d do venc.) / CPC (qtd_contatos) */
-export function calcConversao(t: Pick<MetricTotals, "qtd_boletos_pagos" | "qtd_contatos">): number {
+/** Conversão = acordos gerados (qtd_acordos) / CPC (qtd_contatos) */
+export function calcConversao(t: Pick<MetricTotals, "qtd_acordos" | "qtd_contatos">): number {
   if (t.qtd_contatos <= 0) return 0;
-  return (t.qtd_boletos_pagos * 100) / t.qtd_contatos;
+  return (t.qtd_acordos * 100) / t.qtd_contatos;
 }
 
 /** Ticket médio = valor_acordos / qtd_acordos */
@@ -159,7 +159,8 @@ export function calcProdutividadeMediaAgente(rows: ProdutividadeRowWithSource[])
  * Operational Health Score: weighted normalized score 0–100.
  * Weights:
  *   - cpc            (target 35%)  weight 25%
- *   - conversao      (target 8%)   weight 30%
+ *   - conversao      (target 10%)  weight 30% — acordos/CPC; estimativa inicial
+ *     (doc: "50 acordos de 500 contatos"), calibrar pós-deploy
  *   - ticket         (target 1500) weight 20%
  *   - exception_rate (target <=5%) weight 25% (inverted)
  */
@@ -170,7 +171,7 @@ export function calcHealthScore(t: MetricTotals): number {
   const excPct = calcExcecoesPctQtd(t);
   const norm = (v: number, target: number) => Math.min(1, Math.max(0, v / target));
   const cpcN = norm(cpc, 35);
-  const convN = norm(conv, 8);
+  const convN = norm(conv, 10);
   const ticketN = norm(ticket, 1500);
   const excN = 1 - Math.min(1, Math.max(0, excPct / 25));
   const score = cpcN * 25 + convN * 30 + ticketN * 20 + excN * 25;

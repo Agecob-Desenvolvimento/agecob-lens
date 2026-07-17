@@ -119,6 +119,26 @@ export interface TvTopAgente {
   value: number;
 }
 
+/** Linha de agente do Modo TV Operacional (heatmap por agente). */
+export interface TvAgenteRow {
+  id: string;
+  nome: string;
+  /** matrícula (sub-rótulo abaixo do nome) */
+  login: string;
+  /** acionamentos */
+  acion: number;
+  /** Contato = Alô (ALO=1) */
+  contato: number;
+  /** CPC = qtd_contatos (RPC) */
+  cpc: number;
+  /** conversão % */
+  conv: number;
+  acordos: number;
+  vlrAcordos: number;
+  /** 1ª parcela */
+  parc1: number;
+}
+
 export interface TvModeViewModel {
   loading: boolean;
   valor: TvHeroValor;
@@ -130,6 +150,8 @@ export interface TvModeViewModel {
   ticker: TvTickerItem[];
   /** top 3 agentes do dia por 1ª parcela — usado no boletim horário da URA */
   topAgentes: TvTopAgente[];
+  /** agentes do período — consumido pelo Modo TV Operacional (heatmap) */
+  agentes: TvAgenteRow[];
   /** campos sem dado real (mostrados como "—") */
   placeholders: string[];
 }

@@ -83,8 +83,9 @@ export function generateDailyReadout(
   }
 
   // N=30 no CPC (denominador) é gate de base mínima — abaixo disso o % oscila
-  // demais pra virar alerta crítico sozinho (1 boleto já move vários pontos).
-  if (conversao < 5 && totals.qtd_acionamentos > 100 && totals.qtd_contatos >= 30) {
+  // demais pra virar alerta crítico sozinho (1 acordo já move vários pontos).
+  // Limiar escalado com o target do health score (8%→10%, fator 1.25x): 5→6.
+  if (conversao < 6 && totals.qtd_acionamentos > 100 && totals.qtd_contatos >= 30) {
     insights.push({
       ruleId: "insight_conversion_drop",
       category: "conversion",

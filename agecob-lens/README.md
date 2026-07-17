@@ -217,10 +217,10 @@ Acesse `http://127.0.0.1:5173`. A API deve estar rodando em `http://127.0.0.1:80
 **Taxa de Conversao**
 
 ```
-Taxa Conversao = (qtd_contatos / qtd_acordos) * 100
+Taxa Conversao = (qtd_acordos / qtd_contatos) * 100
 ```
 
-Exibida com 2 casas decimais. Retorna `0` quando `qtd_acordos = 0`.
+Exibida com 2 casas decimais. Retorna `0` quando `qtd_contatos = 0`.
 
 **Endpoints consumidos**
 

@@ -26,7 +26,7 @@ function TvScreen({ children }: { children: ReactNode }) {
   );
 }
 
-function TopBar({ sub }: { sub: string }) {
+export function TopBar({ sub }: { sub: string }) {
   return (
     <div style={{ flexShrink: 0, height: 110, padding: "0 56px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: `1px solid ${TV.line}` }}>
       <TvBrand sub={sub} />

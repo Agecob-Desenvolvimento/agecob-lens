@@ -94,7 +94,7 @@ ID_REC_STATUS IN (1, 3, 12)
 ID_REC_STATUS IN (1, 2, 3, 10, 12)
 ```
 
-Aprovados (1,3,12) + QUEBRA (2) + QUEBRA AUTOMÁTICA (10). **Base dos KPIs de valor gerado**: `valor_acordos`, `valor_primeira_parcela`, `qtd_acordos`, ticket, boletos de conversão/efetividade. Acordo gerado hoje conta no valor gerado mesmo que depois quebre — quebrar é desfecho posterior. Conversão = boletos pagos / CPC (Σ qtd_contatos), nunca / emitidos. Pré-filtro das CTEs (`STATUS_UNIVERSO_ACORDOS`) = gerados + exceção = `(1, 2, 3, 5, 10, 12)`.
+Aprovados (1,3,12) + QUEBRA (2) + QUEBRA AUTOMÁTICA (10). **Base dos KPIs de valor gerado**: `valor_acordos`, `valor_primeira_parcela`, `qtd_acordos`, ticket, boletos de conversão/efetividade. Acordo gerado hoje conta no valor gerado mesmo que depois quebre — quebrar é desfecho posterior. Conversão = qtd_acordos / CPC (Σ qtd_contatos), nunca / emitidos. Pré-filtro das CTEs (`STATUS_UNIVERSO_ACORDOS`) = gerados + exceção = `(1, 2, 3, 5, 10, 12)`.
 
 ## Exception Status
 
@@ -149,8 +149,8 @@ Funil canônico: **Acionamento → Contato (atende) → CPC (pessoa certa) → A
 
 `CPC` = Σ `qtd_contatos` (count = RPC, NOT %). "Taxa de contato" = Σ `qtd_alo` /
 Σ `qtd_acionamentos`. "Taxa de CPC" = Σ `qtd_contatos` / Σ `qtd_alo`. Conversão =
-Σ `qtd_boletos_pagos` / Σ `qtd_contatos` (boleto pago no prazo sobre **CPC**, NÃO
-boletos emitidos).
+Σ `qtd_acordos` / Σ `qtd_contatos` (acordos gerados sobre **CPC**, NÃO
+boletos pagos).
 
 ## First Installment
 
@@ -363,7 +363,7 @@ Frontend lazy-loads via `AgenteDetalheSection` (in DetalhamentoAgentes page, ins
 
 | Metric | Old Formula | New Formula |
 |---|---|---|
-| **Conversão %** | `qtd_acordos / qtd_contatos` → `qtd_boletos_pagos / qtd_boletos_emitidos × 100` | `qtd_boletos_pagos / qtd_contatos × 100` (pago em ≤5d do venc. sobre **CPC**, 2026-06-23) |
+| **Conversão %** | `qtd_acordos / qtd_contatos` → `qtd_boletos_pagos / qtd_boletos_emitidos × 100` → `qtd_boletos_pagos / qtd_contatos × 100` (2026-06-23) | `qtd_acordos / qtd_contatos × 100` — acordos gerados sobre **CPC** (2026-07-15; benchmark backend e health score recalibrados junto) |
 | **Composição de Entrada** | `valor_1ª_parcela / valor_acordos × 100` (era chamada "Efetividade de Caixa" até 2026-07-10) | mesma fórmula — quanto do acordo é a entrada |
 | **Efetividade de Caixa** | — (nome reaproveitado 2026-07-10; fórmula antiga virou "Composição de Entrada" acima) | `valor_p1_recebido / valor_primeira_parcela × 100` — quanto da entrada combinada de fato entrou (recebido / emitido) |
 | **% Exc. s/ 1ª Parcela** | — (new) | `valor_exceções / valor_1ª_parcela × 100` |

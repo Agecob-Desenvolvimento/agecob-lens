@@ -6,6 +6,7 @@
 import { useEffect, useState } from "react";
 import { TV, TvDataContext, type TvModeViewModel } from "./tvShared";
 import { VariantHeroCentral, VariantScoreboard, VariantSplitCommand } from "./TvVariants";
+import TvOperacional from "./TvOperacional";
 import { useAcordoAnnouncer } from "@/hooks/useAcordoAnnouncer";
 
 function SpeakerIcon({ on }: { on: boolean }) {
@@ -35,6 +36,7 @@ const TV_KEYFRAMES = `
 export default function TvMode({ vm, onClose }: { vm: TvModeViewModel; onClose: () => void }) {
   const [idx, setIdx] = useState(0);
   const [scale, setScale] = useState(1);
+  const [mode, setMode] = useState<"ritmo" | "operacional">("ritmo");
   const ura = useAcordoAnnouncer(vm.valor.metaDia, vm.ritmoAgg, vm.topAgentes);
 
   useEffect(() => {
@@ -44,10 +46,12 @@ export default function TvMode({ vm, onClose }: { vm: TvModeViewModel; onClose: 
     return () => window.removeEventListener("resize", fit);
   }, []);
 
+  // Auto-cicla as variantes só no modo Ritmo; o Operacional é tela única.
   useEffect(() => {
+    if (mode !== "ritmo") return;
     const id = setInterval(() => setIdx((i) => (i + 1) % VARIANTS.length), CYCLE_MS);
     return () => clearInterval(id);
-  }, []);
+  }, [mode]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -63,20 +67,35 @@ export default function TvMode({ vm, onClose }: { vm: TvModeViewModel; onClose: 
       <style>{TV_KEYFRAMES}</style>
       <div style={{ position: "fixed", inset: 0, zIndex: 9999, background: TV.bg0, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
         <div style={{ width: 1920, height: 1080, flexShrink: 0, transform: `scale(${scale})`, transformOrigin: "center center" }}>
-          <Current />
+          {mode === "ritmo" ? <Current /> : <TvOperacional />}
+        </div>
+        <div style={{ position: "fixed", top: 20, left: "50%", transform: "translateX(-50%)", display: "flex", gap: 4, padding: 4, borderRadius: 10, background: "rgba(255,255,255,0.06)", border: `1px solid ${TV.line}`, zIndex: 10000 }}>
+          {(["ritmo", "operacional"] as const).map((m) => (
+            <button
+              key={m}
+              onClick={() => setMode(m)}
+              title={m === "ritmo" ? "Modo Gerencial" : "Modo Operacional"}
+              aria-pressed={mode === m}
+              style={{ padding: "6px 14px", borderRadius: 7, border: "none", cursor: "pointer", fontSize: 13, fontWeight: 700, letterSpacing: "0.04em", background: mode === m ? TV.gold : "transparent", color: mode === m ? TV.bg0 : TV.t2, transition: "background 200ms ease, color 200ms ease" }}
+            >
+              {m === "ritmo" ? "Gerencial" : "Operacional"}
+            </button>
+          ))}
         </div>
         <div style={{ position: "fixed", top: 20, right: 24, display: "flex", alignItems: "center", gap: 18, zIndex: 10000 }}>
-          <div style={{ display: "flex", gap: 9 }}>
-            {VARIANTS.map((v, i) => (
-              <button
-                key={v.id}
-                onClick={() => setIdx(i)}
-                title={v.label}
-                aria-label={v.label}
-                style={{ width: 11, height: 11, borderRadius: "50%", border: "none", cursor: "pointer", padding: 0, background: i === idx ? TV.gold : "rgba(255,255,255,0.25)", transition: "background 200ms ease" }}
-              />
-            ))}
-          </div>
+          {mode === "ritmo" && (
+            <div style={{ display: "flex", gap: 9 }}>
+              {VARIANTS.map((v, i) => (
+                <button
+                  key={v.id}
+                  onClick={() => setIdx(i)}
+                  title={v.label}
+                  aria-label={v.label}
+                  style={{ width: 11, height: 11, borderRadius: "50%", border: "none", cursor: "pointer", padding: 0, background: i === idx ? TV.gold : "rgba(255,255,255,0.25)", transition: "background 200ms ease" }}
+                />
+              ))}
+            </div>
+          )}
           {ura.supported && (
             <button
               onClick={ura.toggle}
