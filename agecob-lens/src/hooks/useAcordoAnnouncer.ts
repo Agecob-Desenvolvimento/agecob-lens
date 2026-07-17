@@ -78,10 +78,10 @@ function falaRitmo(r: TvRitmoAgg, motivIdx: number, top: TvTopAgente[]): string 
   return `Atualização do ritmo do dia. ${real} acordos fechados, ${estado}, esperado ${esp} até agora.${proj}${falaTop3(top)} ${motiv}`;
 }
 
-function announce(rows: AcordoRow[], pct: number | null): void {
+function announce(rows: AcordoRow[], pct: number | null, primeiraParcelaPorAcordo: Map<string, number>): void {
   const head = rows.slice(0, MAX_PER_TICK);
   for (const r of head) {
-    const reais = Math.round(r.valor_total_acordo || 0);
+    const reais = Math.round(primeiraParcelaPorAcordo.get(keyOf(r)) ?? r.valor_parcela ?? 0);
     speakPtBR(`Conseguimos realizar mais um acordo! ${r.agente} fez uma negociação de ${reais} reais.${falaMeta(pct)}`);
   }
   const extra = rows.length - head.length;
@@ -146,6 +146,10 @@ export function useAcordoAnnouncer(
       seen.current = new Set(rows.map(keyOf)); // semeia: não anuncia o que já existia
       return;
     }
+    const primeiraParcelaPorAcordo = new Map<string, number>();
+    for (const r of rows) {
+      if (r.numero_parcela === 0) primeiraParcelaPorAcordo.set(keyOf(r), r.valor_parcela);
+    }
     const fresh: AcordoRow[] = [];
     for (const r of rows) {
       const k = keyOf(r);
@@ -153,7 +157,7 @@ export function useAcordoAnnouncer(
       seen.current.add(k);
       fresh.push(r);
     }
-    if (fresh.length) announce(fresh, pctRef.current);
+    if (fresh.length) announce(fresh, pctRef.current, primeiraParcelaPorAcordo);
   }, [data, enabled]);
 
   // boletim do ritmo do dia: imediato ao ligar e depois a cada virada de hora
