@@ -38,7 +38,7 @@ SELECT
     COUNT(*) OVER() AS _total_rows,
 
     -- 1. DADOS DO AGENTE
-    U.CHAVE AS agente,
+    U.NOME AS agente,
 
     -- 2. DADOS DO DEVEDOR
     DEV.CPF_CNPJ AS cpf_cnpj,
