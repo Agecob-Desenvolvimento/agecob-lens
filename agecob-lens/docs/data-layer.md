@@ -136,7 +136,8 @@ Vocabulário da UI (importante — não inverter):
 | **CPC** | "Falei com a pessoa certa?" (RPC) | `CTO_COMPLEMENTO.COD_COMPLEMENTO IN CPC_COMPLEMENTO_CODS` | `qtd_contatos` |
 
 `CPC_COMPLEMENTO_CODS` (curado, `config/settings.py`) = `("449", "452", "453",
-"454", "455", "459", "572")` — apenas desfechos de voz com o titular. Chave por
+"454", "455", "459")` — apenas desfechos de voz com o titular ("572" removido
+2026-07-27). Chave por
 `COD_COMPLEMENTO` (varchar, código de negócio), não por `ID_COMPLEMENTO`
 (surrogate key): o catálogo `CTO_COMPLEMENTO` foi resseedado em 2026-07-10
 (ver `BKP_CTO_COMPLEMENTO_20260710`), renumerando os IDs e zerando

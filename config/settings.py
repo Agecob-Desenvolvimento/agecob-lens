@@ -79,7 +79,7 @@ PORTFOLIO_COLUMN: str = "CAMPO010"
 # renumerando os IDs e órfãos a lista antiga (95,105,108,109,110,111,229,230,
 # 231,233) — zerava qtd_contatos em produção. COD_COMPLEMENTO é estável entre
 # reloads do catálogo; ID_COMPLEMENTO não é.
-CPC_COMPLEMENTO_CODS: Tuple[str, ...] = ("449", "452", "453", "454", "455", "459", "572")
+CPC_COMPLEMENTO_CODS: Tuple[str, ...] = ("449", "452", "453", "454", "455", "459")
 
 RECOMMENDED_INDEXES: List[Dict[str, Any]] = [
     {
