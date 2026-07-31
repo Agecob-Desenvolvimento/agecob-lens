@@ -102,11 +102,20 @@ export function useTvModeViewModel(): TvModeViewModel {
     const qtdAcordosDia = agentesHoje.length
       ? agentesHoje.reduce((s, r) => s + (Number(r.qtd_acordos) || 0), 0)
       : null;
+    // Exceção (ID_REC_STATUS=5, "Exceção" no negócio) — mesma fonte/dia de valorAcordosDia.
+    const excecoesValorDia = agentesHoje.length
+      ? agentesHoje.reduce((s, r) => s + (Number(r.valor_excecoes) || 0), 0)
+      : null;
+    const excecoesQtdDia = agentesHoje.length
+      ? agentesHoje.reduce((s, r) => s + (Number(r.qtd_excecoes) || 0), 0)
+      : null;
     const valor = {
       metaDia,
       realizadoDia: ppHoje,
       valorAcordosDia,
       qtdAcordosDia,
+      excecoesValorDia,
+      excecoesQtdDia,
       ontemDia: ppOntem,
       // hoje é parcial; comparar com o dia anterior FECHADO daria ▼80% às 10h por
       // construção. A base é reduzida à mesma fração da janela já decorrida.
@@ -205,7 +214,6 @@ export function useTvModeViewModel(): TvModeViewModel {
       nome: r.NOME,
       login: r.CHAVE,
       acion: r.qtd_acionamentos,
-      contato: r.qtd_alo,
       cpc: r.qtd_contatos,
       conv: calcConversao({ qtd_acordos: r.qtd_acordos, qtd_contatos: r.qtd_contatos }),
       acordos: r.qtd_acordos,

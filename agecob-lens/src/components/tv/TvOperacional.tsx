@@ -11,7 +11,7 @@ import { Ticker } from "./TvAtoms";
 import { buildPercentileMap, classifyCell } from "@/components/detalhamento/PerformanceHeatmap";
 
 type ColKind = "brl" | "num" | "pct";
-type MetricKey = "parc1" | "acordos" | "cpc" | "conv" | "acion" | "contato";
+type MetricKey = "parc1" | "acordos" | "cpc" | "conv" | "acion";
 /** Coluna ordenável: métricas + Agente (alfabética) — mesmo contrato do Heatmap. */
 type SortKey = MetricKey | "nome";
 type SortDir = "desc" | "asc";
@@ -30,7 +30,6 @@ const COLS: Col[] = [
   { key: "cpc", label: "CPC", w: 5, kind: "num" },
   { key: "conv", label: "Conv. %", w: 6, kind: "pct" },
   { key: "acion", label: "Acionam.", w: 6.4, kind: "num" },
-  { key: "contato", label: "Contato", w: 6.4, kind: "num" },
 ];
 
 const BAND_BG: Record<"good" | "warn" | "bad", string> = {

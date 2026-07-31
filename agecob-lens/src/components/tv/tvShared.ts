@@ -108,6 +108,10 @@ export interface TvHeroValor {
   valorAcordosDia: number | null;
   /** qtd de acordos gerados HOJE */
   qtdAcordosDia: number | null;
+  /** valor em exceção (ID_REC_STATUS=5, "Exceção" no negócio) gerado HOJE */
+  excecoesValorDia: number | null;
+  /** qtd de acordos em exceção gerados HOJE */
+  excecoesQtdDia: number | null;
   /** 1ª parcela do dia útil anterior (fechado) */
   ontemDia: number | null;
   /** delta fracionário do dia vs dia útil anterior */
@@ -188,9 +192,7 @@ export interface TvAgenteRow {
   login: string;
   /** acionamentos */
   acion: number;
-  /** Contato = Alô (ALO=1) */
-  contato: number;
-  /** CPC = qtd_contatos (RPC) */
+  /** CPC = contato com a pessoa certa (RPC), qtd_contatos */
   cpc: number;
   /** conversão % */
   conv: number;

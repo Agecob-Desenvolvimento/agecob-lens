@@ -119,10 +119,18 @@ export function VariantScoreboard() {
                 {v.pctMetaDia == null ? "—" : Math.round(v.pctMetaDia * 100) + "%"}
               </div>
 
-              <div style={{ ...NUM, fontSize: 17, color: TV.t3, whiteSpace: "nowrap" }}>{tvNum(v.qtdAcordosDia)} acordos</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                <div style={{ ...NUM, fontSize: 17, color: TV.t3, whiteSpace: "nowrap" }}>{tvNum(v.qtdAcordosDia)} acordos</div>
+                {/* goldText, não warn: única cor "amarela" auditada p/ texto < 28px (§ paleta APCA) */}
+                <div style={{ ...NUM, fontSize: 15, fontWeight: 700, color: TV.goldText, whiteSpace: "nowrap" }}>
+                  {tvBRLk(v.excecoesValorDia)} em exceção · {tvNum(v.excecoesQtdDia)} acordos
+                </div>
+              </div>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <DeltaChip value={v.vsOntemDia} size={20} />
-                <span style={{ fontSize: 17, color: TV.t3, whiteSpace: "nowrap" }}>vs dia útil anterior, mesma hora</span>
+                <span style={{ fontSize: 17, color: TV.t3, whiteSpace: "nowrap" }}>
+                  vs dia útil anterior, mesma hora <span style={{ fontSize: 13, color: TV.t3small }}>(estimado por hora do dia)</span>
+                </span>
               </div>
               {/* único lugar da tela que usa o vermelho saturado (§3.6): fora do
                   estado atrasado não existe um pixel de `alarm` na tela.
