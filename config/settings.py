@@ -332,6 +332,9 @@ _PRODUTIVIDADE_AGENTES_TTL_SECONDS: int = 60
 ACORDOS_HOJE_DEFAULT_LIMIT: int = 500
 ACORDOS_HOJE_MAX_LIMIT: int = 5000
 
+# Teto do PDF de metas. O upload era lido inteiro em memória, sem limite.
+METAS_UPLOAD_MAX_BYTES: int = int(os.getenv("METAS_UPLOAD_MAX_BYTES", str(20 * 1024 * 1024)))
+
 PRODUCTIVITY_REQUIRED_FIELDS: List[str] = [
     "CHAVE",
     "NOME",

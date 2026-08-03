@@ -58,6 +58,8 @@ from dominios.produtividade.servico import produtividade_servico
 
 router = APIRouter(prefix="/dashboard")
 
+_UPLOAD_CHUNK_BYTES = 1024 * 1024
+
 
 # ─────────────────────────────────────────────────────────────────
 # HELPERS INTERNOS
@@ -1115,11 +1117,15 @@ def get_real_por_portfolio(
 
 
 @router.post("/metas/upload")
-async def upload_metas_pdf(
+def upload_metas_pdf(
     file: UploadFile = File(...),
     request: Request = None,
 ) -> Dict[str, Any]:
-    """Recebe um PDF de metas, processa e atualiza ultimas_metas.json."""
+    """Recebe um PDF de metas, processa e atualiza ultimas_metas.json.
+
+    `def` e não `async def`: gravar em disco e rodar o pdfplumber são síncronos e,
+    no event loop, congelavam todas as requisições do worker durante o parse.
+    """
     run_id = str(uuid4())
 
     if not file.filename or not file.filename.lower().endswith(".pdf"):
@@ -1142,12 +1148,33 @@ async def upload_metas_pdf(
             run_id=run_id,
         )
 
-    # Salva em arquivo temporário
-    tmp_path = Path(f"dados_metas/_upload_{run_id}.pdf")
+    # Caminho absoluto a partir de BASE_DIR: o relativo dependia do AppDirectory
+    # configurado no NSSM para resolver no lugar certo.
+    tmp_path = Path(settings.BASE_DIR) / "dados_metas" / f"_upload_{run_id}.pdf"
     tmp_path.parent.mkdir(exist_ok=True)
     try:
-        content = await file.read()
-        tmp_path.write_bytes(content)
+        # Grava em blocos com teto: `await file.read()` carregava o upload inteiro
+        # em memória sem limite nenhum.
+        gravados = 0
+        with tmp_path.open("wb") as destino:
+            while True:
+                bloco = file.file.read(_UPLOAD_CHUNK_BYTES)
+                if not bloco:
+                    break
+                gravados += len(bloco)
+                if gravados > settings.METAS_UPLOAD_MAX_BYTES:
+                    return build_response_envelope(
+                        rows=[],
+                        sources=[],
+                        errors=[{
+                            "message": (
+                                "Arquivo maior que o limite de "
+                                f"{settings.METAS_UPLOAD_MAX_BYTES // (1024 * 1024)} MB."
+                            )
+                        }],
+                        run_id=run_id,
+                    )
+                destino.write(bloco)
 
         dados = processar_pdf(str(tmp_path), nome_origem=file.filename)
         periodo = salvar_resultado(dados, file.filename or "upload.pdf")
