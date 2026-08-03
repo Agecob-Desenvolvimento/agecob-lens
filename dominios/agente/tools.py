@@ -117,6 +117,7 @@ AGENT_TOOLS: List[Dict[str, Any]] = [
                     "type": "string",
                     "enum": [
                         "valor_acordos", "qtd_acordos", "conversao_pct",
+                        "pagos_por_cpc_pct",
                         "qtd_contatos", "qtd_acionamentos", "valor_primeira_parcela",
                         "ticket_medio", "valor_excecoes", "qtd_excecoes",
                         "taxa_cpc_pct", "taxa_contato_pct", "qtd_alo",
@@ -307,6 +308,7 @@ def _find_portfolio(name: str, entries: List[Dict[str, Any]]) -> Optional[Dict[s
 # schema é orientativo para o modelo, não é validado pelo provedor.
 _AGENT_ORDER_BY_FIELDS = frozenset({
     "valor_acordos", "qtd_acordos", "conversao_pct",
+    "pagos_por_cpc_pct",
     "qtd_contatos", "qtd_acionamentos", "valor_primeira_parcela",
     "ticket_medio", "valor_excecoes", "qtd_excecoes",
     "taxa_cpc_pct", "taxa_contato_pct", "qtd_alo",

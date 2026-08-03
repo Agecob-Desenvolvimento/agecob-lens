@@ -80,7 +80,12 @@ def _agent_entries_from_rows(
             "valor_primeira_parcela": round(bucket["valor_primeira_parcela"], 2),
             "qtd_boletos_emitidos": bucket["qtd_boletos_emitidos"],
             "qtd_boletos_pagos": bucket["qtd_boletos_pagos"],
-            "conversao_pct": _ratio_pct(bucket["qtd_boletos_pagos"], bucket["qtd_contatos"]),
+            # Conversão oficial (docs/data-layer.md): acordos gerados sobre CPC.
+            "conversao_pct": _ratio_pct(bucket["qtd_acordos"], bucket["qtd_contatos"]),
+            # Métrica distinta que antes ocupava o nome "conversao_pct": boletos
+            # pagos sobre CPC. Como pagos <= acordos gerados, o agente informava
+            # ~4% onde a Home mostrava ~11% para o mesmo agente e período.
+            "pagos_por_cpc_pct": _ratio_pct(bucket["qtd_boletos_pagos"], bucket["qtd_contatos"]),
             "qtd_excecoes": bucket["qtd_excecoes"],
             "valor_excecoes": round(bucket["valor_excecoes"], 2),
             "data_referencia": data_referencia,

@@ -352,7 +352,10 @@ SELECT
     CAST(ISNULL(F.parcelamento_medio, 0) AS DECIMAL(10,2)) AS parcelamento_medio,
     CAST(ISNULL(F.valor_total_p1, 0) AS DECIMAL(18,2)) AS valor_primeira_parcela,
     CAST(ISNULL(F.valor_p1_recebido, 0) AS DECIMAL(18,2)) AS valor_p1_recebido,
-    CAST(100.0 * ISNULL(B.qtd_boletos_pagos, 0) / NULLIF(B.qtd_boletos_emitidos, 0) AS DECIMAL(18,2)) AS taxa_conversao,
+    -- pagos/emitidos = efetividade do boleto, NAO Conversao. Conversao oficial e
+    -- qtd_acordos/qtd_contatos (docs/data-layer.md). O nome antigo era
+    -- taxa_conversao e nao tinha consumidor no frontend.
+    CAST(100.0 * ISNULL(B.qtd_boletos_pagos, 0) / NULLIF(B.qtd_boletos_emitidos, 0) AS DECIMAL(18,2)) AS efetividade_boleto_pct,
     CAST(CEILING(ISNULL(E.qtd_contatos, 0) * 100.0 / NULLIF(E.qtd_alo, 0)) AS INT) AS cpc_percentual,
     CAST(ISNULL(F.desconto_medio, 0) AS DECIMAL(10,2)) AS desconto_medio_percentual,
     ISNULL(F.qtd_excecoes, 0) AS qtd_excecoes,

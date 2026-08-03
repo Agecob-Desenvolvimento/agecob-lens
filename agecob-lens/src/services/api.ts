@@ -822,7 +822,10 @@ export interface TabelaPerformancePeriodoRow {
   qtd_alo: number;
   qtd_contatos: number;
   qtd_acordos: number;
+  /** Conversão oficial: qtd_acordos / qtd_contatos (docs/data-layer.md). */
   conversao_pct: number;
+  /** Boletos pagos / CPC — métrica distinta, ocupava o nome conversao_pct até 2026-08. */
+  pagos_por_cpc_pct: number;
   valor_total: number;
   soma_primeira_parcela: number;
   valor_p1_recebido: number;

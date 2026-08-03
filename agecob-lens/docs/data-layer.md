@@ -372,6 +372,24 @@ Frontend lazy-loads via `AgenteDetalheSection` (in DetalhamentoAgentes page, ins
 
 All defined in `lib/metrics.ts` → `calcConversao()`, `calcComposicaoEntrada()`, `calcEfetividadeCaixa()` (single source of truth, cascades to all charts/pages).
 
+## Name collision resolved (2026-08-03)
+
+Three backend producers emitted a **different** metric under the Conversão name. They were not competing formulas
+for one metric — they were a separate metric with the wrong label. Renamed, formulas unchanged:
+
+| Producer | Was | Now |
+|---|---|---|
+| `dominios/produtividade/queries.py` | `taxa_conversao` = pagos / emitidos | `efetividade_boleto_pct` (same formula) |
+| `dominios/acordos/queries.py` | `conversao_pct` = pagos / contatos | `pagos_por_cpc_pct` (same formula) |
+| `dominios/agente/agentes.py` | `conversao_pct` = pagos / contatos | `pagos_por_cpc_pct` (same formula) |
+
+The freed name now carries the official definition everywhere it appears: `conversao_pct` =
+`qtd_acordos / qtd_contatos × 100`, matching the benchmark query and the frontend's `calcConversao()`.
+
+Practical effect: the chat agent used to answer ~4% where the Home card showed ~11% for the same agent and
+period — and ranked agents by a metric that ordered differently from the one the benchmark scored them against.
+Both metrics remain available to the agent; `order_by` accepts either name.
+
 # Important Nodes
 
 High-impact functions:

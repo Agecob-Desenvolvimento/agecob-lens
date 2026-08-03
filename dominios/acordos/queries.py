@@ -184,7 +184,11 @@ def build_tabela_performance_periodo_query(
 
     Colunas retornadas:
         nome_agente, matricula, qtd_acionamentos, qtd_acordos, conversao_pct,
-        valor_total, soma_primeira_parcela, qtd_reprovados
+        pagos_por_cpc_pct, valor_total, soma_primeira_parcela, qtd_reprovados
+
+    conversao_pct = qtd_acordos / qtd_contatos (Conversão oficial, docs/data-layer.md).
+    pagos_por_cpc_pct = qtd_boletos_pagos / qtd_contatos — métrica distinta, que
+    até 2026-08 ocupava indevidamente o nome conversao_pct.
 
     Status (Acordos + valor gerado): ID_REC_STATUS IN (1, 2, 3, 10, 12) — STATUS_GERADOS.
     Reprovados: REC_STATUS.DESCR contém REJEITADO, REPROVADO ou RECUSADO.
@@ -285,12 +289,20 @@ def build_tabela_performance_periodo_query(
                 SUM(qtd_acordos)      AS qtd_acordos,
                 SUM(qtd_boletos_emitidos) AS qtd_boletos_emitidos,
                 SUM(qtd_boletos_pagos)    AS qtd_boletos_pagos,
+                -- Conversao oficial: acordos gerados sobre CPC (docs/data-layer.md).
+                CAST(
+                    CASE WHEN SUM(qtd_contatos) > 0
+                         THEN SUM(qtd_acordos) * 100.0 / SUM(qtd_contatos)
+                         ELSE 0.0
+                    END AS DECIMAL(6,1)
+                ) AS conversao_pct,
+                -- Metrica distinta que antes ocupava o nome conversao_pct.
                 CAST(
                     CASE WHEN SUM(qtd_contatos) > 0
                          THEN SUM(qtd_boletos_pagos) * 100.0 / SUM(qtd_contatos)
                          ELSE 0.0
                     END AS DECIMAL(6,1)
-                ) AS conversao_pct,
+                ) AS pagos_por_cpc_pct,
                 CAST(SUM(valor_total)            AS DECIMAL(18,2)) AS valor_total,
                 CAST(SUM(soma_primeira_parcela)  AS DECIMAL(18,2)) AS soma_primeira_parcela,
                 SUM(qtd_reprovados) AS qtd_reprovados,
