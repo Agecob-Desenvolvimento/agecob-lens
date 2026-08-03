@@ -4,7 +4,7 @@ from typing import Any, Dict, List, Optional
 
 import config.settings as settings
 from core.database.query_executor import run_query
-from core.telemetry.agent_logger import _agent_ndjson
+from core.telemetry.agent_logger import _agent_ndjson, _sentry_log
 from dominios.efetividade.queries import _EF_BUILDER_MAP, _EF_DB_VARIANTS
 
 
@@ -32,6 +32,7 @@ class EfetividadeETL:
                         "etl_error",
                         {"error": str(exc)},
                     )
+                    _sentry_log("error", "Falha no ETL de efetividade (background).", store_key=store_key, error=str(exc))
         with self._lock:
             self._store.update(results)
             self._last_run = time.time()

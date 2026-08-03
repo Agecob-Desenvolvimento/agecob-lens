@@ -131,6 +131,9 @@ DROP INDEX IX_REC_MASTER_DT_EMISSAO ON dbo.REC_MASTER;
 | `REQUIRE_API_AUTH` | false | Exige auth em `/dashboard/*`, `/health/*`, `/admin/*` |
 | `ENABLE_AGENT_TELEMETRY` | false | Habilita rotas de telemetria |
 | `ENABLE_INDEX_ADMIN` | false | Habilita `/admin/indexes/*` |
+| `SENTRY_DSN` | — | Sentry (erros + performance) — vazio desliga |
+| `SENTRY_TRACES_SAMPLE_RATE` | 0.1 | Taxa de amostragem de transactions |
+| `SENTRY_ENABLE_LOGS` | true | Habilita Sentry Logs estruturados (`sentry_sdk.logger`) |
 
 Use `.env.example` como base.
 
@@ -153,6 +156,34 @@ Em produção: `http://<IP_SERVIDOR>:8000`
 3. Acessar: `http://<IP_SERVIDOR>:8000`
 
 O `atualizar.bat` já força `--workers 4` via `nssm set` antes de reiniciar.
+
+## Segurança LAN — HTTPS + Basic Auth (Caddy)
+
+O dashboard é dado de cobrança (PII) numa LAN. Sem TLS, token e dados trafegam em
+texto puro; e qualquer `VITE_API_TOKEN` embutido no build vaza no JS público. O
+proxy Caddy resolve os dois: termina TLS, exige Basic Auth e injeta as credenciais
+da API no upstream — o frontend não embute token algum.
+
+```
+Browser → Caddy (443, TLS + Basic Auth) → uvicorn (127.0.0.1:8000) → injeta X-API-Key + Bearer
+```
+
+Config em [`infra/Caddyfile`](infra/Caddyfile). Cutover de produção (ordem importa):
+
+1. Backend `.env`: `REQUIRE_API_AUTH=true`, `API_KEY=<chave>`, `API_TOKEN=<token>`.
+2. Hash da senha de login: `caddy hash-password --plaintext '<senha>'` → colar no `basic_auth` do Caddyfile.
+3. Variáveis de ambiente do Caddy (devem bater com o `.env`): `AGECOB_API_KEY`, `AGECOB_API_TOKEN`.
+4. **Só depois do Caddy no ar**, fechar o uvicorn para a LAN: trocar `--host 0.0.0.0`
+   por `--host 127.0.0.1` no `atualizar.bat` (linha do `nssm set ... AppParameters`).
+   Inverter a ordem deixa o dashboard inacessível. Trocar a regra de firewall da
+   porta `8000` por `443` (Caddy).
+5. `caddy start --config infra/Caddyfile`. Em cada cliente: `caddy trust` (confia na CA local 1×).
+6. Frontend `.env`: `VITE_API_BASE_URL=https://dashboard.local` (sem `VITE_API_KEY/TOKEN`).
+
+Acesso passa a `https://dashboard.local` (ou IP do servidor) atrás de login.
+
+Hardening complementar (rate limit, CSRF, rotação de credenciais, backup da CA,
+dependency scanning, monitoramento): [`docs/security-hardening.md`](docs/security-hardening.md).
 
 ## Endpoints
 
@@ -219,7 +250,7 @@ O `atualizar.bat` já força `--workers 4` via `nssm set` antes de reiniciar.
 | Rejeitados (`ID_REC_STATUS`) | `IN (7)` (REJEITADO — supervisor/banco negou) |
 | Boletos quebrados (`ID_REC_STATUS`) | `IN (2)` |
 | Boleto pago no prazo | `VR_PAGO > 0 AND DT_PAGAMENTO <= DATEADD(DAY, 5, DT_VENCIMENTO)` |
-| Conversão | `Σ boletos_pagos_no_prazo / Σ qtd_contatos (CPC) × 100` (pago = `VR_PAGO > 0 AND DT_PAGAMENTO <= DATEADD(DAY, 5, DT_VENCIMENTO)`; denominador é CPC, não emitidos) |
+| Conversão | `Σ qtd_acordos / Σ qtd_contatos (CPC) × 100` — acordos gerados sobre CPC; denominador é CPC, não emitidos |
 | Pré-filtro CTE | `IN (1, 2, 3, 5, 10, 12)` — gerados + exceção |
 | Portfólio | `DIV_AUX.CAMPO010` |
 | Filtro de data | `DT_EMISSAO >= @Hoje AND DT_EMISSAO < @Amanha` |

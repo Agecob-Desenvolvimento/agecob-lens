@@ -23,7 +23,7 @@ interface DiagnosticCard {
   conversao: number;
   conversaoBench: number | null;
   conversaoAbove: boolean;
-  /** Sem boletos vencidos no período → conversão não é mensurável (mostra "—", não 0%). */
+  /** Sem CPC no período → conversão (acordos/CPC) não é mensurável (mostra "—", não 0%). */
   conversaoNd: boolean;
   diagnosis: string;
   action: string;
@@ -66,11 +66,11 @@ const DIAGNOSIS_MAP = {
   },
   cpcAboveConvNd: {
     diagnosis: "CPC saudável",
-    action: "Conversão sem boletos vencidos hoje — reavaliar quando as parcelas vencerem.",
+    action: "Sem CPC hoje — conversão não mensurável ainda.",
   },
   cpcBelowConvNd: {
     diagnosis: "Foco em CPC",
-    action: "CPC baixo (alcança poucos titulares). Melhorar discagem. Conversão sem boletos vencidos hoje.",
+    action: "CPC baixo (alcança poucos titulares). Melhorar discagem. Conversão não mensurável sem CPC.",
   },
 };
 
@@ -88,8 +88,10 @@ function buildCards(
     const bench = benchByBu.get(d.bu);
     const cpcBench = bench?.cpc ?? null;
     const conversaoBench = bench?.conversao ?? null;
+    const funnel = funnelMap.get(d.bu);
+    // conversão = acordos/CPC — só não mensurável quando não há CPC ainda.
+    const conversaoNd = (funnel?.contatos ?? 0) === 0;
     // compare against benchmark when available, fall back to overall avg
-    const conversaoNd = (d.boletosEmitidos ?? 0) === 0;
     const cpcAbove = cpcBench != null ? d.cpc >= cpcBench : cpcRef > 0 ? d.cpc >= cpcRef : true;
     const convAbove = conversaoBench != null ? d.conversao >= conversaoBench : conversaoRef > 0 ? d.conversao >= conversaoRef : true;
     const key = conversaoNd
@@ -98,7 +100,6 @@ function buildCards(
         ? convAbove ? "bothAbove" : "cpcAboveConvBelow"
         : convAbove ? "cpcBelowConvAbove" : "bothBelow";
     const { diagnosis, action } = DIAGNOSIS_MAP[key];
-    const funnel = funnelMap.get(d.bu);
     return {
       bu: d.bu,
       color: BU_COLORS[d.bu] ?? "#6b7280",
@@ -201,7 +202,7 @@ function DiagnosticCardItem({ card }: { card: DiagnosticCard }) {
           bench={card.conversaoBench}
           above={card.conversaoAbove}
           nd={card.conversaoNd}
-          ndNote="Sem boletos vencidos hoje"
+          ndNote="Sem CPC hoje"
         />
       </div>
 

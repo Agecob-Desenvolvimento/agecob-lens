@@ -1,3 +1,5 @@
+import hmac
+import re
 from collections import deque
 from datetime import datetime, timezone
 from typing import Dict, Optional
@@ -20,12 +22,21 @@ def require_auth(request: Request) -> None:
     api_key = request.headers.get("x-api-key", "")
     auth_header = request.headers.get("authorization", "")
     expected_auth = f"Bearer {settings.API_TOKEN}"
-    if api_key != settings.API_KEY or auth_header != expected_auth:
+    # compare_digest: comparação em tempo constante evita timing side-channel.
+    key_ok = hmac.compare_digest(api_key, settings.API_KEY)
+    tok_ok = hmac.compare_digest(auth_header, expected_auth)
+    if not (key_ok and tok_ok):
         raise HTTPException(status_code=401, detail="Unauthorized")
 
 
+# /dashboard/ (dados) + /agente/ (LLM, custo por chamada) + /admin/ (DBA). Mesmo
+# bucket por (client_ip, api_key); /health/ e demais ficam fora p/ não atrapalhar
+# monitoramento e navegação normal do SPA.
+_RATE_LIMITED_PREFIXES = ("/dashboard/", "/agente/", "/admin/")
+
+
 def rate_limit_dashboard(request: Request, path: str) -> Optional[JSONResponse]:
-    if not path.startswith("/dashboard/"):
+    if not path.startswith(_RATE_LIMITED_PREFIXES):
         return None
 
     client_ip = request.client.host if request.client else "unknown"
@@ -59,6 +70,11 @@ def ensure_validated_execution(path: str) -> None:
         )
 
 
+# Run-id vem de header do cliente; valida o formato antes de logar/refletir para
+# evitar injeção no log ndjson e no header X-Run-Id da resposta (F-07).
+_RUN_ID_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
+
+
 def extract_run_id(request: Request) -> str:
     provided = (
         request.headers.get("x-run-id")
@@ -66,7 +82,9 @@ def extract_run_id(request: Request) -> str:
         or request.headers.get("x-request-id")
         or ""
     ).strip()
-    return provided or f"srv-{uuid4().hex[:12]}"
+    if provided and _RUN_ID_RE.match(provided):
+        return provided
+    return f"srv-{uuid4().hex[:12]}"
 
 
 def normalize_api_path(path: str) -> str:

@@ -1,7 +1,25 @@
 import { describe, expect, it } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
-import { PerformanceHeatmap, classifyCell } from "./PerformanceHeatmap";
+import { PerformanceHeatmap, buildPercentileMap, classifyCell } from "./PerformanceHeatmap";
 import { MOCK_AGENTS_ENRICHED } from "./heatmapMocks";
+
+describe("buildPercentileMap", () => {
+  it("ranks values by percentile (below + half of equals)", () => {
+    const map = buildPercentileMap([10, 20, 20, 30]);
+    expect(map.get(10)).toBe(13); // (0 + 0.5×1)/4 ×100
+    expect(map.get(20)).toBe(50); // (1 + 0.5×2)/4 ×100
+    expect(map.get(30)).toBe(88); // (3 + 0.5×1)/4 ×100
+  });
+
+  // Regressão: NaN !== NaN fazia o loop de ranking nunca avançar → main thread travada.
+  it("terminates and stays finite when input contains NaN/Infinity", () => {
+    const map = buildPercentileMap([Number.NaN, 10, Number.POSITIVE_INFINITY, 20]);
+    expect(map.size).toBeGreaterThan(0);
+    for (const rank of map.values()) {
+      expect(Number.isFinite(rank)).toBe(true);
+    }
+  });
+});
 
 describe("classifyCell", () => {
   it("scores high percentile as good, mid as warn, low as bad", () => {

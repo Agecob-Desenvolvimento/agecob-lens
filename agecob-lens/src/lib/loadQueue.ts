@@ -16,7 +16,7 @@ const PRIORITY_WEIGHT: Record<LoadPriority, number> = {
   low: 2,
 };
 
-class LoadQueue {
+export class LoadQueue {
   private readonly maxConcurrency: number;
   private active = 0;
   private queue: Array<QueueTask<unknown>> = [];
@@ -43,7 +43,10 @@ class LoadQueue {
 
   cancelScope(scope: string): void {
     this.queue.forEach((task) => {
-      if (task.scope === scope) task.cancelled = true;
+      if (task.scope === scope) {
+        task.cancelled = true;
+        task.reject(new Error(`cancelled: ${scope}`));
+      }
     });
     this.queue = this.queue.filter((task) => task.scope !== scope);
   }
@@ -51,7 +54,11 @@ class LoadQueue {
   private pump(): void {
     while (this.active < this.maxConcurrency && this.queue.length > 0) {
       const task = this.queue.shift();
-      if (!task || task.cancelled) continue;
+      if (!task) continue;
+      if (task.cancelled) {
+        task.reject(new Error(`cancelled: ${task.scope}`));
+        continue;
+      }
       this.active += 1;
       task
         .run()

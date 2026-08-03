@@ -108,6 +108,21 @@ CTE_Financeiro_Agente AS (
     LEFT JOIN CTE_Saldo_Original S ON A.NR_RECEBIMENTO = S.NR_RECEBIMENTO
     GROUP BY A.ID_USUARIO
 ),
+-- Esforço (acionamentos/alô/contato) pré-agregado por agente. Separado da tabela
+-- final para o agente com acordo gerado hoje mas sem acionamento no mesmo dia
+-- (ex.: renegociação automática) não sumir do resultado — CTO_MASTER deixa de
+-- ser a tabela-âncora (era JOIN direto, excluía quem tinha F mas não tinha CM).
+CTE_Esforco_Agente AS (
+    SELECT
+        CM.ID_USUARIO,
+        COUNT(DISTINCT CM.ID_DEV) AS qtd_acionamentos,
+        COUNT(DISTINCT CASE WHEN CC.ALO = 1 THEN CM.ID_DEV END) AS qtd_alo,
+        COUNT(DISTINCT CASE WHEN CC.ALO = 1 AND CC.COD_COMPLEMENTO IN {settings.CPC_CODS_SQL} THEN CM.ID_DEV END) AS qtd_contatos
+    FROM CTO_MASTER CM (NOLOCK)
+    LEFT JOIN CTO_COMPLEMENTO CC (NOLOCK) ON CM.ID_COMPLEMENTO = CC.ID_COMPLEMENTO
+    WHERE CM.DATA >= @Hoje AND CM.DATA < @Amanha
+    GROUP BY CM.ID_USUARIO
+),
 -- Proxy de horas trabalhadas: janela intradiária entre o primeiro e o último
 -- acordo aprovado de cada dia (MAX-MIN de DT_EMISSAO). Somado por dia para não
 -- contar o intervalo de um dia para o outro.
@@ -148,43 +163,37 @@ SELECT
     U.CHAVE,
     U.NOME,
     -- qtd_acionamentos = devedores únicos acionados no dia (dedupe por ID_DEV)
-    COUNT(DISTINCT CM.ID_DEV) AS qtd_acionamentos,
+    ISNULL(E.qtd_acionamentos, 0) AS qtd_acionamentos,
     -- Alô = alguém atendeu (CTO_COMPLEMENTO.ALO=1). Etapa do funil entre
     -- acionamento e contato/RPC.
-    COUNT(DISTINCT CASE WHEN CC.ALO = 1 THEN CM.ID_DEV END) AS qtd_alo,
-    -- Contato (RPC) = falou com a pessoa certa (CPC_COMPLEMENTO_IDS curado).
-    COUNT(DISTINCT CASE WHEN CC.ALO = 1 AND CM.ID_COMPLEMENTO IN {settings.CPC_IDS_SQL} THEN CM.ID_DEV END) AS qtd_contatos,
+    ISNULL(E.qtd_alo, 0) AS qtd_alo,
+    -- Contato (RPC) = falou com a pessoa certa (CPC_COMPLEMENTO_CODS curado).
+    ISNULL(E.qtd_contatos, 0) AS qtd_contatos,
     CAST(
-        CEILING(
-            COUNT(DISTINCT CASE WHEN CC.ALO = 1 AND CM.ID_COMPLEMENTO IN {settings.CPC_IDS_SQL} THEN CM.ID_DEV END) * 100.0
-        / NULLIF(COUNT(DISTINCT CASE WHEN CC.ALO = 1 THEN CM.ID_DEV END), 0)
-        )
+        CEILING(ISNULL(E.qtd_contatos, 0) * 100.0 / NULLIF(E.qtd_alo, 0))
     AS INT) AS cpc_percentual,
-    ISNULL(MAX(F.qtd_acordos), 0) AS qtd_acordos,
-    ISNULL(MAX(BA.qtd_boletos_emitidos), 0) AS qtd_boletos_emitidos,
-    ISNULL(MAX(BA.qtd_boletos_pagos), 0) AS qtd_boletos_pagos,
+    ISNULL(F.qtd_acordos, 0) AS qtd_acordos,
+    ISNULL(BA.qtd_boletos_emitidos, 0) AS qtd_boletos_emitidos,
+    ISNULL(BA.qtd_boletos_pagos, 0) AS qtd_boletos_pagos,
     CAST(
-        ISNULL(MAX(F.qtd_acordos), 0) * 100.0
-        / NULLIF(COUNT(DISTINCT CM.ID_DEV), 0)
+        ISNULL(F.qtd_acordos, 0) * 100.0 / NULLIF(E.qtd_acionamentos, 0)
     AS DECIMAL(5,2)) AS acordos_percentual,
-    CAST(ISNULL(MAX(F.valor_acordos), 0) AS DECIMAL(18,2)) AS valor_acordos,
-    CAST(ISNULL(MAX(F.acordo_medio), 0) AS DECIMAL(18,2)) AS acordo_medio,
-    CAST(ISNULL(MAX(F.parcelamento_medio), 0) AS DECIMAL(10,2)) AS parcelamento_medio,
-    CAST(ISNULL(MAX(F.desconto_medio_percentual), 0) AS DECIMAL(10,2)) AS desconto_medio_percentual,
-    CAST(ISNULL(MAX(F.valor_primeira_parcela), 0) AS DECIMAL(18,2)) AS valor_primeira_parcela,
-    CAST(ISNULL(MAX(F.valor_p1_recebido), 0) AS DECIMAL(18,2)) AS valor_p1_recebido,
-    ISNULL(MAX(F.qtd_excecoes), 0) AS qtd_excecoes,
-    CAST(ISNULL(MAX(F.valor_excecoes), 0) AS DECIMAL(18,2)) AS valor_excecoes,
-    CAST(ISNULL(MAX(F.valor_primeira_parcela_excecoes), 0) AS DECIMAL(18,2)) AS valor_primeira_parcela_excecoes,
-    ISNULL(MAX(F.qtd_rejeitados), 0) AS qtd_rejeitados,
-    CAST(ISNULL(MAX(F.valor_rejeitados), 0) AS DECIMAL(18,2)) AS valor_rejeitados,
-    CAST(ISNULL(MAX(F.idade_media_acordos), 0) AS DECIMAL(10,1)) AS idade_media_acordos,
-    CAST(ISNULL(MAX(H.horas_trabalhadas), 0) AS DECIMAL(10,2)) AS horas_trabalhadas
-FROM CTO_MASTER CM (NOLOCK)
-JOIN USU_MASTER U (NOLOCK)
-    ON CM.ID_USUARIO = U.ID_USUARIO
-LEFT JOIN CTO_COMPLEMENTO CC (NOLOCK)
-    ON CM.ID_COMPLEMENTO = CC.ID_COMPLEMENTO
+    CAST(ISNULL(F.valor_acordos, 0) AS DECIMAL(18,2)) AS valor_acordos,
+    CAST(ISNULL(F.acordo_medio, 0) AS DECIMAL(18,2)) AS acordo_medio,
+    CAST(ISNULL(F.parcelamento_medio, 0) AS DECIMAL(10,2)) AS parcelamento_medio,
+    CAST(ISNULL(F.desconto_medio_percentual, 0) AS DECIMAL(10,2)) AS desconto_medio_percentual,
+    CAST(ISNULL(F.valor_primeira_parcela, 0) AS DECIMAL(18,2)) AS valor_primeira_parcela,
+    CAST(ISNULL(F.valor_p1_recebido, 0) AS DECIMAL(18,2)) AS valor_p1_recebido,
+    ISNULL(F.qtd_excecoes, 0) AS qtd_excecoes,
+    CAST(ISNULL(F.valor_excecoes, 0) AS DECIMAL(18,2)) AS valor_excecoes,
+    CAST(ISNULL(F.valor_primeira_parcela_excecoes, 0) AS DECIMAL(18,2)) AS valor_primeira_parcela_excecoes,
+    ISNULL(F.qtd_rejeitados, 0) AS qtd_rejeitados,
+    CAST(ISNULL(F.valor_rejeitados, 0) AS DECIMAL(18,2)) AS valor_rejeitados,
+    CAST(ISNULL(F.idade_media_acordos, 0) AS DECIMAL(10,1)) AS idade_media_acordos,
+    CAST(ISNULL(H.horas_trabalhadas, 0) AS DECIMAL(10,2)) AS horas_trabalhadas
+FROM USU_MASTER U (NOLOCK)
+LEFT JOIN CTE_Esforco_Agente E
+    ON U.ID_USUARIO = E.ID_USUARIO
 LEFT JOIN CTE_Financeiro_Agente F
     ON U.ID_USUARIO = F.ID_USUARIO
 LEFT JOIN CTE_Horas_Agente H
@@ -192,11 +201,8 @@ LEFT JOIN CTE_Horas_Agente H
 LEFT JOIN CTE_Boletos_Agente BA
     ON U.ID_USUARIO = BA.ID_USUARIO
 WHERE
-    CM.DATA >= @Hoje AND CM.DATA < @Amanha
+    (E.ID_USUARIO IS NOT NULL OR F.ID_USUARIO IS NOT NULL)
     {settings.FILTRO_AGENTES_EXCLUIDOS_SQL}
-GROUP BY
-    U.CHAVE,
-    U.NOME
 ORDER BY
     qtd_acionamentos DESC
 OPTION (USE HINT('ENABLE_PARALLEL_PLAN_PREFERENCE'), MAXDOP 0);
@@ -205,13 +211,13 @@ OPTION (USE HINT('ENABLE_PARALLEL_PLAN_PREFERENCE'), MAXDOP 0);
     normalized = (db or "").strip().lower()
     if normalized == "cobwebrcbconsumer":
         usu_master = "SELECT ID_USUARIO, CHAVE, NOME, 'CONSUMER' AS origem FROM COBwebRCBCONSUMER.dbo.USU_MASTER (NOLOCK)"
-        cto_master = f"SELECT CM2.ID_USUARIO, CM2.ID_CTO_MASTER, CM2.ID_COMPLEMENTO, CM2.ID_DEV, CM2.DATA, CASE WHEN CC.ALO = 1 AND CM2.ID_COMPLEMENTO IN {settings.CPC_IDS_SQL} THEN 1 ELSE 0 END AS contato, CASE WHEN CC.ALO = 1 THEN 1 ELSE 0 END AS alo, 'CONSUMER' AS origem FROM COBwebRCBCONSUMER.dbo.CTO_MASTER CM2 (NOLOCK) LEFT JOIN COBwebRCBCONSUMER.dbo.CTO_COMPLEMENTO CC (NOLOCK) ON CM2.ID_COMPLEMENTO = CC.ID_COMPLEMENTO WHERE CM2.DATA >= @Hoje AND CM2.DATA < @Amanha"
+        cto_master = f"SELECT CM2.ID_USUARIO, CM2.ID_CTO_MASTER, CM2.ID_COMPLEMENTO, CM2.ID_DEV, CM2.DATA, CASE WHEN CC.ALO = 1 AND CC.COD_COMPLEMENTO IN {settings.CPC_CODS_SQL} THEN 1 ELSE 0 END AS contato, CASE WHEN CC.ALO = 1 THEN 1 ELSE 0 END AS alo, 'CONSUMER' AS origem FROM COBwebRCBCONSUMER.dbo.CTO_MASTER CM2 (NOLOCK) LEFT JOIN COBwebRCBCONSUMER.dbo.CTO_COMPLEMENTO CC (NOLOCK) ON CM2.ID_COMPLEMENTO = CC.ID_COMPLEMENTO WHERE CM2.DATA >= @Hoje AND CM2.DATA < @Amanha"
         rec_master = "SELECT ID_USUARIO, NR_RECEBIMENTO, VALOR, PARCELA, ID_REC_STATUS, PLANO, ID_CARTEIRA, VR_PAGO, DT_PAGAMENTO, DT_VENCIMENTO, 'CONSUMER' AS origem FROM COBwebRCBCONSUMER.dbo.REC_MASTER (NOLOCK) WHERE DT_EMISSAO >= @Hoje AND DT_EMISSAO < @Amanha"
         rec_dividas = "SELECT NR_RECEBIMENTO, ID_DIVIDA, 'CONSUMER' AS origem FROM COBwebRCBCONSUMER.dbo.REC_DIVIDAS (NOLOCK)"
         div_master = "SELECT ID_DIVIDA, VR_SALDO, 'CONSUMER' AS origem FROM COBwebRCBCONSUMER.dbo.DIV_MASTER (NOLOCK)"
     elif normalized == "cobwebrcbautos":
         usu_master = "SELECT ID_USUARIO, CHAVE, NOME, 'AUTOS' AS origem FROM COBwebRCBAUTOS.dbo.USU_MASTER (NOLOCK)"
-        cto_master = f"SELECT CM2.ID_USUARIO, CM2.ID_CTO_MASTER, CM2.ID_COMPLEMENTO, CM2.ID_DEV, CM2.DATA, CASE WHEN CC.ALO = 1 AND CM2.ID_COMPLEMENTO IN {settings.CPC_IDS_SQL} THEN 1 ELSE 0 END AS contato, CASE WHEN CC.ALO = 1 THEN 1 ELSE 0 END AS alo, 'AUTOS' AS origem FROM COBwebRCBAUTOS.dbo.CTO_MASTER CM2 (NOLOCK) LEFT JOIN COBwebRCBAUTOS.dbo.CTO_COMPLEMENTO CC (NOLOCK) ON CM2.ID_COMPLEMENTO = CC.ID_COMPLEMENTO WHERE CM2.DATA >= @Hoje AND CM2.DATA < @Amanha"
+        cto_master = f"SELECT CM2.ID_USUARIO, CM2.ID_CTO_MASTER, CM2.ID_COMPLEMENTO, CM2.ID_DEV, CM2.DATA, CASE WHEN CC.ALO = 1 AND CC.COD_COMPLEMENTO IN {settings.CPC_CODS_SQL} THEN 1 ELSE 0 END AS contato, CASE WHEN CC.ALO = 1 THEN 1 ELSE 0 END AS alo, 'AUTOS' AS origem FROM COBwebRCBAUTOS.dbo.CTO_MASTER CM2 (NOLOCK) LEFT JOIN COBwebRCBAUTOS.dbo.CTO_COMPLEMENTO CC (NOLOCK) ON CM2.ID_COMPLEMENTO = CC.ID_COMPLEMENTO WHERE CM2.DATA >= @Hoje AND CM2.DATA < @Amanha"
         rec_master = "SELECT ID_USUARIO, NR_RECEBIMENTO, VALOR, PARCELA, ID_REC_STATUS, PLANO, ID_CARTEIRA, VR_PAGO, DT_PAGAMENTO, DT_VENCIMENTO, 'AUTOS' AS origem FROM COBwebRCBAUTOS.dbo.REC_MASTER (NOLOCK) WHERE DT_EMISSAO >= @Hoje AND DT_EMISSAO < @Amanha"
         rec_dividas = "SELECT NR_RECEBIMENTO, ID_DIVIDA, 'AUTOS' AS origem FROM COBwebRCBAUTOS.dbo.REC_DIVIDAS (NOLOCK)"
         div_master = "SELECT ID_DIVIDA, VR_SALDO, 'AUTOS' AS origem FROM COBwebRCBAUTOS.dbo.DIV_MASTER (NOLOCK)"
@@ -222,9 +228,9 @@ OPTION (USE HINT('ENABLE_PARALLEL_PLAN_PREFERENCE'), MAXDOP 0);
             SELECT ID_USUARIO, CHAVE, NOME, 'AUTOS' AS origem FROM COBwebRCBAUTOS.dbo.USU_MASTER (NOLOCK)
         """
         cto_master = f"""
-            SELECT CM2.ID_USUARIO, CM2.ID_CTO_MASTER, CM2.ID_COMPLEMENTO, CM2.ID_DEV, CM2.DATA, CASE WHEN CC.ALO = 1 AND CM2.ID_COMPLEMENTO IN {settings.CPC_IDS_SQL} THEN 1 ELSE 0 END AS contato, CASE WHEN CC.ALO = 1 THEN 1 ELSE 0 END AS alo, 'CONSUMER' AS origem FROM COBwebRCBCONSUMER.dbo.CTO_MASTER CM2 (NOLOCK) LEFT JOIN COBwebRCBCONSUMER.dbo.CTO_COMPLEMENTO CC (NOLOCK) ON CM2.ID_COMPLEMENTO = CC.ID_COMPLEMENTO WHERE CM2.DATA >= @Hoje AND CM2.DATA < @Amanha
+            SELECT CM2.ID_USUARIO, CM2.ID_CTO_MASTER, CM2.ID_COMPLEMENTO, CM2.ID_DEV, CM2.DATA, CASE WHEN CC.ALO = 1 AND CC.COD_COMPLEMENTO IN {settings.CPC_CODS_SQL} THEN 1 ELSE 0 END AS contato, CASE WHEN CC.ALO = 1 THEN 1 ELSE 0 END AS alo, 'CONSUMER' AS origem FROM COBwebRCBCONSUMER.dbo.CTO_MASTER CM2 (NOLOCK) LEFT JOIN COBwebRCBCONSUMER.dbo.CTO_COMPLEMENTO CC (NOLOCK) ON CM2.ID_COMPLEMENTO = CC.ID_COMPLEMENTO WHERE CM2.DATA >= @Hoje AND CM2.DATA < @Amanha
             UNION ALL
-            SELECT CM2.ID_USUARIO, CM2.ID_CTO_MASTER, CM2.ID_COMPLEMENTO, CM2.ID_DEV, CM2.DATA, CASE WHEN CC.ALO = 1 AND CM2.ID_COMPLEMENTO IN {settings.CPC_IDS_SQL} THEN 1 ELSE 0 END AS contato, CASE WHEN CC.ALO = 1 THEN 1 ELSE 0 END AS alo, 'AUTOS' AS origem FROM COBwebRCBAUTOS.dbo.CTO_MASTER CM2 (NOLOCK) LEFT JOIN COBwebRCBAUTOS.dbo.CTO_COMPLEMENTO CC (NOLOCK) ON CM2.ID_COMPLEMENTO = CC.ID_COMPLEMENTO WHERE CM2.DATA >= @Hoje AND CM2.DATA < @Amanha
+            SELECT CM2.ID_USUARIO, CM2.ID_CTO_MASTER, CM2.ID_COMPLEMENTO, CM2.ID_DEV, CM2.DATA, CASE WHEN CC.ALO = 1 AND CC.COD_COMPLEMENTO IN {settings.CPC_CODS_SQL} THEN 1 ELSE 0 END AS contato, CASE WHEN CC.ALO = 1 THEN 1 ELSE 0 END AS alo, 'AUTOS' AS origem FROM COBwebRCBAUTOS.dbo.CTO_MASTER CM2 (NOLOCK) LEFT JOIN COBwebRCBAUTOS.dbo.CTO_COMPLEMENTO CC (NOLOCK) ON CM2.ID_COMPLEMENTO = CC.ID_COMPLEMENTO WHERE CM2.DATA >= @Hoje AND CM2.DATA < @Amanha
         """
         rec_master = """
             SELECT ID_USUARIO, NR_RECEBIMENTO, VALOR, PARCELA, ID_REC_STATUS, PLANO, ID_CARTEIRA, VR_PAGO, DT_PAGAMENTO, DT_VENCIMENTO, 'CONSUMER' AS origem FROM COBwebRCBCONSUMER.dbo.REC_MASTER (NOLOCK) WHERE DT_EMISSAO >= @Hoje AND DT_EMISSAO < @Amanha
@@ -385,12 +391,12 @@ SELECT
         THEN CM.ID_DEV
     END)                             AS QTD_ALO,
     COUNT(DISTINCT CASE
-        WHEN CC.ALO = 1 AND CM.ID_COMPLEMENTO IN {settings.CPC_IDS_SQL}
+        WHEN CC.ALO = 1 AND CC.COD_COMPLEMENTO IN {settings.CPC_CODS_SQL}
         THEN CM.ID_DEV
     END)                             AS QTD_CONTATOS
-FROM dbo.CTO_MASTER CM
-JOIN dbo.USU_MASTER U ON U.ID_USUARIO = CM.ID_USUARIO
-JOIN dbo.USU_MASTER UM ON UM.ID_USUARIO = CM.ID_USUARIO
+FROM dbo.CTO_MASTER CM (NOLOCK)
+JOIN dbo.USU_MASTER U (NOLOCK) ON U.ID_USUARIO = CM.ID_USUARIO
+JOIN dbo.USU_MASTER UM (NOLOCK) ON UM.ID_USUARIO = CM.ID_USUARIO
 LEFT JOIN dbo.CTO_COMPLEMENTO CC (NOLOCK) ON CM.ID_COMPLEMENTO = CC.ID_COMPLEMENTO
 WHERE CM.DATA >= CAST(GETDATE() AS DATE)
   AND CM.DATA <  CAST(DATEADD(DAY, 1, GETDATE()) AS DATE)
@@ -417,7 +423,7 @@ WITH CTE_Esforco_Diario AS (
         CM.ID_USUARIO,
         CAST(CM.DATA AS DATE) AS dia,
         CM.ID_DEV,
-        MAX(CASE WHEN CC.ALO = 1 AND CM.ID_COMPLEMENTO IN {settings.CPC_IDS_SQL} THEN 1 ELSE 0 END) AS teve_contato,
+        MAX(CASE WHEN CC.ALO = 1 AND CC.COD_COMPLEMENTO IN {settings.CPC_CODS_SQL} THEN 1 ELSE 0 END) AS teve_contato,
         MAX(CASE WHEN CC.ALO = 1 THEN 1 ELSE 0 END) AS teve_alo
     FROM dbo.CTO_MASTER CM (NOLOCK)
     LEFT JOIN dbo.CTO_COMPLEMENTO CC (NOLOCK) ON CM.ID_COMPLEMENTO = CC.ID_COMPLEMENTO
@@ -440,7 +446,8 @@ CTE_Acordos_Diario AS (
         R.ID_USUARIO,
         CAST(R.DT_EMISSAO AS DATE) AS dia,
         SUM(R.VALOR) AS valor_total_acordos,
-        COUNT(DISTINCT R.NR_RECEBIMENTO) AS qtd_acordos,
+        COUNT(DISTINCT CASE WHEN R.ID_REC_STATUS IN {settings.STATUS_GERADOS_SQL}
+            THEN R.NR_RECEBIMENTO END) AS qtd_acordos,
         SUM(CASE WHEN R.ID_REC_STATUS IN {settings.STATUS_GERADOS_SQL}
                  AND R.PARCELA = {settings.PRIMEIRA_PARCELA}
             THEN R.VALOR ELSE 0 END) AS valor_p1,
@@ -450,9 +457,6 @@ CTE_Acordos_Diario AS (
         SUM(CASE WHEN R.ID_REC_STATUS IN {settings.STATUS_GERADOS_SQL}
                  AND R.DT_VENCIMENTO < @Hoje
             THEN 1 ELSE 0 END) AS qtd_boletos_emitidos,
-        SUM(CASE WHEN R.ID_REC_STATUS IN {settings.STATUS_GERADOS_SQL}
-                 AND R.DT_VENCIMENTO < @Hoje
-            THEN {settings.BOLETO_PAGO_PRAZO_SQL} ELSE 0 END) AS qtd_boletos_pagos,
         SUM(CASE WHEN R.ID_REC_STATUS IN {settings.STATUS_EXCECAO_SQL}
             THEN R.VALOR ELSE 0 END) AS valor_excecoes
     FROM dbo.REC_MASTER R (NOLOCK)
@@ -464,7 +468,7 @@ SELECT
     U.CHAVE,
     U.NOME,
     SUM(E.qtd_contatos) * 100.0 / NULLIF(SUM(E.qtd_alo), 0) AS avg_taxa_contato,
-    ISNULL(SUM(A.qtd_boletos_pagos), 0) * 100.0
+    ISNULL(SUM(A.qtd_acordos), 0) * 100.0
         / NULLIF(SUM(E.qtd_contatos), 0) AS avg_taxa_conversao,
     ISNULL(SUM(A.valor_p1_recebido), 0) * 100.0
         / NULLIF(SUM(A.valor_p1), 0) AS avg_efetividade_caixa,

@@ -9,7 +9,7 @@ import pyodbc
 from fastapi import HTTPException
 
 import config.settings as settings
-from core.telemetry.agent_logger import _agent_ndjson
+from core.telemetry.agent_logger import _agent_ndjson, _sentry_log, _sentry_metric
 
 
 class PoolManager:
@@ -61,6 +61,7 @@ class PoolManager:
                 "db_connect_error",
                 {"database": database_name, "error": str(exc)},
             )
+            _sentry_log("error", "Erro ao conectar no banco de dados.", database=database_name, error=str(exc))
             raise HTTPException(
                 status_code=500,
                 detail="Erro ao conectar no banco de dados.",
@@ -78,6 +79,7 @@ class PoolManager:
 
     @contextmanager
     def get_connection(self, database_name: str) -> Iterator[pyodbc.Connection]:
+        acquire_started_at = time.perf_counter()
         pool = self._pool_for(database_name)
         conn: Optional[pyodbc.Connection] = None
         opened_at: float = 0.0
@@ -96,9 +98,19 @@ class PoolManager:
                     pass
                 conn = None
 
+        source = "reused" if conn is not None else "opened"
         if conn is None:
             conn = self._open_raw_connection(database_name)
             opened_at = time.time()
+
+        _sentry_metric(
+            "distribution",
+            "db.pool_acquire_ms",
+            round((time.perf_counter() - acquire_started_at) * 1000, 2),
+            unit="millisecond",
+            database=database_name,
+            source=source,
+        )
 
         ok = False
         try:

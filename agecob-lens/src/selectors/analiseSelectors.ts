@@ -30,7 +30,7 @@ export function selectTopByCpc(
       const contatos = Number(row.qtd_contatos || 0);
       // Taxa de CPC = pessoa certa (RPC) dentre quem atendeu (alô).
       const cpc = alo > 0 ? (contatos * 100) / alo : 0;
-      const conversao = calcConversao({ qtd_boletos_pagos: Number(row.qtd_boletos_pagos || 0), qtd_contatos: contatos });
+      const conversao = calcConversao({ qtd_acordos: Number(row.qtd_acordos || 0), qtd_contatos: contatos });
       return { agente: row.NOME, cpc, conversao };
     })
     .sort((a, b) => b.cpc - a.cpc)

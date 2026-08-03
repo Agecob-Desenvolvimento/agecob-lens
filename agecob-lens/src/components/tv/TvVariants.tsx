@@ -1,9 +1,9 @@
 /**
- * Modo TV — 3 variantes de layout (1920×1080). Transcrição do design standalone.
+ * Modo TV — Placar do Dia (canvas 1920×1080).
  */
 import type { ReactNode } from "react";
-import { TV, tvBRLk, tvNum, type TvBu, useTvData } from "./tvShared";
-import { BuPanel, DeltaChip, Eyebrow, HeroValor, KpiTile, LivePulse, MetaBar, RitmoStrip, Ticker, TvBrand, TvCard, TvClock } from "./TvAtoms";
+import { NUM, TV, TV_BG, TV_SANS, tvBRLc, tvBRLk, tvNum, type TvBu, useTvData } from "./tvShared";
+import { DeltaChip, Eyebrow, KpiTile, LivePulse, MetaProgressBar, RitmoWorm, Ticker, TvBrand, TvCard, TvClock } from "./TvAtoms";
 
 function TvScreen({ children }: { children: ReactNode }) {
   return (
@@ -11,9 +11,9 @@ function TvScreen({ children }: { children: ReactNode }) {
       style={{
         width: 1920,
         height: 1080,
-        background: `radial-gradient(120% 90% at 80% -10%, ${TV.petrol} 0%, ${TV.bg1} 45%, ${TV.bg0} 100%)`,
+        background: TV_BG,
         color: TV.t1,
-        fontFamily: "'Inter', system-ui, sans-serif",
+        fontFamily: TV_SANS,
         textTransform: "uppercase",
         display: "flex",
         flexDirection: "column",
@@ -26,9 +26,9 @@ function TvScreen({ children }: { children: ReactNode }) {
   );
 }
 
-function TopBar({ sub }: { sub: string }) {
+export function TopBar({ sub }: { sub: string }) {
   return (
-    <div style={{ flexShrink: 0, height: 110, padding: "0 56px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: `1px solid ${TV.line}` }}>
+    <div style={{ flexShrink: 0, height: 158, padding: "68px 80px 0", display: "flex", alignItems: "flex-start", justifyContent: "space-between", borderBottom: `1px solid ${TV.line}` }}>
       <TvBrand sub={sub} />
       <div style={{ display: "flex", alignItems: "center", gap: 40 }}>
         <LivePulse />
@@ -38,119 +38,144 @@ function TopBar({ sub }: { sub: string }) {
   );
 }
 
-function BuMini({ b, align }: { b: TvBu; align: "left" | "right" }) {
-  const ok = b.pct != null && b.pct >= 0.9;
-  const c = b.pct == null ? TV.t3 : ok ? TV.good : b.pct >= 0.6 ? TV.warn : TV.bad;
+/** Par número + rótulo dos cards de BU. Rótulo fica secundário — não compete com o dado. */
+function BuStat({ value, label }: { value: string; label: string }) {
   return (
-    <div style={{ textAlign: align, display: "flex", flexDirection: "column", gap: 12, alignItems: align === "right" ? "flex-end" : "flex-start" }}>
-      <span style={{ fontWeight: 800, fontSize: 26, letterSpacing: "0.1em", color: TV.t2 }}>{b.bu}</span>
-      <span style={{ fontWeight: 800, fontSize: 64, color: TV.t1, lineHeight: 0.9, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em" }}>{tvBRLk(b.valor)}</span>
-      <span style={{ fontSize: 18, color: TV.t2, fontVariantNumeric: "tabular-nums" }}>{tvNum(b.acordos)} acordos</span>
-      <div style={{ width: 240, maxWidth: "100%" }}>
-        <MetaBar pct={b.pct} color={c} height={9} />
-      </div>
-      <span style={{ fontSize: 15, color: c, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{b.pct == null ? "—" : Math.round(b.pct * 100) + "%"} da meta</span>
+    <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-end" }}>
+      <span style={{ ...NUM, fontSize: 34, fontWeight: 800, color: TV.t1, lineHeight: 0.9 }}>{value}</span>
+      <span style={{ fontSize: 15, fontWeight: 600, letterSpacing: "0.14em", color: TV.t3, whiteSpace: "nowrap" }}>{label}</span>
     </div>
   );
 }
 
-// A — Hero Central
-export function VariantHeroCentral() {
-  const { kpis } = useTvData();
+/** Bloco de unidade de negócio no painel lateral do Placar. `share` = fatia da 1ª parcela do dia. */
+function BuCard({ b, share }: { b: TvBu; share: number | null }) {
   return (
-    <TvScreen>
-      <TopBar sub="Ritmo de Acordos · Modo TV" />
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", padding: "40px 56px 28px", gap: 32, minHeight: 0 }}>
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 48 }}>
-          <HeroValor scale={1} />
-          <div style={{ width: 360, flexShrink: 0, display: "flex", flexDirection: "column", gap: 16 }}>
-            {kpis.slice(0, 2).map((k) => (
-              <KpiTile key={k.id} kpi={k} />
-            ))}
-          </div>
-        </div>
-        <TvCard style={{ flex: 1, minHeight: 0 }} pad={30}>
-          <RitmoStrip />
-        </TvCard>
+    <div style={{ flex: 1, minHeight: 0, background: TV.cardHi, borderRadius: 16, padding: "20px 32px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 28 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
+        <span style={{ fontSize: 20, fontWeight: 700, letterSpacing: "0.18em", color: TV.t2 }}>{b.bu}</span>
+        <span style={{ ...NUM, fontSize: 58, fontWeight: 800, color: TV.t1, lineHeight: 0.9, letterSpacing: "-0.02em", whiteSpace: "nowrap" }}>{tvBRLk(b.valor)}</span>
       </div>
-      <div style={{ flexShrink: 0, height: 96 }}>
-        <Ticker />
+      <div style={{ display: "flex", gap: 36, flexShrink: 0 }}>
+        <BuStat value={tvNum(b.acordos)} label="Acordos" />
+        <BuStat value={share == null ? "—" : share + "%"} label="Da 1ª parcela" />
       </div>
-    </TvScreen>
+    </div>
   );
 }
 
-// B — Centro de Comando
-export function VariantSplitCommand() {
-  const { kpis } = useTvData();
+// Safe area vertical (§3.7): TV em modo Zoom corta ~5% da borda. Marca e relógio
+// descem 40px; o ticker sobe 60px do rodapé.
+export const OVERSCAN_BOTTOM = 60;
+
+// C — Placar do Dia
+export function VariantScoreboard() {
+  const { valor: v, kpis, bu, buTotal } = useTvData();
+
+  // Cor do % = posição vs ritmo esperado do dia. Gold nunca carrega estado (§3.6):
+  // dentro de ±3pp do esperado o número fica neutro.
+  const diff = v.pctMetaDia != null && v.pctEsperado != null ? v.pctMetaDia - v.pctEsperado : null;
+  const pctCor = v.pctMetaDia != null && v.pctMetaDia >= 1 ? TV.good : diff == null ? TV.t1 : diff >= 0.03 ? TV.good : diff <= -0.03 ? TV.warn : TV.t1;
+  // mesmo limiar da barra de meta — um só conceito de "atrás do ritmo" na tela
+  const atrasado = diff != null && diff <= -0.03 && !(v.pctMetaDia != null && v.pctMetaDia >= 1);
+
   return (
     <TvScreen>
-      <TopBar sub="Centro de Comando · Modo TV" />
-      <div style={{ flex: 1, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 28, padding: "36px 56px 28px", minHeight: 0 }}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 24, minHeight: 0 }}>
-          <TvCard pad={36} style={{ background: TV.cardHi, borderColor: TV.lineHi }}>
-            <HeroValor scale={0.82} />
-          </TvCard>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18, flex: 1 }}>
+      <TopBar sub="Placar do Dia · Modo TV" />
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", padding: "28px 80px 20px", gap: 22, minHeight: 0 }}>
+        <div style={{ display: "grid", gridTemplateColumns: bu.length ? "1fr 620px" : "1fr", gap: 40, alignItems: "stretch", flexShrink: 0, height: 262 }}>
+          <div style={{ display: "flex", flexDirection: "column", justifyContent: "center" }}>
+            <Eyebrow color={TV.goldText}>Hoje</Eyebrow>
+            {/* grid de 3 colunas × 3 linhas (rótulo · número · nota). `alignItems:
+                baseline` alinha cada linha entre si: os números têm corpos diferentes
+                (96 vs 96 vs 132) e, empilhados em flex aninhado, as bases saíam tortas
+                e cada nota caía numa altura. `justifyItems: center` centra o número
+                sobre a nota — quem dita a largura da coluna é o texto mais longo. */}
+            <div
+              style={{
+                display: "grid",
+                // 1fr por coluna + space-between: as 3 medidas ocupam a largura toda
+                // do hero em vez de se amontoarem à esquerda deixando vão até os BU
+                gridTemplateColumns: "repeat(3, auto)",
+                justifyContent: "space-between",
+                justifyItems: "center",
+                alignItems: "baseline",
+                columnGap: 52,
+                rowGap: 10,
+                marginTop: 14,
+              }}
+            >
+              <Eyebrow size={17} color={TV.t3} style={{ letterSpacing: "0.16em" }}>Valor de acordos</Eyebrow>
+              <Eyebrow size={17} color={TV.t3} style={{ letterSpacing: "0.16em" }}>1ª parcela</Eyebrow>
+              <Eyebrow size={17} color={TV.t3} style={{ letterSpacing: "0.16em" }}>Meta do dia</Eyebrow>
+
+              {/* `nowrap` obrigatório: as trilhas são `auto` e, sem ele, um valor
+                  longo ("R$ 1,61 mi") quebra em duas linhas e estoura a faixa por
+                  cima da barra de meta. Corpos somam ~1050px em 1100 disponíveis. */}
+              <div style={{ ...NUM, fontWeight: 800, fontSize: 76, lineHeight: 0.92, color: TV.t1, letterSpacing: "-0.03em", whiteSpace: "nowrap" }}>{tvBRLc(v.valorAcordosDia)}</div>
+              <div style={{ ...NUM, fontWeight: 800, fontSize: 76, lineHeight: 0.92, color: TV.gold, letterSpacing: "-0.03em", whiteSpace: "nowrap" }}>{tvBRLc(v.realizadoDia)}</div>
+              {/* maior glifo da tela — é a métrica que a operação olha primeiro */}
+              <div style={{ ...NUM, fontWeight: 800, fontSize: 110, lineHeight: 0.92, color: pctCor, letterSpacing: "-0.03em", whiteSpace: "nowrap" }}>
+                {v.pctMetaDia == null ? "—" : Math.round(v.pctMetaDia * 100) + "%"}
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                <div style={{ ...NUM, fontSize: 17, color: TV.t3, whiteSpace: "nowrap" }}>{tvNum(v.qtdAcordosDia)} acordos</div>
+                {/* goldText, não warn: única cor "amarela" auditada p/ texto < 28px (§ paleta APCA) */}
+                <div style={{ ...NUM, fontSize: 15, fontWeight: 700, color: TV.goldText, whiteSpace: "nowrap" }}>
+                  {tvBRLk(v.excecoesValorDia)} em exceção · {tvNum(v.excecoesQtdDia)} acordos
+                </div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <DeltaChip value={v.vsOntemDia} size={20} />
+                <span style={{ fontSize: 17, color: TV.t3, whiteSpace: "nowrap" }}>
+                  vs dia útil anterior, mesma hora <span style={{ fontSize: 13, color: TV.t3small }}>(estimado por hora do dia)</span>
+                </span>
+              </div>
+              {/* único lugar da tela que usa o vermelho saturado (§3.6): fora do
+                  estado atrasado não existe um pixel de `alarm` na tela.
+                  Diz "abaixo da meta", não "abaixo do ritmo": este chip mede CAIXA
+                  (1ª parcela / meta do dia) e a pill do gráfico mede CONTAGEM de
+                  acordos. Podem discordar legitimamente — dois rótulos iguais para
+                  métricas diferentes leem como contradição na parede. */}
+              {atrasado ? (
+                <div style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "5px 14px", borderRadius: 999, background: TV.alarmSoft, border: `1px solid rgba(255,77,66,0.35)`, whiteSpace: "nowrap" }}>
+                  <span style={{ ...NUM, fontSize: 17, fontWeight: 700, color: TV.alarmText }}>▼ {Math.round(Math.abs(diff! * 100))} pp</span>
+                  <span style={{ fontSize: 15, fontWeight: 700, letterSpacing: "0.10em", color: TV.alarmText, textTransform: "uppercase" }}>abaixo da meta</span>
+                </div>
+              ) : (
+                <div style={{ fontSize: 17, color: TV.t2, whiteSpace: "nowrap" }}>
+                  de <strong style={{ color: TV.t1, fontWeight: 700 }}>{tvBRLc(v.metaDia)}</strong>
+                </div>
+              )}
+            </div>
+          </div>
+          {bu.length > 0 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 16, minHeight: 0 }}>
+              {bu.map((b) => (
+                <BuCard key={b.bu} b={b} share={buTotal ? Math.round(((b.valor ?? 0) / buTotal) * 100) : null} />
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div style={{ flexShrink: 0 }}>
+          <MetaProgressBar pct={v.pctMetaDia} pctEsperado={v.pctEsperado} />
+        </div>
+
+        {/* tiles 2×2 à esquerda, card do gráfico ao lado — o split é o que dá altura ao gráfico */}
+        <div style={{ display: "grid", gridTemplateColumns: "680px 1fr", gap: 24, flex: 1, minHeight: 0 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gridTemplateRows: "1fr 1fr", gap: 24, minHeight: 0 }}>
             {kpis.map((k) => (
               <KpiTile key={k.id} kpi={k} />
             ))}
           </div>
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 24, minHeight: 0 }}>
-          <TvCard style={{ flex: 1.3, minHeight: 0 }} pad={30}>
-            <RitmoStrip />
+          <TvCard style={{ minHeight: 0 }} pad={26}>
+            <RitmoWorm />
           </TvCard>
-          <div style={{ flex: 1, minHeight: 0 }}>
-            <BuPanel />
-          </div>
         </div>
       </div>
-      <div style={{ flexShrink: 0, height: 96 }}>
-        <Ticker />
-      </div>
-    </TvScreen>
-  );
-}
-
-// C — Placar do Dia
-export function VariantScoreboard() {
-  const { valor: v, kpis, bu } = useTvData();
-  return (
-    <TvScreen>
-      <TopBar sub="Placar do Dia · Modo TV" />
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", padding: "44px 56px 28px", gap: 30, minHeight: 0 }}>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", gap: 40, alignItems: "center" }}>
-          {bu[0] && <BuMini b={bu[0]} align="right" />}
-          <div style={{ textAlign: "center", padding: "0 20px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 14, justifyContent: "center" }}>
-              <Eyebrow color={TV.gold}>Primeira parcela · hoje</Eyebrow>
-            </div>
-            <div style={{ fontWeight: 800, fontSize: 130, lineHeight: 0.95, color: TV.t1, letterSpacing: "-0.03em", fontVariantNumeric: "tabular-nums", marginTop: 10 }}>{tvBRLk(v.realizado)}</div>
-            <div style={{ display: "flex", alignItems: "center", gap: 20, justifyContent: "center", marginTop: 14 }}>
-              <DeltaChip value={v.vsOntem} size={24} />
-              <span style={{ fontSize: 18, color: TV.t2 }}>vs ontem mesma hora</span>
-            </div>
-            <div style={{ marginTop: 22, maxWidth: 560, marginLeft: "auto", marginRight: "auto" }}>
-              <MetaBar pct={v.pctMeta} color={TV.gold} height={12} />
-              <div style={{ display: "flex", justifyContent: "space-between", marginTop: 10, fontSize: 16, color: TV.t3 }}>
-                <span>{v.pctMeta == null ? "—" : Math.round(v.pctMeta * 100) + "%"} da meta {tvBRLk(v.meta)}</span>
-                <span style={{ color: TV.good, fontWeight: 700 }}>proj. {tvBRLk(v.projecao)}</span>
-              </div>
-            </div>
-          </div>
-          {bu[1] && <BuMini b={bu[1]} align="left" />}
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 18 }}>
-          {kpis.map((k) => (
-            <KpiTile key={k.id} kpi={k} />
-          ))}
-        </div>
-        <TvCard style={{ flex: 1, minHeight: 0 }} pad={30}>
-          <RitmoStrip />
-        </TvCard>
-      </div>
-      <div style={{ flexShrink: 0, height: 96 }}>
+      <div style={{ flexShrink: 0, height: 96, marginBottom: OVERSCAN_BOTTOM }}>
         <Ticker />
       </div>
     </TvScreen>

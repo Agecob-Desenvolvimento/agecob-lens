@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { formatBRLCompact } from "@/lib/metrics";
 import { type DatabaseOption, fetchRitmoDia, type RitmoDiaResponse } from "@/services/api";
 
 const STATUS_ICON: Record<string, string> = {
@@ -109,6 +110,9 @@ export default function RitmoDiaCard({ db, embedded }: { db: DatabaseOption; emb
             const acumText = b.acumulado == null ? "—" : String(b.acumulado);
             const isCurrent = b.status === "em_andamento";
             const isFuturo = b.status === "futuro";
+            const iconValor = b.status_valor ? (STATUS_ICON[b.status_valor] ?? "·") : null;
+            const realValorText = b.real_valor == null ? "—" : formatBRLCompact(b.real_valor);
+            const esperadoValorText = b.esperado_valor === undefined ? null : formatBRLCompact(b.esperado_valor);
             return (
               <div
                 key={b.hora}
@@ -119,19 +123,32 @@ export default function RitmoDiaCard({ db, embedded }: { db: DatabaseOption; emb
                       ? "border-border bg-muted/40"
                       : "border-border bg-card"
                 }`}
-                title={`Hora ${b.hora}h — esperado ${b.esperado} · real ${realText} · acumulado ${acumText} · delta ${deltaText || "—"}`}
+                title={`Hora ${b.hora}h — esperado ${b.esperado} · real ${realText} · acumulado ${acumText} · delta ${deltaText || "—"}${esperadoValorText ? ` · valor esperado ${esperadoValorText} · valor real ${realValorText}` : ""}`}
               >
                 <span className="font-semibold">{b.hora}h</span>
                 <span className="text-muted-foreground">esp {b.esperado}</span>
                 <span>real {realText}</span>
                 <span className="text-muted-foreground">acum {acumText}</span>
                 <span>{icon}{deltaText && ` ${deltaText}`}</span>
+                {esperadoValorText && (
+                  <>
+                    <span className="mt-0.5 w-full border-t border-border/60 pt-0.5 text-muted-foreground">{esperadoValorText}</span>
+                    <span>{realValorText}</span>
+                    {iconValor && <span>{iconValor}</span>}
+                  </>
+                )}
               </div>
             );
           })}
         </div>
         <div className="mt-2 text-[11px] text-muted-foreground tabular-nums">
           Acumulado atual: <span className="font-medium">{data.acumulado_atual}</span>
+          {data.valor_acumulado_atual !== undefined && (
+            <> · Valor acumulado: <span className="font-medium">{formatBRLCompact(data.valor_acumulado_atual)}</span></>
+          )}
+          {data.valor_projecao_fechamento !== undefined && (
+            <> · Projeção valor: <span className="font-medium">{formatBRLCompact(data.valor_projecao_fechamento)}</span></>
+          )}
         </div>
       </CardContent>
     </Wrapper>

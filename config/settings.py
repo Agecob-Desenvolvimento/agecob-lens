@@ -68,13 +68,18 @@ STATUS_PORTFOLIO_ROLLUP: Tuple[int, ...] = tuple(sorted(set(
 PRIMEIRA_PARCELA: int = 0
 PORTFOLIO_COLUMN: str = "CAMPO010"
 
-# IDs de complementos que contam como CPC / RPC (Contato com a Pessoa Certa).
-# ADR-006: gerenciado manualmente pelo cientista de dados.
+# Códigos de complemento (COD_COMPLEMENTO) que contam como CPC / RPC (Contato
+# com a Pessoa Certa). ADR-006: gerenciado manualmente pelo cientista de dados.
 # Curado a partir do catálogo CTO_COMPLEMENTO: apenas desfechos de voz onde o
-# agente efetivamente falou com o titular (CONTATO=1, RECADO=0). Exclui
+# agente efetivamente falou com o titular (ALO=1, CONTATO=1). Exclui
 # automáticos (disparo whatsapp, envio boleto), ligação interrompida/ruim,
 # recado com terceiro, transferência e status de workflow/jurídico.
-CPC_COMPLEMENTO_IDS: Tuple[int, ...] = (95, 105, 108, 109, 110, 111, 229, 230, 231, 233)
+# Chave por COD_COMPLEMENTO (varchar, código de negócio), não por ID_COMPLEMENTO
+# (surrogate key): o catálogo CTO_COMPLEMENTO foi resseedado em 2026-07-10,
+# renumerando os IDs e órfãos a lista antiga (95,105,108,109,110,111,229,230,
+# 231,233) — zerava qtd_contatos em produção. COD_COMPLEMENTO é estável entre
+# reloads do catálogo; ID_COMPLEMENTO não é.
+CPC_COMPLEMENTO_CODS: Tuple[str, ...] = ("449", "452", "453", "454", "455", "459")
 
 RECOMMENDED_INDEXES: List[Dict[str, Any]] = [
     {
@@ -85,6 +90,7 @@ RECOMMENDED_INDEXES: List[Dict[str, Any]] = [
         "include_columns": [
             "NR_RECEBIMENTO", "ID_USUARIO", "ID_DEV", "ID_REC_STATUS",
             "PARCELA", "PLANO", "VALOR", "DT_VENCIMENTO", "DT_PAGAMENTO",
+            "VR_PAGO",
         ],
         "purpose": "Janela de acordos emitidos no dia (base de todo o dashboard).",
     },
@@ -113,12 +119,16 @@ RECOMMENDED_INDEXES: List[Dict[str, Any]] = [
         "purpose": "CROSS APPLY TOP 1 para trazer nome do portfolio.",
     },
     {
-        "name": "IX_CTO_MASTER_DT_CONTATO",
+        # Todas as queries filtram CTO_MASTER.DATA — o antigo IX_CTO_MASTER_DT_CONTATO
+        # (key DT_CONTATO) nunca era usado e deixava todo KPI de esforço em table scan.
+        # Se o antigo existir em prod, DBA deve dropar. ID_DEV no INCLUDE: dedupe
+        # COUNT(DISTINCT ID_DEV) sem key lookup.
+        "name": "IX_CTO_MASTER_DATA",
         "schema": "dbo",
         "table": "CTO_MASTER",
-        "key_columns": ["DT_CONTATO"],
-        "include_columns": ["ID_USUARIO", "ID_COMPLEMENTO", "ID_CTO_MASTER"],
-        "purpose": "Acionamentos do dia (produtividade).",
+        "key_columns": ["DATA"],
+        "include_columns": ["ID_USUARIO", "ID_COMPLEMENTO", "ID_DEV", "ID_CTO_MASTER"],
+        "purpose": "Acionamentos do dia (produtividade, comparacao, benchmarks).",
     },
     {
         "name": "IX_USU_MASTER_ID_USUARIO",
@@ -127,6 +137,45 @@ RECOMMENDED_INDEXES: List[Dict[str, Any]] = [
         "key_columns": ["ID_USUARIO"],
         "include_columns": ["NOME", "CHAVE"],
         "purpose": "Join por ID_USUARIO + filtro de exclusao em NOME/CHAVE.",
+    },
+    {
+        "name": "IX_REC_MASTER_DT_VENCIMENTO_COV",
+        "schema": "dbo",
+        "table": "REC_MASTER",
+        "key_columns": ["DT_VENCIMENTO"],
+        "include_columns": [
+            "ID_REC_STATUS", "PARCELA", "VALOR", "VR_PAGO",
+            "DT_PAGAMENTO", "ID_USUARIO", "NR_RECEBIMENTO", "ID_CARTEIRA",
+            "DT_EMISSAO",
+        ],
+        "purpose": "Efetividade/conversao: boleto pago no prazo, curva de quebra, boletos-detalhe.",
+    },
+    {
+        "name": "IX_REC_MASTER_DT_PAGAMENTO_COV",
+        "schema": "dbo",
+        "table": "REC_MASTER",
+        "key_columns": ["DT_PAGAMENTO"],
+        "include_columns": [
+            "ID_REC_STATUS", "PARCELA", "VALOR", "VR_PAGO",
+            "DT_VENCIMENTO", "ID_USUARIO", "NR_RECEBIMENTO", "ID_CARTEIRA",
+        ],
+        "purpose": "Valor recebido no dia / colchao.",
+    },
+    {
+        "name": "IX_DIV_MASTER_ID_DIVIDA",
+        "schema": "dbo",
+        "table": "DIV_MASTER",
+        "key_columns": ["ID_DIVIDA"],
+        "include_columns": ["VR_SALDO", "DT_VENCIMENTO"],
+        "purpose": "Saldo original / calculo de desconto via REC_DIVIDAS.",
+    },
+    {
+        "name": "IX_REC_DIVIDAS_NR_CARTEIRA",
+        "schema": "dbo",
+        "table": "REC_DIVIDAS",
+        "key_columns": ["NR_RECEBIMENTO", "ID_CARTEIRA"],
+        "include_columns": ["ID_DIVIDA"],
+        "purpose": "Join com portfolio (chave composta usada no CROSS APPLY real).",
     },
 ]
 
@@ -138,6 +187,10 @@ def _sql_in(values: Tuple[int, ...]) -> str:
     return "(" + ", ".join(str(v) for v in values) + ")"
 
 
+def _sql_in_str(values: Tuple[str, ...]) -> str:
+    return "(" + ", ".join(f"'{v}'" for v in values) + ")"
+
+
 STATUS_APROVADOS_SQL: str = _sql_in(STATUS_APROVADOS)
 STATUS_EXCECAO_SQL: str = _sql_in(STATUS_EXCECAO)
 STATUS_REJEITADO_SQL: str = _sql_in(STATUS_REJEITADO)
@@ -145,7 +198,7 @@ STATUS_QUEBRADO_SQL: str = _sql_in(STATUS_QUEBRADO)
 STATUS_GERADOS_SQL: str = _sql_in(STATUS_GERADOS)
 STATUS_UNIVERSO_SQL: str = _sql_in(STATUS_UNIVERSO_ACORDOS)
 STATUS_PORTFOLIO_ROLLUP_SQL: str = _sql_in(STATUS_PORTFOLIO_ROLLUP)
-CPC_IDS_SQL: str = _sql_in(CPC_COMPLEMENTO_IDS)
+CPC_CODS_SQL: str = _sql_in_str(CPC_COMPLEMENTO_CODS)
 
 # Boleto pago no prazo (5 dias após vencimento) — base da Conversão (pagos/emitidos)
 BOLETO_PAGO_PRAZO_SQL: str = (
@@ -165,6 +218,32 @@ FILTRO_AGENTES_EXCLUIDOS_SQL: str = """
     AND UPPER(LTRIM(RTRIM(U.CHAVE))) NOT LIKE 'SUPORTE%'
     AND UPPER(LTRIM(RTRIM(U.CHAVE))) NOT LIKE 'SISTEMA%'
 """
+
+# Piso histórico das séries de efetividade (formato YYYYMMDD, comparação
+# sargável — nunca envolver a coluna em YEAR()).
+EFETIVIDADE_DATA_MINIMA: str = "20260101"
+
+# Filtro de agentes da EFETIVIDADE — diverge do FILTRO_AGENTES_EXCLUIDOS_SQL de
+# propósito: match por substring (não prefixo/exato) e exclui também SERASA e
+# NEMBUS. Unificar os dois muda os números da página Efetividade — decisão de
+# negócio pendente.
+FILTRO_AGENTES_EFETIVIDADE_SQL: str = (
+    "AND UPPER(U.CHAVE) NOT LIKE '%SERASA%' "
+    "AND UPPER(U.CHAVE) NOT LIKE '%COBDESANTOS%' "
+    "AND UPPER(U.CHAVE) NOT LIKE '%NEMBUS%' "
+    "AND UPPER(U.CHAVE) NOT LIKE '%ANTLIA%' "
+    "AND UPPER(U.CHAVE) NOT LIKE '%SUPORTE%' "
+    "AND UPPER(U.CHAVE) NOT LIKE '%INTERNA%' "
+    "AND UPPER(U.CHAVE) NOT LIKE '%SISTEMA%' "
+    "AND UPPER(U.NOME) NOT LIKE '%COBDESANTOS%' "
+    "AND UPPER(U.NOME) NOT LIKE '%NEMBUSUSER%'"
+)
+
+# Curva de quebra: aprovados + quebra manual. Status 10 (QUEBRA AUTOMÁTICA) fora
+# por decisão pendente — incluir mudaria taxa_quebra (hoje subconta auto-quebras).
+STATUS_CURVA_QUEBRA_SQL: str = _sql_in(tuple(sorted(set(
+    STATUS_APROVADOS + STATUS_QUEBRADO
+))))  # (1, 2, 3, 12)
 
 # ─────────────────────────────────────────────────────────────────
 # PATHS
@@ -203,6 +282,11 @@ LOG_CLEANUP_INTERVAL_SECONDS: int = 5 * 60 * 60
 ENABLE_VALIDATED_ROUTES: bool = (os.getenv("ENABLE_VALIDATED_ROUTES") or "true").strip().lower() == "true"
 ENABLE_AGENT_TELEMETRY: bool = (os.getenv("ENABLE_AGENT_TELEMETRY") or "false").strip().lower() == "true"
 ENABLE_INDEX_ADMIN: bool = (os.getenv("ENABLE_INDEX_ADMIN") or "false").strip().lower() == "true"
+
+# Sentry (erros + performance) — vazio desliga
+SENTRY_DSN: str = (os.getenv("SENTRY_DSN") or "").strip()
+SENTRY_TRACES_SAMPLE_RATE: float = float(os.getenv("SENTRY_TRACES_SAMPLE_RATE") or "0.1")
+SENTRY_ENABLE_LOGS: bool = (os.getenv("SENTRY_ENABLE_LOGS") or "true").strip().lower() == "true"
 
 # ─────────────────────────────────────────────────────────────────
 # AGENTE DE CHAT (/agente/chat)

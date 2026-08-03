@@ -10,7 +10,7 @@ from api.dependencias import (
     rate_limit_dashboard,
     require_auth,
 )
-from core.telemetry.agent_logger import _agent_ndjson
+from core.telemetry.agent_logger import _agent_ndjson, _capture_exception, _sentry_log
 
 
 async def api_prefix_middleware(request: Request, call_next):
@@ -20,12 +20,14 @@ async def api_prefix_middleware(request: Request, call_next):
 
 
 async def security_middleware(request: Request, call_next):
-    open_paths = {"/", "/docs", "/openapi.json", "/redoc"}
+    open_paths = {"/"}  # /docs, /openapi.json, /redoc desligados em prod (ver main.py)
     raw_path = request.scope.get("path", request.url.path)
     path = normalize_api_path(raw_path)
     in_open = path in open_paths
     requires_auth = (
         path.startswith("/dashboard/")
+        or path.startswith("/efetividade/")
+        or path.startswith("/regressao/")
         or path.startswith("/health/")
         or path.startswith("/admin/")
         or path.startswith("/agente/")
@@ -65,6 +67,7 @@ async def security_middleware(request: Request, call_next):
                 run_id=run_id,
             )
             # endregion
+            _sentry_log("warning", "Auth rejeitada.", path=path, status=exc.status_code)
             return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
 
         limited = rate_limit_dashboard(request, path)
@@ -78,6 +81,7 @@ async def security_middleware(request: Request, call_next):
                 run_id=run_id,
             )
             # endregion
+            _sentry_log("warning", "Rate limit atingido.", path=path)
             return limited
         # region agent log
         _agent_ndjson(
@@ -98,7 +102,11 @@ async def security_middleware(request: Request, call_next):
             run_id=run_id,
         )
         # endregion
-    response = await call_next(request)
+    try:
+        response = await call_next(request)
+    except Exception as exc:
+        _capture_exception(exc, run_id=run_id)
+        raise
     total_elapsed_ms = round((time.perf_counter() - request.state.req_started_at) * 1000, 2)
     # region agent log
     _agent_ndjson(

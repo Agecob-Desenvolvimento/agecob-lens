@@ -1,6 +1,33 @@
+const MES_NOMES = [
+  "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
+];
+
+/** "202607" → "Julho 2026" */
+export function formatMesLabel(mes: string): string {
+  const ano = mes.slice(0, 4);
+  const m = Number(mes.slice(4, 6));
+  const nome = MES_NOMES[m - 1];
+  return nome ? `${nome} ${ano}` : mes;
+}
+
 export function todayStr(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/** Dia útil anterior a hoje (pula fim de semana e feriado) — base do "vs ontem". */
+export function previousBusinessDayStr(): string {
+  const d = new Date();
+  do {
+    d.setDate(d.getDate() - 1);
+  } while (!isBusinessDay(d));
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/** Mês corrente no formato do PDF de metas ("202607"). */
+export function currentMonthKey(): string {
+  return todayStr().slice(0, 7).replace("-", "");
 }
 
 export function firstOfMonthStr(): string {

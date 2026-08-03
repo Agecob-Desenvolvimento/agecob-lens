@@ -3,7 +3,7 @@
   "configurations": [
     {
       "name": "FastAPI (agecob-lens API)",
-      "runtimeExecutable": "python",
+      "runtimeExecutable": ".venv\\Scripts\\python.exe",
       "runtimeArgs": ["main.py"],
       "port": 8000
     },
@@ -12,7 +12,16 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
       "cwd": "agecob-lens",
-      "port": 5173
+      "port": 5173,
+      "autoPort": true
+    },
+    {
+      "name": "Vite (proxy producao)",
+      "runtimeExecutable": "C:\\Windows\\System32\\cmd.exe",
+      "runtimeArgs": ["/c", "set VITE_API_PROXY_TARGET=http://192.168.0.20:8000&& npm run dev"],
+      "cwd": "agecob-lens",
+      "port": 5173,
+      "autoPort": true
     }
   ]
 }

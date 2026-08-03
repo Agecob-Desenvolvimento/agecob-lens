@@ -19,6 +19,9 @@ node_modules/
 agecob-lens/dist/
 agecob-lens/.vite/
 
+# Local tooling binaries (caddy.exe, etc) + Caddy local CA/state
+.tools/
+
 # IDE / local tooling
 .cursor/
 .vscode/
@@ -31,6 +34,8 @@ agecob-lens/docs/aa.txt
 
 # Relatórios exportados (podem conter PII — CPF completo). Não versionar.
 relatorio_*.csv
+relatorio-carteiras-*.csv
+relatorio-carteiras-*.csv.txt
 
 # Claude Code local state
 .claude/settings.local.json
@@ -47,3 +52,10 @@ dados_metas/
 
 # PDFs de metas — contêm PII (CPF, DocuSign Envelope ID). Não versionar.
 docs/*.pdf
+
+# design-sync (claude.ai/design) — staged scripts, build output, machine state
+.ds-sync/
+ds-bundle/
+.design-sync/.cache/
+.design-sync/learnings/
+.design-sync/node_modules

@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 
 import config.settings as settings
 from api.dependencias import require_auth
-from core.telemetry.agent_logger import _agent_ndjson
+from core.telemetry.agent_logger import _agent_ndjson, _sentry_log
 from core.utils.index_helpers import apply_indexes_on_database, list_index_status
 from core.utils.validation import validate_database
 
@@ -37,6 +37,7 @@ def admin_indexes_status(database_name: str, request: Request) -> Dict[str, Any]
             "admin_indexes_status_error",
             {"database": database_name, "error": str(exc)},
         )
+        _sentry_log("error", "Erro ao inspecionar indices.", database=database_name, error=str(exc))
         raise HTTPException(status_code=500, detail="Erro ao inspecionar indices.") from exc
 
     total = len(indexes)
@@ -88,6 +89,7 @@ def admin_indexes_apply(
             "admin_indexes_apply_error",
             {"database": database_name, "error": str(exc)},
         )
+        _sentry_log("error", "Erro ao aplicar indices.", database=database_name, error=str(exc))
         raise HTTPException(status_code=500, detail="Erro ao aplicar indices.") from exc
 
     _agent_ndjson(

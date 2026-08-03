@@ -3,7 +3,7 @@ from typing import Dict
 from fastapi import APIRouter, HTTPException
 
 from core.database.query_executor import run_query
-from core.telemetry.agent_logger import _agent_ndjson
+from core.telemetry.agent_logger import _agent_ndjson, _sentry_log
 from core.utils.validation import validate_database
 
 router = APIRouter(prefix="/health")
@@ -24,6 +24,7 @@ def healthcheck_db() -> Dict[str, str]:
             "healthcheck_error",
             {"database": database_name, "error": str(exc.detail)},
         )
+        _sentry_log("warning", "Falha no healthcheck do banco.", database=database_name, error=str(exc.detail))
         raise HTTPException(
             status_code=500,
             detail="Falha no healthcheck do banco.",
@@ -45,6 +46,7 @@ def healthcheck_db_por_banco(database_name: str) -> Dict[str, str]:
             "healthcheck_error",
             {"database": database_name, "error": str(exc.detail)},
         )
+        _sentry_log("warning", "Falha no healthcheck do banco.", database=database_name, error=str(exc.detail))
         raise HTTPException(
             status_code=500,
             detail="Falha no healthcheck do banco.",

@@ -3,7 +3,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from fastapi import HTTPException
 
 import config.settings as settings
-from core.telemetry.agent_logger import _agent_ndjson
+from core.telemetry.agent_logger import _agent_ndjson, _sentry_log
 
 
 def validate_database(database_name: str) -> str:
@@ -58,6 +58,7 @@ def validate_produtividade_rows(
                 {"missing_fields": missing},
                 run_id=run_id,
             )
+            _sentry_log("warning", "Campos faltando na resposta de produtividade.", missing_fields=",".join(missing))
             raise HTTPException(status_code=500, detail=f"Productivity response missing fields: {missing}")
         normalized = {**row}
         for field in numeric_fields:

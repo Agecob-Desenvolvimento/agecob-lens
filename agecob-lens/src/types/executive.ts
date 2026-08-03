@@ -24,12 +24,16 @@ export interface InsightSlot {
   text: string;
   severity: InsightSeverity;
   headline?: string;
+  /** Nome curto do indicador (ex.: "Conversão"), usado quando 2 slots dividem 1 card. */
+  label?: string;
 }
 
 export interface ActionSlot {
   text: string;
   severity: "action";
   headline?: string;
+  /** DOM id of the section this action should scroll to, when applicable. */
+  anchor?: string;
 }
 
 export interface InsightEngineOutput {

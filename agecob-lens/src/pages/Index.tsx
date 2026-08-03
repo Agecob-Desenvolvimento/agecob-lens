@@ -13,6 +13,8 @@ import ApiDebugBanner from "@/components/executive/ApiDebugBanner";
 import SectionHeader from "@/components/executive/SectionHeader";
 import ReportDownloadDialog from "@/components/executive/ReportDownloadDialog";
 import type { ReportSection } from "@/lib/csvReport";
+import { calcComposicaoEntrada, calcConversao, calcEfetividadeCaixa, calcTaxaContato } from "@/lib/metrics";
+import { useMetasData } from "@/hooks/useMetasData";
 
 const RitmoDiaCard = lazy(() => import("@/components/executive/RitmoDiaCard"));
 const HandoffTopAgentes1aParcela = lazy(() => import("@/components/executive/HandoffTopAgentes1aParcela"));
@@ -34,6 +36,7 @@ const KPI_KIND_BY_LABEL: Record<string, HomeKpiDetalheKind> = {
 export default function Index() {
   const { selectedDatabase, dateFrom, dateTo } = useGlobalFilters();
   const vm = useHomeViewModel();
+  const { metasFiltradas } = useMetasData(null);
   const [kpiSheetKind, setKpiSheetKind] = useState<HomeKpiDetalheKind | null>(null);
 
   const { guardedRefresh, refreshing, remainingMs } = useRefreshGuard(async () => {
@@ -120,8 +123,77 @@ export default function Index() {
           rows: vm.rejeitadosPorPortfolioValor.map((d) => [d.label, d.value]),
         }),
       },
+      {
+        id: "quebrados-portfolio",
+        label: "Boletos Quebrados por Portfólio",
+        available: vm.quebradosPorPortfolio.length > 0,
+        build: () => ({
+          columns: ["Portfólio", "Valor Quebrados (R$)", "Qtd Quebrados"],
+          rows: vm.quebradosPorPortfolio.map((d) => [d.label, d.value, d.qtd]),
+        }),
+      },
+      {
+        id: "financeiro-bu",
+        label: "Financeiro por Unidade de Negócio (R$)",
+        available: vm.financeiroData.length > 0,
+        build: () => ({
+          columns: ["Unidade", "Valor Acordos (R$)", "Valor 1ª Parcela (R$)"],
+          rows: vm.financeiroData.map((d) => [d.bu, d.valorAcordos, d.primeiraParcela]),
+        }),
+      },
+      {
+        id: "detalhamento-agentes",
+        label: "Detalhamento por Agente (completo)",
+        available: vm.produtividadeRows.length > 0,
+        build: () => ({
+          columns: [
+            "Agente", "Acionamentos", "Alô (Contato)", "CPC", "Acordos",
+            "Boletos Emitidos", "Boletos Pagos", "Taxa Contato (%)",
+            "Conversão (%)", "Composição Entrada (%)", "Valor Acordos (R$)",
+            "Ticket Médio (R$)", "Parcelamento Médio", "Desconto Médio (%)",
+            "Valor 1ª Parcela (R$)", "1ª Parcela Recebida (R$)", "Efetividade de Caixa (%)",
+            "Qtd Exceções", "Valor Exceções (R$)", "Qtd Rejeitados",
+            "Valor Rejeitados (R$)", "Idade Média Acordos (dias)", "Horas Trabalhadas",
+          ],
+          rows: vm.produtividadeRows.map((r) => [
+            r.NOME, r.qtd_acionamentos, r.qtd_alo, r.qtd_contatos, r.qtd_acordos,
+            r.qtd_boletos_emitidos, r.qtd_boletos_pagos, calcTaxaContato(r),
+            calcConversao(r), calcComposicaoEntrada(r), r.valor_acordos,
+            r.acordo_medio, r.parcelamento_medio, r.desconto_medio_percentual,
+            r.valor_primeira_parcela, r.valor_p1_recebido, calcEfetividadeCaixa(r),
+            r.qtd_excecoes, r.valor_excecoes, r.qtd_rejeitados,
+            r.valor_rejeitados, r.idade_media_acordos, r.horas_trabalhadas,
+          ]),
+        }),
+      },
+      {
+        id: "metas-portfolio",
+        label: "Metas por Portfólio (mês corrente)",
+        available: metasFiltradas.length > 0,
+        build: () => ({
+          columns: ["Portfólio", "Grupo", "Negociadores", "Meta PNT (R$)", "Meta Caixa (R$)", "Meta Retomadas (R$)"],
+          rows: metasFiltradas.map((m) => [
+            m.portfolio, m.grupo ?? "", m.qtd_negociadores,
+            m.meta_pnt, m.meta_caixa, m.meta_retomadas_valor,
+          ]),
+        }),
+      },
     ];
-  }, [vm.kpiPrimary, vm.kpiSecondary, vm.top10PrimeiraParcela, vm.ppPortfolioRows, vm.funnelData, vm.eficienciaData, vm.portfolio1aParcela, vm.excecoesPorPortfolioValor, vm.rejeitadosPorPortfolioValor]);
+  }, [vm.kpiPrimary, vm.kpiSecondary, vm.top10PrimeiraParcela, vm.ppPortfolioRows, vm.funnelData, vm.eficienciaData, vm.portfolio1aParcela, vm.excecoesPorPortfolioValor, vm.rejeitadosPorPortfolioValor, vm.quebradosPorPortfolio, vm.financeiroData, vm.produtividadeRows, metasFiltradas]);
+
+  const insight = useMemo(() => {
+    if (vm.insight.variant === "neutral" || !vm.insight.cta) return vm.insight;
+    const anchor = vm.insight.cta.anchor;
+    return {
+      ...vm.insight,
+      cta: {
+        label: vm.insight.cta.label,
+        onClick: anchor
+          ? () => document.getElementById(anchor)?.scrollIntoView({ behavior: "smooth", block: "start" })
+          : undefined,
+      },
+    };
+  }, [vm.insight]);
 
   const reportMeta = useMemo(
     () => ({
@@ -157,7 +229,7 @@ export default function Index() {
               />
             </div>
 
-            <ExecutiveInsightCard {...vm.insight} loading={vm.loading} />
+            <ExecutiveInsightCard {...insight} loading={vm.loading} />
             <Suspense fallback={CHART_FALLBACK}>
               <RitmoDiaCard db={selectedDatabase} />
             </Suspense>
@@ -186,7 +258,7 @@ export default function Index() {
               </Suspense>
             </section>
 
-            <section className="space-y-4">
+            <section className="space-y-4" id="diagnostico-bu">
               <SectionHeader title="Eficiência" unit="%" description="Funil de conversão (Acionamentos → Contato → CPC → Acordos) e diagnóstico por unidade de negócio." />
               <Suspense fallback={CHART_FALLBACK}>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

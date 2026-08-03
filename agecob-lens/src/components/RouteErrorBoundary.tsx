@@ -2,6 +2,8 @@ import { Component, type ReactNode } from "react";
 import { AlertCircle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { captureError } from "@/services/analytics";
+import { reloadOnChunkError } from "@/lib/chunkErrorRecovery";
 
 interface RouteErrorBoundaryProps {
   children: ReactNode;
@@ -25,6 +27,9 @@ export class RouteErrorBoundary extends Component<RouteErrorBoundaryProps, State
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
     console.error(`[RouteErrorBoundary${this.props.routeName ? `:${this.props.routeName}` : ""}]`, error, info.componentStack);
+    captureError(error, { routeName: this.props.routeName, componentStack: info.componentStack });
+
+    reloadOnChunkError(error);
   }
 
   handleRetry = () => {

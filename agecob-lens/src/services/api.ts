@@ -1,5 +1,5 @@
 export type DatabaseOption = "COBwebRCBAUTOS" | "COBwebRCBCONSUMER" | "todos";
-import { trackApiMetric } from "@/services/analytics";
+import { logEvent, trackApiMetric } from "@/services/analytics";
 import { demoAnonymize, getDemoSnapshot, isDemoMode, setDemoSnapshot } from "@/services/demoMask";
 
 export interface ApiMeta {
@@ -82,8 +82,6 @@ export interface PortfolioRow {
 }
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "").trim();
-const API_KEY = (import.meta.env.VITE_API_KEY ?? "").trim();
-const API_TOKEN = (import.meta.env.VITE_API_TOKEN ?? "").trim();
 const inflight = new Map<string, Promise<unknown>>();
 const IS_DEV = Boolean(import.meta.env.DEV);
 const RUNTIME_ORIGIN =
@@ -137,9 +135,9 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     let triedAnyResponse = false;
     const startedAt = performance.now();
     const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
+    // Auth não vem do bundle: o proxy Caddy injeta X-API-Key + Bearer no upstream
+    // (ver infra/Caddyfile). Em dev local o backend roda com REQUIRE_API_AUTH=false.
     const headers: Record<string, string> = { "X-Run-Id": runId };
-    if (API_KEY) headers["X-API-Key"] = API_KEY;
-    if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
     // FormData: o browser define Content-Type com o boundary multipart — não forçar.
     if (options.body !== undefined && !isFormData) headers["Content-Type"] = "application/json";
 
@@ -164,6 +162,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
           lastError = new Error(
             `Unexpected content-type for ${base}${path}: ${contentType || "unknown"}`,
           );
+          logEvent("warn", "api candidate failed", { path, base, error: String(lastError) });
           continue;
         }
 
@@ -173,9 +172,11 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
           break;
         } catch (err) {
           lastError = err;
+          logEvent("warn", "api candidate failed", { path, base, error: String(err) });
         }
       } catch (err) {
         lastError = err;
+        logEvent("warn", "api candidate failed", { path, base, error: String(err) });
       }
     }
     if (!res) {
@@ -281,11 +282,8 @@ export async function fetchPortfolios(
 
 // ── Metas (PDF → JSON) ────────────────────────────────────────────────────────
 
-export interface MetaMensal {
-  "202604": number;
-  "202605": number;
-  "202606": number;
-}
+// Chaves são os 3 meses do trimestre carregado (ex: "202607"), variam por PDF.
+export type MetaMensal = Record<string, number>;
 
 export interface MetaRow {
   escritorio: string | null;
@@ -301,6 +299,7 @@ export interface MetaRow {
 export interface MetasEnvelope {
   meta: {
     periodo: string;
+    meses: string[];
     extraido_em: string;
     arquivo_origem: string;
     total_registros: number;
@@ -1138,6 +1137,11 @@ export interface RitmoDiaBanda {
   delta: number | null;
   status: "acima" | "ok" | "abaixo" | "em_andamento" | "futuro";
   acumulado: number | null;
+  esperado_valor?: number;
+  real_valor?: number | null;
+  delta_valor?: number | null;
+  status_valor?: "acima" | "ok" | "abaixo" | "em_andamento" | "futuro";
+  acumulado_valor?: number | null;
 }
 
 export interface RitmoDiaResponse {
@@ -1145,6 +1149,7 @@ export interface RitmoDiaResponse {
     generated_at: string;
     em_operacao: boolean;
     modelo: string;
+    modelo_valor?: string;
     faixa_batimento?: string;
     dias_desde_ultimo_batimento?: number;
   };
@@ -1153,6 +1158,9 @@ export interface RitmoDiaResponse {
     acumulado_atual: number;
     esperado_total?: number;
     projecao_fechamento?: number;
+    valor_acumulado_atual?: number;
+    valor_esperado_total?: number;
+    valor_projecao_fechamento?: number;
     bandas: RitmoDiaBanda[];
   };
   errors: ApiErrorItem[];

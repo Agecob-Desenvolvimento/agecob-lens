@@ -7,17 +7,8 @@ _EF_PAID = settings.BOLETO_PAGO_PRAZO_SQL
 _EF_CONV = (
     f"CAST(FLOOR(100.0 * SUM({_EF_PAID}) / NULLIF(COUNT(*), 0) + 0.5) AS INT)"
 )
-_EF_AGENT_FILTER = (
-    "AND UPPER(U.CHAVE) NOT LIKE '%SERASA%' "
-    "AND UPPER(U.CHAVE) NOT LIKE '%COBDESANTOS%' "
-    "AND UPPER(U.CHAVE) NOT LIKE '%NEMBUS%' "
-    "AND UPPER(U.CHAVE) NOT LIKE '%ANTLIA%' "
-    "AND UPPER(U.CHAVE) NOT LIKE '%SUPORTE%' "
-    "AND UPPER(U.CHAVE) NOT LIKE '%INTERNA%' "
-    "AND UPPER(U.CHAVE) NOT LIKE '%SISTEMA%' "
-    "AND UPPER(U.NOME) NOT LIKE '%COBDESANTOS%' "
-    "AND UPPER(U.NOME) NOT LIKE '%NEMBUSUSER%'"
-)
+_EF_AGENT_FILTER = settings.FILTRO_AGENTES_EFETIVIDADE_SQL
+_EF_DATA_MINIMA = settings.EFETIVIDADE_DATA_MINIMA
 _EF_DB_A = "COBwebRCBAUTOS"
 _EF_DB_C = "COBwebRCBCONSUMER"
 _EF_STATUS = settings.STATUS_GERADOS_SQL  # (1, 2, 3, 10, 12) — valores gerados
@@ -33,7 +24,7 @@ def _ef_inner_simple(db: str, parcela_cond: str, date_col: str, extra_cols: str 
     raw_col = date_col.split(" AS ")[0].strip().replace("CAST(", "").replace(" AS DATE)", "")
     where = (
         f"WHERE R.PARCELA {parcela_cond} AND R.ID_REC_STATUS IN {_EF_STATUS} "
-        f"AND YEAR(R.{raw_col}) >= 2026 {_EF_AGENT_FILTER}"
+        f"AND R.{raw_col} >= CONVERT(DATE, '{_EF_DATA_MINIMA}', 112) {_EF_AGENT_FILTER}"
     )
     def _one(database: str) -> str:
         return (
@@ -55,7 +46,7 @@ def _ef_inner_agent(db: str, parcela_cond: str, date_col: str) -> str:
             f"           U.CHAVE AS Agente, YEAR(R.{date_col}) AS Ano, MONTH(R.{date_col}) AS Mes\n"
             f"    FROM {database}.dbo.REC_MASTER (NOLOCK) R\n"
             f"    INNER JOIN {database}.dbo.USU_MASTER (NOLOCK) U ON R.ID_USUARIO = U.ID_USUARIO\n"
-            f"    WHERE R.PARCELA {parcela_cond} AND R.ID_REC_STATUS IN {_EF_STATUS} AND YEAR(R.{date_col}) >= 2026\n"
+            f"    WHERE R.PARCELA {parcela_cond} AND R.ID_REC_STATUS IN {_EF_STATUS} AND R.{date_col} >= CONVERT(DATE, '{_EF_DATA_MINIMA}', 112)\n"
             f"      {_EF_AGENT_FILTER}"
         )
     if db == "todos":
@@ -171,12 +162,9 @@ _EF_BUILDER_MAP = {
 def _build_ef_resumo_sql(
     db: str,
     parcela_tipo: str,
-    date_from_lit: str,  # YYYYMMDD, already validated via date.fromisoformat()
-    date_to_lit: str,    # YYYYMMDD, already validated via date.fromisoformat()
     id_portfolio: Optional[int] = None,
 ) -> Tuple[str, str]:
     parcela_cond = "= 0" if parcela_tipo == "primeira" else "> 0"
-    # dates embedded as YYYYMMDD literals — safe (validated upstream) and unambiguous in SQL Server
     portfolio_filter = "\n      AND R.ID_CARTEIRA = ?" if id_portfolio is not None else ""
 
     pago_expr = (
@@ -194,8 +182,8 @@ def _build_ef_resumo_sql(
             f"    SELECT R.NR_RECEBIMENTO, R.VALOR, R.VR_PAGO, R.DT_PAGAMENTO, R.DT_VENCIMENTO, R.ID_REC_STATUS\n"
             f"    FROM {database}.dbo.REC_MASTER (NOLOCK) R\n"
             f"    INNER JOIN {database}.dbo.USU_MASTER (NOLOCK) U ON R.ID_USUARIO = U.ID_USUARIO\n"
-            f"    WHERE R.DT_VENCIMENTO >= CONVERT(DATE, '{date_from_lit}', 112)\n"
-            f"      AND R.DT_VENCIMENTO <= CONVERT(DATE, '{date_to_lit}', 112)\n"
+            f"    WHERE R.DT_VENCIMENTO >= CONVERT(DATE, ?, 112)\n"
+            f"      AND R.DT_VENCIMENTO <= CONVERT(DATE, ?, 112)\n"
             f"      AND R.ID_REC_STATUS IN {settings.STATUS_GERADOS_SQL}\n"
             f"      AND R.PARCELA {parcela_cond}{portfolio_filter}\n"
             f"      {_EF_AGENT_FILTER}"
@@ -244,13 +232,21 @@ ORDER BY dia
     return kpi_sql, daily_sql
 
 
+def _ef_date_params(db: str, date_from_lit: str, date_to_lit: str) -> Tuple[Any, ...]:
+    """Params (?, ?) de data por bloco inner — duplicados no UNION ALL de `todos`."""
+    per_db: Tuple[Any, ...] = (date_from_lit, date_to_lit)
+    return per_db + per_db if db == "todos" else per_db
+
+
 def _build_ef_resumo_params(
     db: str,
+    date_from_lit: str,
+    date_to_lit: str,
     id_portfolio: Optional[int] = None,
-) -> Optional[Tuple[Any, ...]]:
-    if id_portfolio is None:
-        return None
-    per_db: Tuple[Any, ...] = (id_portfolio,)
+) -> Tuple[Any, ...]:
+    per_db: Tuple[Any, ...] = (date_from_lit, date_to_lit)
+    if id_portfolio is not None:
+        per_db += (id_portfolio,)
     return per_db + per_db if db == "todos" else per_db
 
 
@@ -280,10 +276,10 @@ _EF_DETALHE_FILTERS = {
 EF_DETALHE_KINDS = tuple(_EF_DETALHE_FILTERS.keys())
 
 
-def _build_ef_detalhe_sql(db: str, parcela_tipo: str, kind: str, date_from_lit: str, date_to_lit: str) -> str:
+def _build_ef_detalhe_sql(db: str, parcela_tipo: str, kind: str) -> str:
     """Detalhe (1 linha por boleto) de um KPI de efetividade (`kind`) — espelha o
     filtro do CASE correspondente no resumo: DT_VENCIMENTO no período + filtro do KPI.
-    Colunas no formato QuebradoDetalheRow. Datas como literais YYYYMMDD (validadas upstream).
+    Colunas no formato QuebradoDetalheRow. Datas via params (`_ef_date_params`).
     """
     parcela_cond = "= 0" if parcela_tipo == "primeira" else "> 0"
     extra_where = _EF_DETALHE_FILTERS[kind]
@@ -343,8 +339,8 @@ def _build_ef_detalhe_sql(db: str, parcela_tipo: str, kind: str, date_from_lit: 
                   AND RD2.ID_CARTEIRA = R.ID_CARTEIRA
                   AND DA2.{settings.PORTFOLIO_COLUMN} IS NOT NULL
             ) DA
-            WHERE R.DT_VENCIMENTO >= CONVERT(DATE, '{date_from_lit}', 112)
-              AND R.DT_VENCIMENTO <= CONVERT(DATE, '{date_to_lit}', 112)
+            WHERE R.DT_VENCIMENTO >= CONVERT(DATE, ?, 112)
+              AND R.DT_VENCIMENTO <= CONVERT(DATE, ?, 112)
               AND R.ID_REC_STATUS IN {_EF_STATUS}
               AND R.PARCELA {parcela_cond}
               {extra_where}
@@ -355,7 +351,7 @@ def _build_ef_detalhe_sql(db: str, parcela_tipo: str, kind: str, date_from_lit: 
     return f"SELECT TOP 500 *\nFROM (\n{inner}\n) AS T\nORDER BY valor_primeira_parcela DESC"
 
 
-def _build_ef_curva_quebra_query(db: str, date_from_lit: str, date_to_lit: str) -> str:
+def _build_ef_curva_quebra_query(db: str) -> str:
     """Curva de quebra por idade do boleto.
 
     Classifica cada boleto pela idade atual (dias desde o vencimento até hoje) e,
@@ -374,9 +370,9 @@ def _build_ef_curva_quebra_query(db: str, date_from_lit: str, date_to_lit: str) 
         DATEDIFF(DAY, R.DT_VENCIMENTO, GETDATE()) AS dias_desde_vencimento
     FROM {database}.dbo.REC_MASTER R (NOLOCK)
     WHERE R.PARCELA = 0
-      AND R.DT_VENCIMENTO >= CONVERT(DATE, '{date_from_lit}', 112)
-      AND R.DT_VENCIMENTO <= CONVERT(DATE, '{date_to_lit}', 112)
-      AND R.ID_REC_STATUS IN (1, 3, 12, 2)
+      AND R.DT_VENCIMENTO >= CONVERT(DATE, ?, 112)
+      AND R.DT_VENCIMENTO <= CONVERT(DATE, ?, 112)
+      AND R.ID_REC_STATUS IN {settings.STATUS_CURVA_QUEBRA_SQL}
 """
 
     inner = (
@@ -389,8 +385,8 @@ def _build_ef_curva_quebra_query(db: str, date_from_lit: str, date_to_lit: str) 
 SELECT
     faixa,
     COUNT(*)                                                            AS total,
-    SUM(CASE WHEN ID_REC_STATUS = 2 THEN 1 ELSE 0 END)                  AS quebrados,
-    CAST(100.0 * SUM(CASE WHEN ID_REC_STATUS = 2 THEN 1 ELSE 0 END)
+    SUM(CASE WHEN ID_REC_STATUS = {settings.STATUS_QUEBRADO[0]} THEN 1 ELSE 0 END)                  AS quebrados,
+    CAST(100.0 * SUM(CASE WHEN ID_REC_STATUS = {settings.STATUS_QUEBRADO[0]} THEN 1 ELSE 0 END)
          / NULLIF(COUNT(*), 0) AS DECIMAL(5,1))                         AS taxa_quebra
 FROM (
     SELECT

@@ -9,6 +9,7 @@ import type { HomeKpiPrimary, HomeKpiSecondary } from "@/components/executive/Ho
 import type { HandoffFinanceiroDatum } from "@/components/executive/HandoffFinanceiroGroupedBar";
 import type { HandoffEficienciaDatum } from "@/components/executive/HandoffEficienciaGroupedBar";
 import type { BarDatum, FunnelDatum, QuebradoPortfolioDatum } from "@/selectors/homeSelectors";
+import type { ProdutividadeRowWithSource } from "@/hooks/useProdutividadeData";
 import type { PrimeiraParcelaPorPortfolioRow } from "@/services/api";
 
 /** Risk dimensions per portfolio for the Rentabilidade & Risco chart. */
@@ -20,6 +21,11 @@ export interface PortfolioRiskEntry {
 
 // ── Home (Index.tsx) ────────────────────────────────────────────
 
+type HomeInsightCard =
+  | { variant: "critical"; metric?: { value: string; label: string }; secondaryMetric?: { value: string; label: string }; description: string; cta?: { label: string; anchor?: string } }
+  | { variant: "positive"; metric?: { value: string; label: string }; description: string; cta?: { label: string; anchor?: string } }
+  | { variant: "neutral" };
+
 export interface HomeViewModel {
   loading: boolean;
   error: string | null;
@@ -29,15 +35,14 @@ export interface HomeViewModel {
   kpiSecondary: HomeKpiSecondary[];
   /** Cash conversion index: 1ª Parcela Recebida / 1ª Parcela Emitida * 100 */
   indiceConversaoCaixa: number | null;
-  insight:
-    | { variant: "critical"; metric?: { value: string; label: string }; description: string; cta?: { label: string } }
-    | { variant: "positive"; metric?: { value: string; label: string }; description: string; cta?: { label: string } }
-    | { variant: "neutral" };
+  insight: HomeInsightCard;
   financeiroData: HandoffFinanceiroDatum[];
   eficienciaData: HandoffEficienciaDatum[];
   funnelData: FunnelDatum[];
   cpcAvg: number;
   convAvg: number;
+  /** Agent-level rows for the active filter — raw extract for the CSV report. */
+  produtividadeRows: ProdutividadeRowWithSource[];
   top10PrimeiraParcela: BarDatum[];
   portfolio1aParcela: BarDatum[];
   excecoesPorPortfolio: BarDatum[];

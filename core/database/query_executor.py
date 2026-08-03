@@ -6,7 +6,7 @@ from fastapi import HTTPException
 from fastapi.encoders import jsonable_encoder
 
 from core.database.pool_manager import pool_manager
-from core.telemetry.agent_logger import _agent_ndjson
+from core.telemetry.agent_logger import _agent_ndjson, _sentry_log, _sentry_metric
 
 
 def run_query(
@@ -38,6 +38,7 @@ def run_query(
             columns = [column[0] for column in cursor.description]
             rows = cursor.fetchall()
             result = [dict(zip(columns, row)) for row in rows]
+            query_elapsed_ms = round((time.perf_counter() - started_at) * 1000, 2)
             _agent_ndjson(
                 "OBS",
                 "query_executor.py:run_query:end",
@@ -46,9 +47,17 @@ def run_query(
                     "database": database_name,
                     "context": context,
                     "rows_count": len(result),
-                    "query_elapsed_ms": round((time.perf_counter() - started_at) * 1000, 2),
+                    "query_elapsed_ms": query_elapsed_ms,
                 },
                 run_id=run_id,
+            )
+            _sentry_metric(
+                "distribution",
+                "db.query_duration_ms",
+                query_elapsed_ms,
+                unit="millisecond",
+                context=context,
+                database=database_name,
             )
             return jsonable_encoder(result)
     except HTTPException:
@@ -65,6 +74,7 @@ def run_query(
             },
             run_id=run_id,
         )
+        _sentry_log("error", "Erro ao executar query.", database=database_name, context=context, error=str(exc))
         raise HTTPException(
             status_code=500,
             detail="Erro ao executar consulta no banco de dados.",

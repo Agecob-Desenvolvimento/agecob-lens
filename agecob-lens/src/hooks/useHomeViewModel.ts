@@ -22,6 +22,7 @@ import {
   aggregateTotals,
   calcConversao,
   calcCpc,
+  calcEfetividadeCaixa,
   calcTicketMedio,
 } from "@/lib/metrics";
 import { generateDailyReadout } from "@/lib/insightEngine";
@@ -86,15 +87,21 @@ export function useHomeViewModel(): HomeViewModel {
   }, [ppMesEnv]);
 
   // Internal benchmarks (top-10 historical mean) — per bank, long cache.
+  // Deferidos até os KPIs principais carregarem (!loading): são consulta pesada
+  // (lookback de 3 meses) e só alimentam baselines secundários. Adiar libera slots
+  // de conexão (browser HTTP/1.1 ~6 por origem + pool DB) para os endpoints de KPI
+  // chegarem antes; benchmarks carregam depois, com folga.
   const { data: benchAutosEnv } = useQuery({
     queryKey: ["benchmarks", "COBwebRCBAUTOS"] as const,
     queryFn: () => fetchBenchmarks("COBwebRCBAUTOS"),
     staleTime: 3_600_000,
+    enabled: !loading,
   });
   const { data: benchConsumerEnv } = useQuery({
     queryKey: ["benchmarks", "COBwebRCBCONSUMER"] as const,
     queryFn: () => fetchBenchmarks("COBwebRCBCONSUMER"),
     staleTime: 3_600_000,
+    enabled: !loading,
   });
   const bench = useMemo(() => {
     const benchAutos = benchAutosEnv?.data as BenchmarkData | undefined;
@@ -176,16 +183,20 @@ export function useHomeViewModel(): HomeViewModel {
   }, [totals, prevTotals, primeiraParcelaDia, primeiraParcelaDiaPrev, periodLabel]);
 
   // Cash conversion index: 1ª Parcela Recebida (VR_PAGO) / 1ª Parcela Emitida (VALOR) * 100
-  const ppValorEmitida = primeiraParcelaDia?.total_valor ?? totals.valor_primeira_parcela;
+  // Usa totals (mesma fonte de `rows`/resto do KPI strip) direto — evita o caso em
+  // que primeiraParcelaDia?.total_valor volta 0 (query separada, sem corrida com
+  // `rows`) e `??` aceita esse 0 como valor válido, zerando o índice mesmo com
+  // acordo/parcela reais no período.
+  const ppValorEmitida = totals.valor_primeira_parcela;
   const ppValorRecebida = totals.valor_primeira_parcela_recebida;
-  const ppValorEmitidaPrev = primeiraParcelaDiaPrev ?? prevTotals.valor_primeira_parcela;
+  const ppValorEmitidaPrev = prevTotals.valor_primeira_parcela;
   const ppValorRecebidaPrev = prevTotals.valor_primeira_parcela_recebida;
   const indiceConversaoCaixa = useMemo(() =>
-    ppValorEmitida > 0 ? (ppValorRecebida * 100) / ppValorEmitida : null,
-  [totals.valor_primeira_parcela_recebida, ppValorEmitida]);
+    calcEfetividadeCaixa({ valor_primeira_parcela: ppValorEmitida, valor_p1_recebido: ppValorRecebida }),
+  [ppValorEmitida, ppValorRecebida]);
   const indiceConversaoCaixaPrev = useMemo(() =>
-    ppValorEmitidaPrev > 0 ? (ppValorRecebidaPrev * 100) / ppValorEmitidaPrev : null,
-  [prevTotals.valor_primeira_parcela_recebida, ppValorEmitidaPrev]);
+    calcEfetividadeCaixa({ valor_primeira_parcela: ppValorEmitidaPrev, valor_p1_recebido: ppValorRecebidaPrev }),
+  [ppValorEmitidaPrev, ppValorRecebidaPrev]);
 
   // KPI secondaries
   const kpiSecondary = useMemo(() => {
@@ -208,7 +219,7 @@ export function useHomeViewModel(): HomeViewModel {
     return [
       { label: "Efetividade de Caixa", value: indiceConversaoCaixa ?? 0, unit: "percent" as const, baseline: mk(indiceConversaoCaixa ?? 0, indiceConversaoCaixaPrev ?? 0, "up"), benchmarks: bm(bench?.efetividade_caixa), base: { num: ppValorRecebida, den: ppValorEmitida, noun: "1ª parcela", unit: "value" } },
       { label: "CPC", value: totals.qtd_contatos, unit: "count" as const, baseline: mk(totals.qtd_contatos, prevTotals.qtd_contatos, "up"), base: { num: totals.qtd_contatos, den: totals.qtd_alo, noun: "alôs" } },
-      { label: "Conversão %", value: conv, unit: "percent" as const, baseline: mkBench(conv, bench?.taxa_conversao?.mean, "up"), base: { num: totals.qtd_boletos_pagos, den: totals.qtd_contatos, noun: "CPC" } },
+      { label: "Conversão %", value: conv, unit: "percent" as const, baseline: mkBench(conv, bench?.taxa_conversao?.mean, "up"), base: { num: totals.qtd_acordos, den: totals.qtd_contatos, noun: "CPC" } },
       { label: "Rejeitados", value: totals.qtd_rejeitados, unit: "count" as const, baseline: mk(totals.qtd_rejeitados, prevTotals.qtd_rejeitados, "down"), caption: "acordos rejeitados" },
       { label: "Exceções", value: totals.qtd_excecoes, unit: "count" as const, baseline: mk(totals.qtd_excecoes, prevTotals.qtd_excecoes, "down"), caption: "acordos em exceção" },
       { label: "Qtd Acordos", value: totals.qtd_acordos, unit: "count" as const, caption: `${diasUteisPeriodo} dias úteis` },
@@ -217,18 +228,29 @@ export function useHomeViewModel(): HomeViewModel {
     ];
   }, [totals, prevTotals, diasUteisPeriodo, gapDePerformance, periodLabel, indiceConversaoCaixa, indiceConversaoCaixaPrev, bench, ppValorRecebida, ppValorEmitida]);
 
-  // Insight
+  // Insight — insight1 (primário) + insight2 (categoria distinta) num card só:
+  // insight2 vira secondaryMetric ao lado do número primário, mesma descrição.
   const readout = useMemo(() => generateDailyReadout(rows, projecaoMes), [rows, projecaoMes]);
   const insight = useMemo(() => {
     if (readout.empty) return { variant: "neutral" as const };
-    const slot = readout.insight1 ?? readout.insight2;
-    if (!slot) return { variant: "neutral" as const };
-    const variant = slot.severity === "positive" ? "positive" as const : "critical" as const;
+    const primary = readout.insight1 ?? readout.insight2;
+    if (!primary) return { variant: "neutral" as const };
+    const cta = readout.action?.headline ? { label: readout.action.headline, anchor: readout.action.anchor } : undefined;
+    if (primary.severity === "positive") {
+      return {
+        variant: "positive" as const,
+        metric: primary.headline ? { value: primary.headline, label: primary.label ?? "" } : undefined,
+        description: primary.text,
+        cta,
+      };
+    }
+    const secondary = readout.insight1 && readout.insight2 ? readout.insight2 : undefined;
     return {
-      variant,
-      metric: slot.headline ? { value: slot.headline, label: "" } : undefined,
-      description: slot.text,
-      cta: readout.action ? { label: readout.action.headline ?? readout.action.text } : undefined,
+      variant: "critical" as const,
+      metric: primary.headline ? { value: primary.headline, label: primary.label ?? "" } : undefined,
+      secondaryMetric: secondary?.headline ? { value: secondary.headline, label: secondary.label ?? "" } : undefined,
+      description: primary.text,
+      cta,
     };
   }, [readout]);
 
@@ -319,6 +341,7 @@ export function useHomeViewModel(): HomeViewModel {
     funnelData,
     cpcAvg,
     convAvg,
+    produtividadeRows: rows,
     top10PrimeiraParcela,
     portfolio1aParcela,
     excecoesPorPortfolio,

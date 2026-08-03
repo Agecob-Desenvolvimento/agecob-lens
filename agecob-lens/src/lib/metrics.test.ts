@@ -1,5 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { formatBRLCompact, formatDelta } from "./metrics";
+import { calcConversao, formatBRLCompact, formatDelta } from "./metrics";
+
+describe("calcConversao", () => {
+  it("computes acordos gerados (qtd_acordos) / CPC (qtd_contatos)", () => {
+    expect(calcConversao({ qtd_acordos: 5, qtd_contatos: 50 })).toBe(10);
+  });
+
+  it("returns 0 when qtd_contatos is 0", () => {
+    expect(calcConversao({ qtd_acordos: 5, qtd_contatos: 0 })).toBe(0);
+  });
+
+  // Regressão ee9699a: fórmula e callers devem casar na mesma chave → senão NaN → freeze no heatmap.
+  it("never returns NaN for the caller shape { qtd_acordos, qtd_contatos }", () => {
+    const result = calcConversao({ qtd_acordos: 3, qtd_contatos: 40 });
+    expect(Number.isFinite(result)).toBe(true);
+  });
+});
 
 describe("formatBRLCompact", () => {
   it("returns full BRL below 100k threshold", () => {

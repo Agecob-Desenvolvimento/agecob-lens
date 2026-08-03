@@ -6,12 +6,13 @@ from typing import Any, Dict, List, Optional, Tuple
 from uuid import uuid4
 
 import numpy as np
+import sentry_sdk
 from fastapi import APIRouter, File, Query, Request, UploadFile
 
 import config.settings as settings
 from core.cache.cache_manager import cache_manager
 from core.database.query_executor import run_query
-from core.telemetry.agent_logger import _agent_ndjson
+from core.telemetry.agent_logger import _agent_ndjson, _sentry_metric
 from core.utils.pagination import extract_total_rows, normalize_pagination
 from core.utils.response_envelope import build_response_envelope, print_rows_preview
 from core.utils.sql_helpers import (
@@ -121,28 +122,74 @@ def _get_dashboard_agentes_unificado(
     date_from: Optional[str] = None,
     date_to_exclusive: Optional[str] = None,
 ) -> Dict[str, Any]:
+    t_recv = time.perf_counter()
     run_id = getattr(request.state, "run_id", f"srv-{uuid4().hex[:12]}") if request else f"srv-{uuid4().hex[:12]}"
     validated_database = validate_database_or_todos(database_name)
-    query = build_produtividade_query(
-        validated_database,
-        use_distinct_esforco=False,
-        date_from=date_from,
-        date_to_exclusive=date_to_exclusive,
-    )
-    rows = run_query(
-        query,
-        settings.ALLOWED_DATABASES[0],
-        run_id=run_id,
-        context=context,
-    )
+
+    def _compute() -> List[Dict[str, Any]]:
+        t_build = time.perf_counter()
+        with sentry_sdk.start_span(op="db.build_sql", description=context):
+            query = build_produtividade_query(
+                validated_database,
+                use_distinct_esforco=False,
+                date_from=date_from,
+                date_to_exclusive=date_to_exclusive,
+            )
+        t_build_done = time.perf_counter()
+        with sentry_sdk.start_span(op="db.execute", description=context):
+            rows = run_query(
+                query,
+                settings.ALLOWED_DATABASES[0],
+                run_id=run_id,
+                context=context,
+            )
+        t_exec_done = time.perf_counter()
+        _agent_ndjson(
+            "TIMING",
+            "dashboard.py:_get_dashboard_agentes_unificado:_compute",
+            "timing_breakdown",
+            {
+                "context": context,
+                "build_sql_ms": round((t_build_done - t_build) * 1000, 1),
+                "execute_sql_ms": round((t_exec_done - t_build_done) * 1000, 1),
+            },
+            run_id=run_id,
+        )
+        return rows
+
+    cache_key = f"produtividade|{context}|{validated_database}|{date_from or 'hoje'}|{date_to_exclusive or 'hoje'}"
+    t_cache_start = time.perf_counter()
+    with sentry_sdk.start_span(op="cache.get_or_compute", description=cache_key):
+        rows = cache_manager.get_or_compute(cache_key, _compute)
+    t_cache_done = time.perf_counter()
     sources = settings.ALLOWED_DATABASES if validated_database == "todos" else [validated_database]
     date_label = f"{date_from}/{date_to_exclusive}" if date_from else "today"
-    return build_response_envelope(
-        rows,
-        sources,
-        filters={"date": date_label, "database": validated_database},
+    with sentry_sdk.start_span(op="serialize.envelope", description=context):
+        envelope = build_response_envelope(
+            rows,
+            sources,
+            filters={"date": date_label, "database": validated_database},
+            run_id=run_id,
+        )
+    t_done = time.perf_counter()
+    total_ms = round((t_done - t_recv) * 1000, 1)
+    _agent_ndjson(
+        "TIMING",
+        "dashboard.py:_get_dashboard_agentes_unificado",
+        "timing_breakdown",
+        {
+            "context": context,
+            "database": validated_database,
+            "cache_hit": (t_cache_done - t_cache_start) < 0.005,
+            "receive_to_cache_ms": round((t_cache_start - t_recv) * 1000, 1),
+            "cache_or_compute_ms": round((t_cache_done - t_cache_start) * 1000, 1),
+            "build_envelope_ms": round((t_done - t_cache_done) * 1000, 1),
+            "total_ms": total_ms,
+        },
         run_id=run_id,
     )
+    _sentry_metric("distribution", "dashboard.request_duration_ms", total_ms, unit="millisecond", context=context)
+    return envelope
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -338,22 +385,27 @@ def get_dashboard_produtividade_hoje(
     run_id = getattr(request.state, "run_id", f"srv-{uuid4().hex[:12]}") if request else f"srv-{uuid4().hex[:12]}"
     database_name = validate_database(database_name)
     parsed_from, parsed_to_excl = _parse_period(date_from, date_to)
-    prod_params = build_produtividade_hoje_params(portfolio)
-    rows = run_query(
-        build_produtividade_query(
-            database_name,
-            use_distinct_esforco=True,
-            date_from=parsed_from,
-            date_to_exclusive=parsed_to_excl,
-            portfolio=portfolio,
-        ),
-        database_name,
-        params=prod_params,
-        run_id=run_id,
-        context="dashboard/produtividade-hoje",
-    )
-    rows, validation_metrics = validate_produtividade_rows(rows, run_id=run_id)
     assessoria_applied, token = normalize_assessoria_filter(assessoria)
+
+    def _compute() -> tuple:
+        prod_params = build_produtividade_hoje_params(portfolio)
+        raw = run_query(
+            build_produtividade_query(
+                database_name,
+                use_distinct_esforco=True,
+                date_from=parsed_from,
+                date_to_exclusive=parsed_to_excl,
+                portfolio=portfolio,
+            ),
+            database_name,
+            params=prod_params,
+            run_id=run_id,
+            context="dashboard/produtividade-hoje",
+        )
+        return validate_produtividade_rows(raw, run_id=run_id)
+
+    cache_key = f"produtividade-hoje|{database_name}|{parsed_from or 'hoje'}|{parsed_to_excl or 'hoje'}|{portfolio or 'all'}|{assessoria_applied or 'all'}"
+    rows, validation_metrics = cache_manager.get_or_compute(cache_key, _compute)
     if token:
         rows = [
             row
@@ -1036,6 +1088,18 @@ async def upload_metas_pdf(
             rows=[],
             sources=[],
             errors=[{"message": "Arquivo inválido. Envie um PDF."}],
+            run_id=run_id,
+        )
+
+    # CSRF: multipart não dispara preflight CORS, então um <form> cross-origin
+    # poderia submeter com a credencial Basic Auth em cache. Rejeita Origin fora da
+    # whitelist nesta rota de efeito colateral (F-09). Sem Origin (não-browser) passa.
+    origin = (request.headers.get("origin") or "").strip() if request else ""
+    if origin and origin not in settings._CORS_ORIGINS:
+        return build_response_envelope(
+            rows=[],
+            sources=[],
+            errors=[{"message": "Origin não autorizado para esta operação."}],
             run_id=run_id,
         )
 
