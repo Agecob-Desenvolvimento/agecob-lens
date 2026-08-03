@@ -16,7 +16,7 @@ import time
 from datetime import date, datetime
 from pathlib import Path
 from threading import Lock
-from typing import Dict, List, NamedTuple, Optional, Tuple
+from typing import Any, Dict, List, NamedTuple, Optional, Tuple
 
 import joblib
 import numpy as np
@@ -434,15 +434,7 @@ def ritmo_dia(db: str) -> Dict[str, object]:
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Falha ao carregar modelo: {exc}")
 
-    try:
-        por_banco = _coletar_dados_por_banco(db)
-        valor_por_banco = _coletar_valor_por_banco(db)
-    except HTTPException:
-        raise
-    except Exception:
-        logger.error(
-            "ritmo-dia: falha ao consultar dados operacionais (db=%s)", db, exc_info=True
-        )
+    def _degradado() -> Dict[str, Any]:
         return {
             "meta": {
                 "generated_at": generated_at,
@@ -458,6 +450,27 @@ def ritmo_dia(db: str) -> Dict[str, object]:
             },
             "errors": [{"msg": "Falha ao consultar dados operacionais"}],
         }
+
+    try:
+        por_banco = _coletar_dados_por_banco(db)
+        valor_por_banco = _coletar_valor_por_banco(db)
+    except HTTPException as exc:
+        # run_query traduz pyodbc.Error em HTTPException(500) e timeout em 504, então
+        # `except HTTPException: raise` engolia justamente a falha de banco para a
+        # qual o payload degradado foi escrito — o Modo TV recebia 500 cru.
+        # Erro de cliente (400/422) continua subindo: degradar ali esconderia bug.
+        if exc.status_code < 500:
+            raise
+        logger.error(
+            "ritmo-dia: falha de banco ao consultar dados operacionais (db=%s, status=%s)",
+            db, exc.status_code, exc_info=True,
+        )
+        return _degradado()
+    except Exception:
+        logger.error(
+            "ritmo-dia: falha ao consultar dados operacionais (db=%s)", db, exc_info=True
+        )
+        return _degradado()
 
     dias_desde_min = min((d for d, _ in por_banco.values()), default=99)
     faixa = _faixa_de_dias(dias_desde_min)
