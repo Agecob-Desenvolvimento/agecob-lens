@@ -465,11 +465,18 @@ export function useDetalhamentoViewModel(): DetalhamentoViewModel {
     { id: "ticket_medio", label: "Ticket Médio", value: calcTicketMedio(effectiveTotals), unit: "BRL" },
   ], [effectiveTotals]);
 
+  // Com carteira selecionada, os acordos vêm filtrados mas o esforço
+  // (acionamentos/alô/CPC) continua cobrindo o escritório inteiro — um acionamento
+  // não é atribuível a uma carteira, porque o devedor pode ter dívida em várias e
+  // CTO_MASTER só guarda ID_DEV. Qualquer razão sobre esse denominador teria
+  // numerador filtrado sobre denominador não filtrado, e o agente pareceria
+  // improdutivo. Omitir é mais honesto que exibir errado; o backend sinaliza o
+  // mesmo em meta.filters.portfolio_partial.
   const kpiSecondary: KpiDatum[] = useMemo(() => [
     { id: "contato_alo", label: "Contato", value: effectiveTotals.qtd_alo, unit: "count" },
     { id: "cpc", label: "CPC", value: effectiveTotals.qtd_contatos, unit: "count" },
-    { id: "taxa_cpc", label: "Taxa CPC %", value: calcCpc(effectiveTotals), unit: "%" },
-    { id: "conversao", label: "Conversão %", value: calcConversao(effectiveTotals), unit: "%" },
+    { id: "taxa_cpc", label: "Taxa CPC %", value: portfolioActive ? null : calcCpc(effectiveTotals), unit: "%" },
+    { id: "conversao", label: "Conversão %", value: portfolioActive ? null : calcConversao(effectiveTotals), unit: "%" },
     { id: "qtd_acionamentos", label: "Qtd Acionamentos", value: effectiveTotals.qtd_acionamentos, unit: "count" },
     { id: "qtd_excecoes", label: "Qtd Exceções", value: effectiveTotals.qtd_excecoes, unit: "count" },
     { id: "valor_excecoes", label: "Valor Exceções", value: effectiveTotals.valor_excecoes, unit: "BRL" },
@@ -477,7 +484,7 @@ export function useDetalhamentoViewModel(): DetalhamentoViewModel {
     { id: "valor_rejeitados", label: "Valor Rejeitados", value: effectiveTotals.valor_rejeitados, unit: "BRL" },
     { id: "receita_hora", label: "Receita/Hora", value: calcReceitaPorHora(effectiveTotals), unit: "BRL" },
     { id: "idade_media", label: "Idade Média (dias)", value: calcIdadeMediaAcordos(effectiveTotals), unit: "count" },
-  ], [effectiveTotals]);
+  ], [effectiveTotals, portfolioActive]);
 
   const funil: FunilData = useMemo(() => ({
     acionamentos: effectiveTotals.qtd_acionamentos,

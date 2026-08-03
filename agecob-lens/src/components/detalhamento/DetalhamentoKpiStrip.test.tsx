@@ -60,4 +60,39 @@ describe("DetalhamentoKpiStrip", () => {
     expect(screen.getByText("13.939")).toBeInTheDocument();
     expect(screen.getByText("3")).toBeInTheDocument();
   });
+
+  // value: null = métrica não computável no escopo atual (ex.: razão de esforço
+  // sob filtro de carteira). O projeto compila com strictNullChecks: false, então
+  // só o teste pega — fmtPct(null) faria null.toLocaleString() e derrubaria o render.
+  it("renders an em dash instead of crashing when value is null", () => {
+    const naoComputavel: KpiDatum[] = [
+      { id: "conversao", label: "Conversão %", value: null, unit: "%" },
+      { id: "taxa_cpc", label: "Taxa CPC %", value: null, unit: "%" },
+    ];
+
+    render(<DetalhamentoKpiStrip primary={[]} secondary={naoComputavel} />);
+    expandSecondary();
+
+    expect(screen.getByText("Conversão %")).toBeInTheDocument();
+    expect(screen.getAllByText("—")).toHaveLength(2);
+  });
+
+  it("omits delta and benchmark lines when value is null", () => {
+    const naoComputavel: KpiDatum[] = [
+      { id: "conversao", label: "Conversão %", value: null, unit: "%" },
+    ];
+
+    render(
+      <DetalhamentoKpiStrip
+        primary={[]}
+        secondary={naoComputavel}
+        deltas={{ conversao: 0.12 }}
+        benchmarks={{ conversao: { ref: 8.5, betterWhen: "up" } }}
+      />,
+    );
+    expandSecondary();
+
+    // Comparar contra um valor que não existe seria pior que não comparar.
+    expect(screen.queryByText(/Média:/)).not.toBeInTheDocument();
+  });
 });

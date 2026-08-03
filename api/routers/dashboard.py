@@ -434,6 +434,16 @@ def get_dashboard_produtividade_hoje(
             if token in str(row.get("CHAVE", "")).upper()
             or token in str(row.get("NOME", "")).upper()
         ]
+    # Com portfólio filtrado, o esforço (acionamentos/alô/CPC) continua cobrindo o
+    # escritório inteiro: um acionamento não é atribuível a uma carteira, porque o
+    # devedor pode ter dívida em várias e CTO_MASTER só guarda ID_DEV. Toda razão
+    # construída sobre esse denominador teria numerador filtrado sobre denominador
+    # não filtrado — some ao invés de exibir um número errado. As contagens e
+    # valores absolutos seguem corretos e filtrados.
+    # Anular aqui, e não no SQL, porque validate_produtividade_rows coage None -> 0.
+    if portfolio:
+        rows = [{**row, "acordos_percentual": None, "cpc_percentual": None} for row in rows]
+
     quality = {
         "entrada_ok": True,
         "alimentacao_ok": True,
@@ -451,7 +461,12 @@ def get_dashboard_produtividade_hoje(
     return build_response_envelope(
         rows,
         [database_name],
-        filters={"date": "today", "assessoria": assessoria_applied},
+        filters={
+            "date": "today",
+            "assessoria": assessoria_applied,
+            "portfolio": portfolio,
+            "portfolio_partial": bool(portfolio),
+        },
         run_id=run_id,
         quality=quality,
     )

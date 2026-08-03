@@ -24,7 +24,8 @@ export type KpiUnit = "BRL" | "%" | "count";
 export interface KpiDatum {
   id: string;
   label: string;
-  value: number;
+  /** null = não computável neste escopo (ex.: razão de esforço sob filtro de carteira). */
+  value: number | null;
   unit: KpiUnit;
 }
 
@@ -47,6 +48,9 @@ export interface DetalhamentoKpiStripProps {
 }
 
 function formatValue(kpi: KpiDatum): string {
+  // Sem isto, fmtPct(null) faz null.toLocaleString() e derruba o render. O projeto
+  // compila com strictNullChecks: false, então o tsc não pega.
+  if (kpi.value === null) return "—";
   if (kpi.unit === "BRL") return formatBRLCompact(kpi.value, "full");
   if (kpi.unit === "%") return fmtPct(kpi.value);
   return fmtNum(kpi.value);
@@ -107,7 +111,7 @@ function KpiCard({ kpi, delta, bench, tier, onClick, blink }: KpiCardProps) {
       >
         {formatValue(kpi)}
       </div>
-      {(delta !== undefined || bench) && (
+      {kpi.value !== null && (delta !== undefined || bench) && (
         <div className="mt-0.5 space-y-0.5">
           {delta !== undefined && (
             <KpiDeltaBadge
@@ -117,7 +121,7 @@ function KpiCard({ kpi, delta, bench, tier, onClick, blink }: KpiCardProps) {
               inverted={INVERTED_DELTA_IDS.has(kpi.id)}
             />
           )}
-          {bench && <BenchmarkLine kpi={kpi} bench={bench} />}
+          {bench && kpi.value !== null && <BenchmarkLine kpi={kpi} bench={bench} />}
         </div>
       )}
     </div>
