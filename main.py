@@ -1,14 +1,41 @@
+import logging
+import logging.handlers
+import os
+
 import config.settings as settings
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from api.middleware import api_prefix_middleware, security_middleware
+from core.utils.response_envelope import build_response_envelope
 from api.routers import dashboard, efetividade, admin, health, ritmo_dia, regressao, agente
 from api.static import setup_static_routes
 from core.telemetry.agent_logger import _init_sentry, _start_agent_log_cleanup_worker, _agent_ndjson
 from dominios.efetividade.etl import efetividade_etl
 
+def _init_logging() -> None:
+    """Logging da stdlib em arquivo rotativo.
+
+    Sem isto, com SENTRY_DSN vazio e ENABLE_AGENT_TELEMETRY=false (defaults), não
+    sobra nenhum registro quando algo quebra em produção.
+    """
+    if logging.getLogger().handlers:
+        return
+    os.makedirs(settings.LOG_DIR, exist_ok=True)
+    handler = logging.handlers.RotatingFileHandler(
+        os.path.join(settings.LOG_DIR, "api.log"),
+        maxBytes=10 * 1024 * 1024,
+        backupCount=3,
+        encoding="utf-8",
+    )
+    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s"))
+    logging.basicConfig(level=logging.INFO, handlers=[handler])
+
+
+_init_logging()
 _init_sentry()
+logger = logging.getLogger("agecob.api")
 
 # Swagger/OpenAPI desligados em produção (REQUIRE_API_AUTH=true) para não expor o
 # schema da API na LAN. Em dev seguem disponíveis.
@@ -40,6 +67,29 @@ app.include_router(health.router)
 app.include_router(ritmo_dia.router)
 app.include_router(regressao.router)
 app.include_router(agente.router)
+
+@app.exception_handler(Exception)
+async def _unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Erro não tratado virava PlainTextResponse('Internal Server Error') do Starlette.
+
+    Como security_middleware re-levanta, a linha que grava X-Run-Id nunca rodava — o
+    erro da tela ficava sem correlação com o log. `detail` é mantido porque o
+    frontend lê body.detail (agecob-lens/src/services/api.ts:202); o envelope é
+    aditivo. A mensagem real fica só no servidor.
+    """
+    run_id = getattr(request.state, "run_id", None)
+    logger.exception("Erro não tratado em %s (run_id=%s)", request.url.path, run_id)
+    envelope = build_response_envelope(
+        [], sources=[],
+        errors=[{"message": "Erro interno ao processar a requisição."}],
+        run_id=run_id,
+    )
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Erro interno ao processar a requisição.", **envelope},
+        headers={"X-Run-Id": run_id} if run_id else None,
+    )
+
 
 setup_static_routes(app)
 
