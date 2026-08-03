@@ -2,6 +2,8 @@ import threading
 import time
 from typing import Any, Callable, Dict, Optional, Tuple
 
+from fastapi import HTTPException
+
 import config.settings as settings
 from core.telemetry.agent_logger import _sentry_metric
 
@@ -58,10 +60,19 @@ class CacheManager:
 
         if not is_leader:
             _sentry_metric("count", "cache.hit", 1, cache_key_prefix=prefix)
-            inflight["event"].wait()
+            # Espera limitada: sem timeout, uma query travada no líder prende todos os
+            # seguidores da mesma chave — que é o caso normal (todo mundo no mesmo
+            # dashboard), drenando o threadpool inteiro em vez de falhar 1 request.
+            if not inflight["event"].wait(timeout=settings.CACHE_LEADER_WAIT_TIMEOUT):
+                raise HTTPException(
+                    status_code=504,
+                    detail="Tempo limite aguardando a consulta em andamento.",
+                )
             if inflight["ok"]:
                 return inflight["value"]
-            raise inflight["error"]
+            # error só é preenchido no except Exception do líder; se ele morreu com
+            # BaseException, `raise None` viraria TypeError e mascararia a causa.
+            raise inflight["error"] or RuntimeError("Falha na consulta compartilhada.")
 
         _sentry_metric("count", "cache.miss", 1, cache_key_prefix=prefix)
         try:

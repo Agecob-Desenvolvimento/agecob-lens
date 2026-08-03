@@ -203,7 +203,11 @@ def _loop_anthropic(
             detail="SDK 'anthropic' não instalado no servidor (pip install anthropic).",
         ) from exc
 
-    client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
+    client = anthropic.Anthropic(
+        api_key=settings.ANTHROPIC_API_KEY,
+        timeout=settings.AGENT_HTTP_TIMEOUT_SECONDS,
+        max_retries=1,
+    )
     convo: List[Dict[str, Any]] = [
         {"role": m["role"], "content": m["content"]} for m in messages
     ]
@@ -267,7 +271,12 @@ def _loop_deepseek(
             detail="SDK 'openai' não instalado no servidor (pip install openai).",
         ) from exc
 
-    client = openai.OpenAI(api_key=settings.DEEPSEEK_API_KEY, base_url=settings.DEEPSEEK_BASE_URL)
+    client = openai.OpenAI(
+        api_key=settings.DEEPSEEK_API_KEY,
+        base_url=settings.DEEPSEEK_BASE_URL,
+        timeout=settings.AGENT_HTTP_TIMEOUT_SECONDS,
+        max_retries=1,
+    )
     tools = [
         {
             "type": "function",

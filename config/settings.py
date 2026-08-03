@@ -311,6 +311,14 @@ RISK_LEVEL_MID_MAX: float = 50.0   # <= 50 → medio; acima → alto
 # DATABASE POOL
 # ─────────────────────────────────────────────────────────────────
 CACHE_TTL_SECONDS: float = float(os.getenv("DASHBOARD_CACHE_TTL", "60"))
+# Timeout de execução da query (pyodbc conn.timeout). O timeout do connect() é só
+# de login — sem este, uma query travada prende a thread do threadpool para sempre.
+DB_QUERY_TIMEOUT_SECONDS: int = max(1, int(os.getenv("DB_QUERY_TIMEOUT", "60")))
+# Seguidor do single-flight do cache espera o líder no máximo isto. Margem sobre o
+# timeout de query para o líder falhar primeiro e propagar o erro real.
+CACHE_LEADER_WAIT_TIMEOUT: float = DB_QUERY_TIMEOUT_SECONDS + 5
+# Budget por chamada ao provedor de LLM. Default do SDK é 600s com retries.
+AGENT_HTTP_TIMEOUT_SECONDS: float = float(os.getenv("AGENT_HTTP_TIMEOUT", "60"))
 _DB_POOL_SIZE: int = max(1, int(os.getenv("DB_POOL_SIZE", "6")))
 _DB_POOL_ACQUIRE_TIMEOUT: float = float(os.getenv("DB_POOL_TIMEOUT", "10"))
 _DB_POOL_MAX_AGE_SECONDS: float = float(os.getenv("DB_POOL_MAX_AGE_SECONDS", "1800"))

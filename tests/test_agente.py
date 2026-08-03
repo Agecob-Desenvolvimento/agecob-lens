@@ -754,8 +754,11 @@ def test_run_agent_loop_anthropic_offline(monkeypatch):
             seen_requests.append(kwargs)
             return responses[len(seen_requests) - 1]
 
+    client_kwargs = {}
+
     class _FakeAnthropic:
-        def __init__(self, api_key):
+        def __init__(self, api_key, **kwargs):
+            client_kwargs.update(kwargs)
             self.messages = _FakeMessages()
 
     fake_sdk = types.ModuleType("anthropic")
@@ -773,6 +776,10 @@ def test_run_agent_loop_anthropic_offline(monkeypatch):
     assert result["text"] == "BANCO BETA é a de maior risco."
     assert result["confidence"] == "high"
     assert result["data_referencia"] == "2026-06-10"
+
+    # sem timeout explícito o SDK usa 600s com retries e prende uma thread do pool
+    assert client_kwargs["timeout"] == settings.AGENT_HTTP_TIMEOUT_SECONDS
+    assert client_kwargs["max_retries"] == 1
 
     # segunda chamada carrega o tool_result do dispatch real
     second = seen_requests[1]["messages"]
@@ -805,13 +812,16 @@ def test_run_agent_loop_deepseek_offline(monkeypatch):
     ]
     seen_requests = []
 
+    client_kwargs = {}
+
     class _FakeCompletions:
         def create(self, **kwargs):
             seen_requests.append(kwargs)
             return fake_responses[len(seen_requests) - 1]
 
     class _FakeOpenAIClient:
-        def __init__(self, api_key, base_url):
+        def __init__(self, api_key, base_url, **kwargs):
+            client_kwargs.update(kwargs)
             self.chat = _Block(completions=_FakeCompletions())
 
     fake_sdk = types.ModuleType("openai")
@@ -829,6 +839,10 @@ def test_run_agent_loop_deepseek_offline(monkeypatch):
 
     assert result["text"] == "Apenas BANCO BETA está em risco médio."
     assert result["confidence"] == "high"
+
+    # sem timeout explícito o SDK usa 600s com retries e prende uma thread do pool
+    assert client_kwargs["timeout"] == settings.AGENT_HTTP_TIMEOUT_SECONDS
+    assert client_kwargs["max_retries"] == 1
 
     # primeira chamada: system como primeira mensagem + tools no formato OpenAI
     first = seen_requests[0]
