@@ -1,5 +1,6 @@
 import hmac
 import re
+import threading
 from collections import deque
 from datetime import datetime, timezone
 from typing import Dict, Optional
@@ -12,6 +13,10 @@ import config.settings as settings
 
 
 _RATE_LIMIT_BUCKETS: Dict[str, deque] = {}
+_RATE_LIMIT_LOCK = threading.Lock()
+# O dict nunca era podado: uma entrada por (client_ip, api_key) distinto ficava
+# para sempre no processo. Acima deste teto, varre e remove as janelas vencidas.
+_RATE_LIMIT_MAX_BUCKETS = 5000
 
 
 def require_auth(request: Request) -> None:
@@ -44,21 +49,34 @@ def rate_limit_dashboard(request: Request, path: str) -> Optional[JSONResponse]:
     api_key = request.headers.get("x-api-key", "missing")
     bucket_key = f"{client_ip}:{api_key}"
     now = datetime.now(timezone.utc).timestamp()
-    bucket = _RATE_LIMIT_BUCKETS.setdefault(bucket_key, deque())
 
-    while bucket and (now - bucket[0]) > settings.RATE_LIMIT_WINDOW_SECONDS:
-        bucket.popleft()
+    # Lock: o read-modify-write da deque roda de várias threads do threadpool, e o
+    # check-then-act sem ele deixava passar mais requisições que o limite.
+    with _RATE_LIMIT_LOCK:
+        if len(_RATE_LIMIT_BUCKETS) > _RATE_LIMIT_MAX_BUCKETS:
+            _poda_buckets(now)
+        bucket = _RATE_LIMIT_BUCKETS.setdefault(bucket_key, deque())
 
-    if len(bucket) >= settings.RATE_LIMIT_REQUESTS:
-        retry_after = max(1, int(settings.RATE_LIMIT_WINDOW_SECONDS - (now - bucket[0])))
-        return JSONResponse(
-            status_code=429,
-            content={"detail": "Too Many Requests"},
-            headers={"Retry-After": str(retry_after)},
-        )
+        while bucket and (now - bucket[0]) > settings.RATE_LIMIT_WINDOW_SECONDS:
+            bucket.popleft()
 
-    bucket.append(now)
+        if len(bucket) >= settings.RATE_LIMIT_REQUESTS:
+            retry_after = max(1, int(settings.RATE_LIMIT_WINDOW_SECONDS - (now - bucket[0])))
+            return JSONResponse(
+                status_code=429,
+                content={"detail": "Too Many Requests"},
+                headers={"Retry-After": str(retry_after)},
+            )
+
+        bucket.append(now)
     return None
+
+
+def _poda_buckets(now: float) -> None:
+    """Remove janelas vencidas. Chamar com _RATE_LIMIT_LOCK tomado."""
+    limite = now - settings.RATE_LIMIT_WINDOW_SECONDS
+    for key in [k for k, d in _RATE_LIMIT_BUCKETS.items() if not d or d[-1] < limite]:
+        _RATE_LIMIT_BUCKETS.pop(key, None)
 
 
 def ensure_validated_execution(path: str) -> None:

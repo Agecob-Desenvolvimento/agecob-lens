@@ -311,6 +311,9 @@ RISK_LEVEL_MID_MAX: float = 50.0   # <= 50 → medio; acima → alto
 # DATABASE POOL
 # ─────────────────────────────────────────────────────────────────
 CACHE_TTL_SECONDS: float = float(os.getenv("DASHBOARD_CACHE_TTL", "60"))
+# Teto de entradas do cache. As chaves embutem string livre do cliente
+# (portfolio, agente, datas), então sem teto o store cresce indefinidamente.
+CACHE_MAX_ENTRIES: int = max(16, int(os.getenv("DASHBOARD_CACHE_MAX_ENTRIES", "500")))
 # Timeout de execução da query (pyodbc conn.timeout). O timeout do connect() é só
 # de login — sem este, uma query travada prende a thread do threadpool para sempre.
 DB_QUERY_TIMEOUT_SECONDS: int = max(1, int(os.getenv("DB_QUERY_TIMEOUT", "60")))

@@ -32,7 +32,23 @@ class CacheManager:
         if self._ttl <= 0:
             return
         with self._lock:
-            self._store[key] = (time.time() + self._ttl, value)
+            now = time.time()
+            if len(self._store) >= settings.CACHE_MAX_ENTRIES:
+                self._descarta(now)
+            self._store[key] = (now + self._ttl, value)
+
+    def _descarta(self, now: float) -> None:
+        """Libera espaço. Chamar com o lock tomado.
+
+        Entradas expiradas só saíam no get() da chave exata, então uma chave nunca
+        mais consultada ficava para sempre — e as chaves embutem string livre do
+        cliente (portfolio/agente/datas), o que fazia o store crescer sem limite.
+        """
+        for key in [k for k, (expira_em, _) in self._store.items() if expira_em < now]:
+            self._store.pop(key, None)
+        # Se todas ainda estão válidas, descarta a que expira primeiro.
+        while len(self._store) >= settings.CACHE_MAX_ENTRIES:
+            self._store.pop(min(self._store, key=lambda k: self._store[k][0]), None)
 
     def get_or_compute(self, key: str, fetcher: Callable[[], Any]) -> Any:
         """
