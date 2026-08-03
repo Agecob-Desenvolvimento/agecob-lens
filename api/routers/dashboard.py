@@ -7,7 +7,7 @@ from uuid import uuid4
 
 import numpy as np
 import sentry_sdk
-from fastapi import APIRouter, File, Query, Request, UploadFile
+from fastapi import APIRouter, File, HTTPException, Query, Request, UploadFile
 
 import config.settings as settings
 from core.cache.cache_manager import cache_manager
@@ -104,15 +104,30 @@ def _parse_period(
     date_from: Optional[str],
     date_to: Optional[str],
 ) -> tuple:
-    """Valida e retorna (date_from_str, date_to_exclusive_str) ou (None, None) para hoje."""
-    if not date_from or not date_to:
+    """Valida e retorna (date_from_str, date_to_exclusive_str) ou (None, None) para hoje.
+
+    Rejeita par incompleto/inválido em vez de cair em "hoje": o silêncio anterior
+    fazia ~20 endpoints devolverem os números do dia com HTTP 200 e
+    filters.date="today" enquanto o usuário achava estar vendo o período escolhido.
+    """
+    if not date_from and not date_to:
         return None, None
+    if not date_from or not date_to:
+        raise HTTPException(
+            status_code=400,
+            detail="Informe dateFrom e dateTo juntos, ou nenhum dos dois.",
+        )
     try:
         df = date.fromisoformat(date_from)
         dt = date.fromisoformat(date_to)
-        return df.isoformat(), (dt + timedelta(days=1)).isoformat()
-    except ValueError:
-        return None, None
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="dateFrom/dateTo inválidos: use o formato YYYY-MM-DD.",
+        ) from exc
+    if df > dt:
+        df, dt = dt, df  # mesma tolerância de api/routers/agente.py:76-77
+    return df.isoformat(), (dt + timedelta(days=1)).isoformat()
 
 
 def _get_dashboard_agentes_unificado(
