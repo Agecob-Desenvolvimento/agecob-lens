@@ -53,7 +53,10 @@ class PoolManager:
         )
 
         try:
-            return pyodbc.connect(conn_str, timeout=10)
+            # autocommit: workload é read-only. Sem isso o SQL Server abre transação
+            # implícita no primeiro SELECT e ela fica aberta enquanto a conexão
+            # espera no pool (até _DB_POOL_MAX_AGE_SECONDS), travando truncamento de log.
+            return pyodbc.connect(conn_str, timeout=10, autocommit=True)
         except pyodbc.Error as exc:
             _agent_ndjson(
                 "OBS",
