@@ -275,6 +275,11 @@ _EF_DETALHE_FILTERS = {
 
 EF_DETALHE_KINDS = tuple(_EF_DETALHE_FILTERS.keys())
 
+# Corte da lista de detalhe. Exportado porque a rota precisa saber o valor para
+# sinalizar truncamento no envelope — antes o corte era invisível e o operador
+# via 500 linhas onde o KPI dizia 3.100, sem saber qual dos dois estava errado.
+EF_DETALHE_TOP = 500
+
 
 def _build_ef_detalhe_sql(db: str, parcela_tipo: str, kind: str) -> str:
     """Detalhe (1 linha por boleto) de um KPI de efetividade (`kind`) — espelha o
@@ -348,7 +353,10 @@ def _build_ef_detalhe_sql(db: str, parcela_tipo: str, kind: str) -> str:
         """
 
     inner = f"{_one(_EF_DB_A)}\n    UNION ALL\n{_one(_EF_DB_C)}" if db == "todos" else _one(db)
-    return f"SELECT TOP 500 *\nFROM (\n{inner}\n) AS T\nORDER BY valor_primeira_parcela DESC"
+    return (
+        f"SELECT TOP {EF_DETALHE_TOP} *\nFROM (\n{inner}\n) AS T"
+        "\nORDER BY valor_primeira_parcela DESC"
+    )
 
 
 def _build_ef_curva_quebra_query(db: str) -> str:

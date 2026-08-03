@@ -5,8 +5,10 @@ from fastapi import APIRouter, HTTPException, Query
 
 import config.settings as settings
 from core.database.query_executor import run_query
+from core.utils.response_envelope import build_response_envelope
 from dominios.efetividade.queries import (
     EF_DETALHE_KINDS,
+    EF_DETALHE_TOP,
     _build_ef_curva_quebra_query,
     _build_ef_detalhe_sql,
     _build_ef_resumo_params,
@@ -149,21 +151,22 @@ def get_ef_boletos_detalhe(
     conn_db = settings.ALLOWED_DATABASES[0]
     rows = run_query(sql, conn_db, params=params, context=f"ef-boletos-detalhe/{kind}")
     sources = settings.ALLOWED_DATABASES if db_variant == "todos" else [db_variant]
-    return {
-        "meta": {
-            "generated_at": datetime.now(tz=timezone.utc).isoformat(),
-            "sources": sources,
-            "filters": {
-                "kind": kind,
-                "date_from": date_from,
-                "date_to": date_to,
-                "parcela_tipo": parcela_tipo,
-                "db": db_variant,
-            },
+    # A query corta em TOP EF_DETALHE_TOP. Sem sinalizar, quem concilia o KPI
+    # (calculado sem corte) contra esta lista vê 500 onde o card diz 3.100.
+    truncado = len(rows) >= EF_DETALHE_TOP
+    return build_response_envelope(
+        rows,
+        sources,
+        filters={
+            "kind": kind,
+            "date_from": date_from,
+            "date_to": date_to,
+            "parcela_tipo": parcela_tipo,
+            "db": db_variant,
         },
-        "data": rows,
-        "errors": [],
-    }
+        pagination={"limit": EF_DETALHE_TOP, "truncated": truncado},
+        quality={"truncated": truncado},
+    )
 
 
 @router.get("/curva-quebra")
@@ -185,12 +188,8 @@ def get_ef_curva_quebra(
     conn_db = settings.ALLOWED_DATABASES[0]
     rows = run_query(query, conn_db, params=params, context="ef-curva-quebra")
     sources = settings.ALLOWED_DATABASES if db_variant == "todos" else [db_variant]
-    return {
-        "meta": {
-            "generated_at": datetime.now(tz=timezone.utc).isoformat(),
-            "sources": sources,
-            "filters": {"db": db_variant, "date_from": date_from, "date_to": date_to},
-        },
-        "data": rows,
-        "errors": [],
-    }
+    return build_response_envelope(
+        rows,
+        sources,
+        filters={"db": db_variant, "date_from": date_from, "date_to": date_to},
+    )
