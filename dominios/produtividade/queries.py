@@ -43,10 +43,18 @@ def build_produtividade_query(
     """
     # Filtro por portfólio (DIV_AUX.CAMPO010) via REC_DIVIDAS. EXISTS preserva a
     # cardinalidade (não multiplica linhas) — apropriado p/ filtro, ADR-004.
+    # Chave composta (NR_RECEBIMENTO, ID_CARTEIRA): sem ID_CARTEIRA, um
+    # NR_RECEBIMENTO presente em mais de uma carteira casa pela carteira ERRADA e
+    # infla qtd_acordos/valor_acordos/valor_primeira_parcela do portfólio filtrado.
+    # Todo o resto do código resolve portfólio assim — ver o CROSS APPLY em
+    # dominios/graficos/queries.py e o índice IX_REC_DIVIDAS_NR_CARTEIRA, cujo
+    # propósito documentado é exatamente a chave composta (config/settings.py).
     cart_filter = (
         "AND EXISTS (SELECT 1 FROM REC_DIVIDAS RD2 (NOLOCK) "
         "JOIN DIV_AUX DA2 (NOLOCK) ON RD2.ID_DIVIDA = DA2.ID_DIVIDA "
-        "WHERE RD2.NR_RECEBIMENTO = RM.NR_RECEBIMENTO AND DA2.CAMPO010 = ?)"
+        "WHERE RD2.NR_RECEBIMENTO = RM.NR_RECEBIMENTO "
+        "AND RD2.ID_CARTEIRA = RM.ID_CARTEIRA "
+        f"AND DA2.{settings.PORTFOLIO_COLUMN} = ?)"
     ) if portfolio else ""
 
     if use_distinct_esforco:
@@ -341,9 +349,11 @@ SELECT
     U.origem,
     U.NOME,
     U.CHAVE,
-    E.qtd_acionamentos,
-    E.qtd_alo,
-    E.qtd_contatos,
+    -- ISNULL porque CTE_Esforco virou LEFT JOIN: o agente com acordo e sem
+    -- acionamento no dia agora aparece, com esforço zerado em vez de sumir.
+    ISNULL(E.qtd_acionamentos, 0) AS qtd_acionamentos,
+    ISNULL(E.qtd_alo, 0) AS qtd_alo,
+    ISNULL(E.qtd_contatos, 0) AS qtd_contatos,
     ISNULL(F.qtd_acordos, 0) AS qtd_acordos,
     ISNULL(B.qtd_boletos_emitidos, 0) AS qtd_boletos_emitidos,
     ISNULL(B.qtd_boletos_pagos, 0) AS qtd_boletos_pagos,
@@ -361,16 +371,21 @@ SELECT
     ISNULL(F.qtd_excecoes, 0) AS qtd_excecoes,
     CAST(ISNULL(F.valor_excecoes, 0) AS DECIMAL(18,2)) AS valor_excecoes,
     CAST(ISNULL(F.valor_primeira_parcela_excecoes, 0) AS DECIMAL(18,2)) AS valor_primeira_parcela_excecoes
-FROM CTE_Esforco E
-JOIN CTE_Usuarios U ON E.ID_USUARIO = U.ID_USUARIO AND E.origem = U.origem
-LEFT JOIN CTE_Financeiro_Final F ON E.ID_USUARIO = F.ID_USUARIO AND E.origem = F.origem
-LEFT JOIN CTE_Boletos B ON E.ID_USUARIO = B.ID_USUARIO AND E.origem = B.origem
+-- Âncora em CTE_Usuarios, espelhando o branch use_distinct_esforco=True. Antes
+-- ancorava em CTE_Esforco com qtd_acionamentos > 0, então o agente que gerou
+-- acordo mas não acionou no mesmo dia (ex.: renegociação automática) sumia de
+-- /comparacao-agentes, /detalhamento-agentes e /produtividade — o mesmo defeito
+-- que o outro branch já tinha corrigido.
+FROM CTE_Usuarios U
+LEFT JOIN CTE_Esforco E ON U.ID_USUARIO = E.ID_USUARIO AND U.origem = E.origem
+LEFT JOIN CTE_Financeiro_Final F ON U.ID_USUARIO = F.ID_USUARIO AND U.origem = F.origem
+LEFT JOIN CTE_Boletos B ON U.ID_USUARIO = B.ID_USUARIO AND U.origem = B.origem
 WHERE
-    E.qtd_acionamentos > 0
+    (E.ID_USUARIO IS NOT NULL OR F.ID_USUARIO IS NOT NULL)
     {settings.FILTRO_AGENTES_EXCLUIDOS_SQL}
     AND U.CHAVE NOT LIKE 'suporte%'
     AND U.CHAVE NOT LIKE 'SISTEMA%'
-ORDER BY E.qtd_acionamentos DESC;
+ORDER BY qtd_acionamentos DESC;
 """
 
 
