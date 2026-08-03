@@ -915,6 +915,8 @@ def get_excecoes_detalhe_agente(
         "dashboard/excecoes-detalhe-agente", request,
         query_args=(parsed_from, parsed_to_excl),
         params=agente_params,
+        filters_extra={"agente": agente, "date": f"{parsed_from}/{parsed_to_excl}" if parsed_from else "today"},
+        cache_key_suffix=f"|agente:{agente}|period:{parsed_from or 'hoje'}-{parsed_to_excl or 'hoje'}",
     )
 
 
@@ -934,6 +936,8 @@ def get_rejeitados_detalhe_agente(
         "dashboard/rejeitados-detalhe-agente", request,
         query_args=(parsed_from, parsed_to_excl),
         params=agente_params,
+        filters_extra={"agente": agente, "date": f"{parsed_from}/{parsed_to_excl}" if parsed_from else "today"},
+        cache_key_suffix=f"|agente:{agente}|period:{parsed_from or 'hoje'}-{parsed_to_excl or 'hoje'}",
     )
 
 
@@ -953,6 +957,8 @@ def get_quebrados_detalhe_agente(
         "dashboard/quebrados-detalhe-agente", request,
         query_args=(parsed_from, parsed_to_excl),
         params=agente_params,
+        filters_extra={"agente": agente, "date": f"{parsed_from}/{parsed_to_excl}" if parsed_from else "today"},
+        cache_key_suffix=f"|agente:{agente}|period:{parsed_from or 'hoje'}-{parsed_to_excl or 'hoje'}",
     )
 
 
