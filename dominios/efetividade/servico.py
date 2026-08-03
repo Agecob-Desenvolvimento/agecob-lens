@@ -18,15 +18,19 @@ def resolve_ef_db(db: Optional[str]) -> str:
 def get_efetividade(key: str, db: Optional[str] = None) -> Dict[str, Any]:
     db_variant = resolve_ef_db(db)
     store_key = f"{key}:{db_variant}"
-    with efetividade_etl._lock:
-        rows = efetividade_etl._store.get(store_key)
-        last_run = efetividade_etl._last_run
+    # Estado POR CHAVE: last_etl_run global mentia quando só esta série falhava —
+    # as linhas antigas continuavam servidas com carimbo de hora nova e errors: [].
+    rows, fetched_at, erro = efetividade_etl.get_key_state(store_key)
     if rows is None:
         raise HTTPException(status_code=503, detail="ETL ainda não concluído. Tente novamente em instantes.")
     sources = settings.ALLOWED_DATABASES if db_variant == "todos" else [db_variant]
     return build_response_envelope(
         rows,
         sources,
+        errors=[{"source": store_key, "message": f"Última atualização falhou: {erro}"}] if erro else None,
         filters={"period": "2026+", "database": db_variant},
-        quality={"last_etl_run": datetime.fromtimestamp(last_run, tz=timezone.utc).isoformat() if last_run else None},
+        quality={
+            "last_etl_run": datetime.fromtimestamp(fetched_at, tz=timezone.utc).isoformat() if fetched_at else None,
+            "stale": bool(erro),
+        },
     )
