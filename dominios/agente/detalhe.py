@@ -39,7 +39,10 @@ def _maiores_por_valor_total(rows: List[Dict[str, Any]], limit: int) -> List[Dic
             "valor_total": round(float(row.get("valor_total") or 0), 2),
             "total_parcelas": int(row.get("total_parcelas") or 0),
             "agente": str(row.get("agente") or "").strip(),
-            "nome_devedor": str(row.get("nome_devedor") or "").strip(),
+            # nome_devedor NÃO entra: este dict é serializado no prompt e sai da LAN
+            # para a API do provedor (Anthropic/DeepSeek). nr_recebimento + cpf_mask
+            # bastam para identificar o acordo; o nome é rejuntado no frontend pelos
+            # endpoints /dashboard/*-detalhe, que são autenticados e internos.
             "cpf_mask": str(row.get("cpf_mask") or "").strip(),
             "data_acordo": str(row.get("data_acordo") or ""),
             "data_vencimento": str(row.get("data_vencimento") or ""),

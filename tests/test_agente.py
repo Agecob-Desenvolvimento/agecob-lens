@@ -4,6 +4,7 @@ Testes do agente de carteiras (/agente/chat) — sem rede e sem banco.
 Cobrem as funções puras (risco, tools, parsing) e o loop de tool-calling
 completo com SDKs stubados (Anthropic e DeepSeek/OpenAI).
 """
+import json
 import sys
 import types
 
@@ -570,6 +571,20 @@ def test_maiores_por_valor_total_ordena_e_limita():
     assert [a["nr_recebimento"] for a in top2] == [3, 1]  # valor_total desc, não 1ª parcela
     assert top2[0]["valor_total"] == 5000.0
     assert top2[0]["cpf_mask"] == "789.***.***-22"
+
+
+def test_maiores_nao_expoe_nome_do_devedor():
+    """Este dict vira prompt e sai da LAN para o provedor de LLM — nome não vai junto."""
+    rows = [
+        {"NR_RECEBIMENTO": 1, "valor_primeira_parcela": 100, "valor_total": 1200, "total_parcelas": 12,
+         "agente": "ADRI", "nome_devedor": "FULANO DE TAL", "cpf_mask": "123.***.***-99",
+         "data_acordo": "2026-06-10", "data_vencimento": "2026-06-15"},
+    ]
+    saida = _maiores_por_valor_total(rows, limit=1)
+
+    assert "nome_devedor" not in saida[0]
+    assert "FULANO DE TAL" not in json.dumps(saida, ensure_ascii=False)
+    assert saida[0]["cpf_mask"] == "123.***.***-99"  # identificador mascarado permanece
 
 
 # ─── dispatch das tools novas (conversão / cruzamento / ranking / maiores) ───
