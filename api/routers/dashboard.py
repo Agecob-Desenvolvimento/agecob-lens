@@ -172,7 +172,11 @@ def _get_dashboard_agentes_unificado(
         )
         return rows
 
-    cache_key = f"produtividade|{context}|{validated_database}|{date_from or 'hoje'}|{date_to_exclusive or 'hoje'}"
+    # `context` fica FORA da chave de propósito: /comparacao-agentes,
+    # /detalhamento-agentes e /produtividade constroem SQL byte-a-byte idêntico e
+    # só diferem no rótulo de telemetria. Com o context na chave eram 3 entradas e
+    # 3 execuções da query mais pesada do app, e o single-flight não deduplicava.
+    cache_key = f"produtividade|unificado|{validated_database}|{date_from or 'hoje'}|{date_to_exclusive or 'hoje'}"
     t_cache_start = time.perf_counter()
     with sentry_sdk.start_span(op="cache.get_or_compute", description=cache_key):
         rows = cache_manager.get_or_compute(cache_key, _compute)
