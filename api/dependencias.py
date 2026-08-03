@@ -29,10 +29,11 @@ def require_auth(request: Request) -> None:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
 
-# /dashboard/ (dados) + /agente/ (LLM, custo por chamada) + /admin/ (DBA). Mesmo
-# bucket por (client_ip, api_key); /health/ e demais ficam fora p/ não atrapalhar
+# /dashboard/ (dados) + /agente/ (LLM, custo por chamada) + /admin/ (DBA) +
+# /regressao/ (fit de sklearn, CPU por chamada). Mesmo bucket por
+# (client_ip, api_key); /health/ e demais ficam fora p/ não atrapalhar
 # monitoramento e navegação normal do SPA.
-_RATE_LIMITED_PREFIXES = ("/dashboard/", "/agente/", "/admin/")
+_RATE_LIMITED_PREFIXES = ("/dashboard/", "/agente/", "/admin/", "/regressao/")
 
 
 def rate_limit_dashboard(request: Request, path: str) -> Optional[JSONResponse]:
