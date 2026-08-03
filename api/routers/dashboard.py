@@ -466,6 +466,7 @@ def get_dashboard_status_carga(
     targets = settings.ALLOWED_DATABASES if validated_db == "todos" else [validated_db]
     summaries: List[Dict[str, Any]] = []
     errors: List[Dict[str, str]] = []
+    cast_failures = 0
     assessoria_applied, assessoria_token = normalize_assessoria_filter(assessoria)
 
     for source in targets:
@@ -476,7 +477,12 @@ def get_dashboard_status_carga(
                 run_id=run_id,
                 context="dashboard/status-carga",
             )
-            rows, _ = validate_produtividade_rows(rows, run_id=run_id)
+            # As métricas de validação eram descartadas aqui. Um cast que falha vira
+            # 0.0 em silêncio (core/utils/validation.py), então o endpoint que existe
+            # só para confirmar a carga do dia respondia status "ok" com errors: []
+            # enquanto reportava valor_acordos: 0.0.
+            rows, vmetrics = validate_produtividade_rows(rows, run_id=run_id)
+            cast_failures += int(vmetrics.get("numeric_cast_failures", 0) or 0)
             if assessoria_token:
                 rows = [
                     row
@@ -517,11 +523,19 @@ def get_dashboard_status_carga(
         })
 
     quality = {
-        "status": "ok" if not errors else "partial",
+        # Cast que falhou também é carga degradada: os números somados viram zeros
+        # fabricados, e "ok" aqui é lido como confirmação de que o dia carregou.
+        "status": "ok" if not errors and not cast_failures else "partial",
         "targets": len(targets),
         "sources_ok": len(summaries),
         "sources_error": len(errors),
+        "numeric_cast_failures": cast_failures,
     }
+    if cast_failures:
+        errors = errors + [{
+            "source": validated_db,
+            "message": f"{cast_failures} valor(es) numérico(s) não puderam ser convertidos e viraram zero.",
+        }]
     return build_response_envelope(
         summaries,
         targets,
