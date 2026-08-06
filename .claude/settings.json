@@ -21,6 +21,27 @@
           }
         ]
       }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "git diff --name-only | grep -E 'agecob-lens/.*\\.(ts|tsx|css)$' && (COUNT=$(cat .claude/loop_count.txt 2>/dev/null || echo 0); COUNT=$((COUNT+1)); echo $COUNT > .claude/loop_count.txt; if [ $COUNT -gt 4 ]; then echo 'ERRO CRÍTICO: Limite de 4 tentativas de auto-correção atingido no Loop Engineering. Parada forçada para análise humana.' && rm -f .claude/loop_count.txt && exit 1; fi; cd agecob-lens && npm run lint && npm run build) || echo 'Fix simples ou fora do front detectado. Pulando build pesado.'"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "rm -f .claude/loop_count.txt; git diff --name-only | grep -E 'agecob-lens/.*\\.(ts|tsx|css)$' && (if [ -f agecob-lens/dist/index.html ]; then echo 'Build verificado com sucesso.'; else echo 'ERRO: O build do frontend não foi gerado ou está quebrado. Você DEVE corrigir os erros antes de finalizar.' && exit 2; fi) || echo 'Concluído sem necessidade de checagem de dist.'"
+          }
+        ]
+      }
     ]
   }
 }

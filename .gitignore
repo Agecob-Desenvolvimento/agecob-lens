@@ -39,7 +39,7 @@ relatorio-carteiras-*.csv.txt
 
 # Claude Code local state
 .claude/settings.local.json
-
+.claude/settings.json
 # ML — raw training data (não versionar; baixar do repo KNN-agecob quando precisar retreinar)
 deploy/d.csv
 
