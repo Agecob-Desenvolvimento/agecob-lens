@@ -106,7 +106,7 @@ export function generateDailyReadout(
       severity: "critical",
       headline: fmtPct(efetividadeCaixa),
       label: "Efetividade de caixa",
-      text: "Efetividade de caixa baixa — pouco da 1ª parcela combinada está entrando de fato.",
+      text: "Efetividade de caixa baixa: pouco da 1ª parcela combinada está entrando de fato.",
       rank: SEVERITY_RANK.critical,
     });
   }
@@ -128,7 +128,7 @@ export function generateDailyReadout(
       category: "first_installment",
       severity: "positive",
       headline: fmtPct(ppRatio),
-      text: "1ª parcela alta — bom sinal de entrada de caixa.",
+      text: "1ª parcela alta: bom sinal de entrada de caixa.",
       rank: SEVERITY_RANK.positive,
     });
   } else if (ppRatio > 0 && ppRatio < 5) {
@@ -196,7 +196,7 @@ export function generateDailyReadout(
           ruleId: "action_bu_focus",
           severity: "action",
           headline: fmtPct(delta),
-          text: `Realocar capacidade para ${winner.label} — conversão maior.`,
+          text: `Realocar capacidade para ${winner.label}: conversão maior.`,
           anchor: "diagnostico-bu",
           rank: 3,
         });

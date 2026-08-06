@@ -47,7 +47,7 @@ function mapRows(rows: ExcecaoSemPortfolioRow[], today: Date): AgenteAcordoItem[
       valor: Number(r.valor_total) || 0,
       cpf: r.cpf_mask,
       diasAtraso: dias,
-      motivo: dias >= 30 ? `Atraso de ${dias} dias — alto risco.` : `Atraso de ${dias} dias desde o vencimento.`,
+      motivo: dias >= 30 ? `Atraso de ${dias} dias, alto risco.` : `Atraso de ${dias} dias desde o vencimento.`,
     };
   });
 }

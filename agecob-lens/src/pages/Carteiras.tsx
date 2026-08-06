@@ -133,7 +133,7 @@ export default function Carteiras() {
           columns: ["Métrica", "Valor"],
           rows: [
             ["Total Meta Caixa do mês (R$)", totalMetaCaixa],
-            [`Meta do dia (R$) — Meta Caixa ÷ ${DIAS_UTEIS_MES}`, metaDia],
+            [`Meta do dia (R$): Meta Caixa ÷ ${DIAS_UTEIS_MES}`, metaDia],
             ["1ª Parcela gerada hoje (R$)", geracaoHojeTotal ?? ""],
             [
               "Atingimento do dia (%)",
@@ -164,7 +164,7 @@ export default function Carteiras() {
 
   const reportMeta = useMemo(
     () => ({
-      "Relatório": "Carteiras — Meta vs Real",
+      "Relatório": "Carteiras · Meta vs Real",
       "Mês": mesEfetivo ? formatMesLabel(mesEfetivo) : "—",
       "Banco": selectedDatabase,
       "Carteira": selectedPortfolio ?? "Todas",
@@ -180,7 +180,7 @@ export default function Carteiras() {
         <AppSidebar />
 
         <div className="flex-1 flex flex-col min-w-0">
-          <ExecutiveHeader title="Carteiras — Meta vs Real" />
+          <ExecutiveHeader title="Carteiras · Meta vs Real" />
 
           <div className="flex-1 overflow-y-auto bg-background">
             <div className="mx-auto max-w-[1600px] w-full p-6 space-y-7">
@@ -196,7 +196,7 @@ export default function Carteiras() {
                 <BlockHeader
                   number="1"
                   title="Atingimento de Metas por Carteira"
-                  description="Meta trimestral (PDF) vs valor gerado no mês — quais carteiras estão atrás do alvo."
+                  description="Meta trimestral (PDF) vs valor gerado no mês: quais carteiras estão atrás do alvo."
                 />
 
                 <div className="mb-3">

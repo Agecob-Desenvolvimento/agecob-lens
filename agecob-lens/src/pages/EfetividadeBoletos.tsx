@@ -118,7 +118,7 @@ export default function EfetividadeBoletos() {
               <Suspense fallback={CHART_FALLBACK}>
                 <EfetividadeDiariaChart
                   data={vm.diaria}
-                  title={`Efetividade Diária por Data de Vencimento — ${vm.diaria.length > 0 ? vm.diaria[0].dia : ""} — ${vm.diaria.length > 0 ? vm.diaria[vm.diaria.length - 1].dia : ""}`}
+                  title={`Efetividade Diária por Data de Vencimento (${vm.diaria.length > 0 ? vm.diaria[0].dia : ""} – ${vm.diaria.length > 0 ? vm.diaria[vm.diaria.length - 1].dia : ""})`}
                 />
               </Suspense>
 

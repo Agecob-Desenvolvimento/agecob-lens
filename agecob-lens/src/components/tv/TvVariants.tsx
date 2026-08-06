@@ -4,6 +4,7 @@
 import type { ReactNode } from "react";
 import { NUM, TV, TV_BG, TV_SANS, tvBRLc, tvBRLk, tvNum, type TvBu, useTvData } from "./tvShared";
 import { DeltaChip, Eyebrow, KpiTile, LivePulse, MetaProgressBar, RitmoWorm, Ticker, TvBrand, TvCard, TvClock } from "./TvAtoms";
+import { useAnimatedFormattedValue } from "@/hooks/useAnimatedFormattedValue";
 
 function TvScreen({ children }: { children: ReactNode }) {
   return (
@@ -40,9 +41,10 @@ export function TopBar({ sub }: { sub: string }) {
 
 /** Par número + rótulo dos cards de BU. Rótulo fica secundário — não compete com o dado. */
 function BuStat({ value, label }: { value: string; label: string }) {
+  const animatedValue = useAnimatedFormattedValue(value);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-end" }}>
-      <span style={{ ...NUM, fontSize: 34, fontWeight: 800, color: TV.t1, lineHeight: 0.9 }}>{value}</span>
+      <span style={{ ...NUM, fontSize: 34, fontWeight: 800, color: TV.t1, lineHeight: 0.9 }}>{animatedValue}</span>
       <span style={{ fontSize: 15, fontWeight: 600, letterSpacing: "0.14em", color: TV.t3, whiteSpace: "nowrap" }}>{label}</span>
     </div>
   );
@@ -50,11 +52,12 @@ function BuStat({ value, label }: { value: string; label: string }) {
 
 /** Bloco de unidade de negócio no painel lateral do Placar. `share` = fatia da 1ª parcela do dia. */
 function BuCard({ b, share }: { b: TvBu; share: number | null }) {
+  const animatedValor = useAnimatedFormattedValue(tvBRLk(b.valor));
   return (
     <div style={{ flex: 1, minHeight: 0, background: TV.cardHi, borderRadius: 16, padding: "20px 32px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 28 }}>
       <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
         <span style={{ fontSize: 20, fontWeight: 700, letterSpacing: "0.18em", color: TV.t2 }}>{b.bu}</span>
-        <span style={{ ...NUM, fontSize: 58, fontWeight: 800, color: TV.t1, lineHeight: 0.9, letterSpacing: "-0.02em", whiteSpace: "nowrap" }}>{tvBRLk(b.valor)}</span>
+        <span style={{ ...NUM, fontSize: 58, fontWeight: 800, color: TV.t1, lineHeight: 0.9, letterSpacing: "-0.02em", whiteSpace: "nowrap" }}>{animatedValor}</span>
       </div>
       <div style={{ display: "flex", gap: 36, flexShrink: 0 }}>
         <BuStat value={tvNum(b.acordos)} label="Acordos" />
@@ -78,6 +81,10 @@ export function VariantScoreboard() {
   const pctCor = v.pctMetaDia != null && v.pctMetaDia >= 1 ? TV.good : diff == null ? TV.t1 : diff >= 0.03 ? TV.good : diff <= -0.03 ? TV.warn : TV.t1;
   // mesmo limiar da barra de meta — um só conceito de "atrás do ritmo" na tela
   const atrasado = diff != null && diff <= -0.03 && !(v.pctMetaDia != null && v.pctMetaDia >= 1);
+
+  const valorAcordosDiaTxt = useAnimatedFormattedValue(tvBRLc(v.valorAcordosDia));
+  const realizadoDiaTxt = useAnimatedFormattedValue(tvBRLc(v.realizadoDia));
+  const pctMetaDiaTxt = useAnimatedFormattedValue(v.pctMetaDia == null ? "—" : Math.round(v.pctMetaDia * 100) + "%");
 
   return (
     <TvScreen>
@@ -112,11 +119,11 @@ export function VariantScoreboard() {
               {/* `nowrap` obrigatório: as trilhas são `auto` e, sem ele, um valor
                   longo ("R$ 1,61 mi") quebra em duas linhas e estoura a faixa por
                   cima da barra de meta. Corpos somam ~1050px em 1100 disponíveis. */}
-              <div style={{ ...NUM, fontWeight: 800, fontSize: 76, lineHeight: 0.92, color: TV.t1, letterSpacing: "-0.03em", whiteSpace: "nowrap" }}>{tvBRLc(v.valorAcordosDia)}</div>
-              <div style={{ ...NUM, fontWeight: 800, fontSize: 76, lineHeight: 0.92, color: TV.gold, letterSpacing: "-0.03em", whiteSpace: "nowrap" }}>{tvBRLc(v.realizadoDia)}</div>
+              <div style={{ ...NUM, fontWeight: 800, fontSize: 76, lineHeight: 0.92, color: TV.t1, letterSpacing: "-0.03em", whiteSpace: "nowrap" }}>{valorAcordosDiaTxt}</div>
+              <div style={{ ...NUM, fontWeight: 800, fontSize: 76, lineHeight: 0.92, color: TV.gold, letterSpacing: "-0.03em", whiteSpace: "nowrap" }}>{realizadoDiaTxt}</div>
               {/* maior glifo da tela — é a métrica que a operação olha primeiro */}
               <div style={{ ...NUM, fontWeight: 800, fontSize: 110, lineHeight: 0.92, color: pctCor, letterSpacing: "-0.03em", whiteSpace: "nowrap" }}>
-                {v.pctMetaDia == null ? "—" : Math.round(v.pctMetaDia * 100) + "%"}
+                {pctMetaDiaTxt}
               </div>
 
               <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>

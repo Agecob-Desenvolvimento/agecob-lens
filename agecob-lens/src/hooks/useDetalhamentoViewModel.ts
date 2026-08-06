@@ -322,11 +322,11 @@ function buildInsight(
 
   if (valorGood && !cpcBad && !convBad && !excHigh) {
     variant = "positive";
-    title = `${agentName} — desempenho acima da equipe`;
+    title = `${agentName} · desempenho acima da equipe`;
     description = `Top ${100 - valorPct}% em valor acordos. CPC, conversão e exceções dentro do esperado. Manter abordagem.`;
   } else if (valorBad || (cpcBad && convBad)) {
     variant = "critical";
-    title = `${agentName} — requer atenção`;
+    title = `${agentName} · requer atenção`;
     const issues: string[] = [];
     if (valorBad) issues.push(`valor acordos no bottom ${100 - valorPct}%`);
     if (cpcBad) issues.push(`CPC no bottom ${100 - cpcPct}%`);
@@ -335,7 +335,7 @@ function buildInsight(
     description = `${issues.join(" · ")}. Recomendação: revisar script de abordagem e acompanhar de perto.`;
   } else {
     variant = "neutral";
-    title = `${agentName} — desempenho mediano`;
+    title = `${agentName} · desempenho mediano`;
     const strengths: string[] = [];
     const weaknesses: string[] = [];
     if (valorPct >= 60) strengths.push("valor acordos acima da mediana");

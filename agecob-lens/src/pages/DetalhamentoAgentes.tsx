@@ -76,7 +76,7 @@ export default function DetalhamentoAgentes() {
                 <BlockHeader
                   number="1"
                   title="Diagnóstico Individual"
-                  description="Entender o porquê do desempenho — diagnóstico multidimensional."
+                  description="Entender o porquê do desempenho: diagnóstico multidimensional."
                 />
 
                 <div className="mb-4">
@@ -104,7 +104,7 @@ export default function DetalhamentoAgentes() {
                 <BlockHeader
                   number="2"
                   title="Contexto Comparativo"
-                  description="Onde cada agente está no time — padrões visuais e validação estatística."
+                  description="Onde cada agente está no time: padrões visuais e validação estatística."
                 />
                 <Suspense fallback={CHART_FALLBACK}>
                   <PerformanceHeatmap
@@ -119,7 +119,7 @@ export default function DetalhamentoAgentes() {
                 <BlockHeader
                   number="3"
                   title="Ação"
-                  description="Quem atender primeiro — fila de prioridade e concentração de resultado."
+                  description="Quem atender primeiro: fila de prioridade e concentração de resultado."
                 />
                 <Suspense fallback={CHART_FALLBACK}>
                   <RankingPrioridade

@@ -5,6 +5,7 @@
 import { useEffect, useId, useState, type CSSProperties, type ReactNode } from "react";
 import { NUM, TV, TONE, TV_MONO, tvBRLk, tvNum, type TvKpi, useTvData } from "./tvShared";
 import { isDemoMode } from "@/services/demoMask";
+import { useAnimatedFormattedValue } from "@/hooks/useAnimatedFormattedValue";
 
 export function Eyebrow({
   children,
@@ -403,6 +404,7 @@ function KpiDelta({ delta }: { delta: NonNullable<TvKpi["delta"]> }) {
 
 export function KpiTile({ kpi }: { kpi: TvKpi }) {
   const c = TONE[kpi.tone] ?? TV.t1;
+  const animatedValue = useAnimatedFormattedValue(kpi.value);
   return (
     // line-height explícito nos rótulos: com `justifyContent: center` o conteúdo
     // que não cabe come o padding em vez de transbordar, e a tile fica sem respiro.
@@ -411,7 +413,7 @@ export function KpiTile({ kpi }: { kpi: TvKpi }) {
         {kpi.label}
       </Eyebrow>
       <div style={{ display: "flex", alignItems: "baseline", gap: 12, minWidth: 0 }}>
-        <div style={{ ...NUM, fontWeight: 800, fontSize: 64, color: TV.t1, lineHeight: 0.95, letterSpacing: "-0.02em" }}>{kpi.value}</div>
+        <div style={{ ...NUM, fontWeight: 800, fontSize: 64, color: TV.t1, lineHeight: 0.95, letterSpacing: "-0.02em" }}>{animatedValue}</div>
         {kpi.delta && <KpiDelta delta={kpi.delta} />}
       </div>
       <div style={{ fontSize: 19, color: c, fontWeight: 600, whiteSpace: "nowrap", lineHeight: 1.2 }}>

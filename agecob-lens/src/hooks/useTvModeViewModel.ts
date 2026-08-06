@@ -29,9 +29,9 @@ import {
 } from "@/components/tv/tvShared";
 
 const TV_PLACEHOLDERS = [
-  "Meta da 1ª parcela = meta de CAIXA do mês (PDF trimestral, soma office de /dashboard/metas). Mensal e da carteira inteira, sem split por BU — atingimento mais fiel com filtro “Todas”.",
+  "Meta da 1ª parcela = meta de CAIXA do mês (PDF trimestral, soma office de /dashboard/metas). Mensal e da carteira inteira, sem split por BU. Atingimento mais fiel com filtro “Todas”.",
   "Projeção de 1ª parcela = run-rate do período extrapolado por dias úteis ao fim do mês (não é um endpoint de projeção).",
-  "Meta de 1ª parcela por unidade de negócio — TV_BU.metaValor / % (metas do PDF não têm dimensão BU).",
+  "Meta de 1ª parcela por unidade de negócio: TV_BU.metaValor / % (metas do PDF não têm dimensão BU).",
   "“Ontem mesma hora” = 1ª parcela do período anterior (aproximação, não a mesma hora literal).",
 ];
 

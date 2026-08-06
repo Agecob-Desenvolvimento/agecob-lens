@@ -100,7 +100,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
           : sev === "warning"
             ? "Resumo do Dia em alerta"
             : "Resumo do Dia atualizado";
-      const body = `${readout.insight1?.headline ?? ""} — ${readout.insight1?.text ?? ""}`;
+      const body = `${readout.insight1?.headline ?? ""}: ${readout.insight1?.text ?? ""}`;
       notify(title, body, "resumo-dia");
     }
     lastSeverityRank.current = rank;
