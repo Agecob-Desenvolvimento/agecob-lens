@@ -191,11 +191,7 @@ def build_excecoes_sem_portfolio_query(db: str, date_from: str = None, date_to_e
                       AND R2.ID_CARTEIRA = R.ID_CARTEIRA
                 ), R.VALOR) AS valor_total,
                 U.NOME AS agente,
-                CASE
-                    WHEN LEN(D.CPF_CNPJ) >= 5
-                    THEN LEFT(D.CPF_CNPJ, 3) + '.***.***-' + RIGHT(D.CPF_CNPJ, 2)
-                    ELSE D.CPF_CNPJ
-                END AS cpf_mask,
+                D.CPF_CNPJ AS cpf_mask,
                 D.NOME_RAZAO AS nome_devedor
             FROM {database}.dbo.REC_MASTER R (NOLOCK)
             JOIN {database}.dbo.USU_MASTER U (NOLOCK) ON R.ID_USUARIO = U.ID_USUARIO
@@ -377,11 +373,7 @@ def _build_detalhe_por_portfolio(db: str, status_sql: str, date_from: str = None
                 ), R.VALOR) AS valor_total,
                 U.NOME AS agente,
                 U.MATRICULA AS matricula,
-                CASE
-                    WHEN LEN(D.CPF_CNPJ) >= 5
-                    THEN LEFT(D.CPF_CNPJ, 3) + '.***.***-' + RIGHT(D.CPF_CNPJ, 2)
-                    ELSE D.CPF_CNPJ
-                END AS cpf_mask,
+                D.CPF_CNPJ AS cpf_mask,
                 D.NOME_RAZAO AS nome_devedor,
                 CONVERT(varchar(10), R.DT_EMISSAO, 120) AS data_acordo,
                 CONVERT(varchar(10), R.DT_VENCIMENTO, 120) AS data_vencimento,
@@ -432,11 +424,7 @@ def _build_detalhe_por_agente(db: str, status_sql: str, date_from: str = None, d
                 ), R.VALOR) AS valor_total,
                 U.NOME AS agente,
                 U.MATRICULA AS matricula,
-                CASE
-                    WHEN LEN(D.CPF_CNPJ) >= 5
-                    THEN LEFT(D.CPF_CNPJ, 3) + '.***.***-' + RIGHT(D.CPF_CNPJ, 2)
-                    ELSE D.CPF_CNPJ
-                END AS cpf_mask,
+                D.CPF_CNPJ AS cpf_mask,
                 D.NOME_RAZAO AS nome_devedor,
                 CONVERT(varchar(10), R.DT_EMISSAO, 120) AS data_acordo,
                 CONVERT(varchar(10), R.DT_VENCIMENTO, 120) AS data_vencimento,
@@ -482,11 +470,7 @@ def _build_detalhe_global(db: str, status_sql: str, date_from: str = None, date_
                 ), R.VALOR) AS valor_total,
                 U.NOME AS agente,
                 U.MATRICULA AS matricula,
-                CASE
-                    WHEN LEN(D.CPF_CNPJ) >= 5
-                    THEN LEFT(D.CPF_CNPJ, 3) + '.***.***-' + RIGHT(D.CPF_CNPJ, 2)
-                    ELSE D.CPF_CNPJ
-                END AS cpf_mask,
+                D.CPF_CNPJ AS cpf_mask,
                 D.NOME_RAZAO AS nome_devedor,
                 DA.{settings.PORTFOLIO_COLUMN} AS portfolio_name,
                 CONVERT(varchar(10), R.DT_EMISSAO, 120) AS data_acordo,

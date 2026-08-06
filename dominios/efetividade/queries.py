@@ -303,11 +303,7 @@ def _build_ef_detalhe_sql(db: str, parcela_tipo: str, kind: str) -> str:
                 ), R.VALOR) AS valor_total,
                 U.NOME AS agente,
                 U.MATRICULA AS matricula,
-                CASE
-                    WHEN LEN(D.CPF_CNPJ) >= 5
-                    THEN LEFT(D.CPF_CNPJ, 3) + '.***.***-' + RIGHT(D.CPF_CNPJ, 2)
-                    ELSE D.CPF_CNPJ
-                END AS cpf_mask,
+                D.CPF_CNPJ AS cpf_mask,
                 D.NOME_RAZAO AS nome_devedor,
                 CONVERT(varchar(10), R.DT_EMISSAO, 120) AS data_acordo,
                 CONVERT(varchar(10), R.DT_VENCIMENTO, 120) AS data_vencimento,

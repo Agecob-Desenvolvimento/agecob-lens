@@ -342,7 +342,7 @@ Columns returned per agreement row:
 | `valor_total` | SUM of REC_MASTER.VALOR for same NR/ID_CARTEIRA | Total agreement value |
 | `agente` | USU_MASTER.NOME | Agent name |
 | `matricula` | USU_MASTER.MATRICULA | Agent registration code |
-| `cpf_mask` | DEV_MASTER.CPF_CNPJ (masked: first 3 + last 2 digits) | Debtor CPF |
+| `cpf_mask` | DEV_MASTER.CPF_CNPJ (full, unmasked — name kept for compat) | Debtor CPF |
 | `nome_devedor` | DEV_MASTER.NOME_RAZAO | Debtor name |
 | `data_acordo` | REC_MASTER.DT_EMISSAO | Agreement date |
 | `data_vencimento` | REC_MASTER.DT_VENCIMENTO | Due date |
