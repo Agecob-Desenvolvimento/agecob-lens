@@ -128,11 +128,11 @@ function renderStep(s: FunilStep) {
       className="flex items-center gap-2.5"
       data-testid={`funil-step-${s.label}`}
     >
-      <span className="w-20 flex-shrink-0 text-right text-[11px] font-semibold text-slate-600">
+      <span className="w-20 flex-shrink-0 text-right text-[11px] font-semibold text-slate-600 dark:text-slate-300">
         {s.label}
       </span>
       <div className="relative flex-1">
-        <div className="h-7 overflow-hidden rounded bg-slate-100">
+        <div className="h-7 overflow-hidden rounded bg-slate-100 dark:bg-white/10">
           <div
             role="presentation"
             className={`flex h-full items-center justify-end rounded pr-2 transition-[width] duration-500 ${barClass}`}
@@ -147,7 +147,7 @@ function renderStep(s: FunilStep) {
         </div>
         {actualW <= 15 && (
           <span
-            className="absolute top-1.5 text-[11px] font-semibold tabular-nums text-slate-700"
+            className="absolute top-1.5 text-[11px] font-semibold tabular-nums text-slate-700 dark:text-slate-200"
             style={{ left: `${actualW + 1}%` }}
           >
             {s.display}
@@ -156,19 +156,19 @@ function renderStep(s: FunilStep) {
       </div>
       {s.pct != null && s.pctLabel ? (
         <div className="w-[120px] flex-shrink-0 text-right">
-          <span className="text-[11px] font-semibold tabular-nums text-slate-500">
+          <span className="text-[11px] font-semibold tabular-nums text-slate-500 dark:text-slate-400">
             {s.pctLabel}: {s.pct.toFixed(1)}%
           </span>
           {s.lossPct != null && s.lossPct > 0 && (
         <span
-              className="ml-0.5 text-[11px] font-bold tabular-nums text-red-600"
+              className="ml-0.5 text-[11px] font-bold tabular-nums text-red-600 dark:text-red-400"
               title={`${s.lossPct.toFixed(0)}% perdidos de ${s.pctLabel}`}
         >
               −{s.lossPct.toFixed(0)}%
         </span>
           )}
           {s.lossPct != null && s.lossPct > 0 && (
-            <div className="mt-0.5 h-1 w-full overflow-hidden rounded-full bg-slate-100">
+            <div className="mt-0.5 h-1 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-white/10">
               <div
                 className="h-full rounded-full bg-red-400"
                 style={{ width: `${Math.min(s.lossPct, 100)}%` }}
@@ -206,14 +206,14 @@ export function FunilConversao({ data }: FunilConversaoProps) {
       <CardContent className="space-y-2.5">
         {funnelSteps.map((s) => renderStep(s))}
 
-        <div className="!mt-4 border-t border-dashed border-slate-200 pt-3">
-          <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+        <div className="!mt-4 border-t border-dashed border-slate-200 dark:border-border pt-3">
+          <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
             Comparador · Efetividade de Caixa (eixo próprio)
           </p>
           {renderStep(comparator)}
         </div>
 
-        <div className="mt-3 flex gap-4 text-[10px] font-semibold text-red-700">
+        <div className="mt-3 flex gap-4 text-[10px] font-semibold text-red-700 dark:text-red-300">
           <span>🔻 Perda Contato→CPC: {lossAloRpc.toFixed(0)}%</span>
           <span>🔻 Perda CPC→Acordos: {lossRpcAcord.toFixed(0)}%</span>
         </div>

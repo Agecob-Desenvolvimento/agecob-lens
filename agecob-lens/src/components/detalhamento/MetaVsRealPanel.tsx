@@ -71,9 +71,9 @@ function achievementColor(pct: number): string {
 }
 
 function achievementTextColor(pct: number): string {
-  if (pct >= ZONA_BOM) return "text-emerald-700";
-  if (pct >= ZONA_ATENCAO) return "text-amber-700";
-  return "text-rose-700";
+  if (pct >= ZONA_BOM) return "text-emerald-700 dark:text-emerald-300";
+  if (pct >= ZONA_ATENCAO) return "text-amber-700 dark:text-amber-300";
+  return "text-rose-700 dark:text-rose-300";
 }
 
 /* ------------------------------------------------------------------ *
@@ -131,7 +131,7 @@ export function MetaVsRealPanel({
             <p className="text-xs text-muted-foreground mt-0.5">
               Meta Caixa do PDF trimestral
               {periodoMetas ? ` · ${periodoMetas}` : ""}
-              {isMedia ? " — Total da carteira" : ""}
+              {isMedia ? " (Total da carteira)" : ""}
               {hasRealData ? " · Real = caixa recebido (VR_PAGO) do mês" : ""}
             </p>
           </div>
@@ -157,9 +157,9 @@ export function MetaVsRealPanel({
 
       <CardContent className="space-y-2">
         {metaDia != null && (
-          <div className="flex items-center justify-between gap-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+          <div className="flex items-center justify-between gap-3 rounded-md border border-slate-200 dark:border-border bg-slate-50 dark:bg-white/5 px-3 py-2">
             <div className="flex flex-col">
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                 Meta do dia · 1ª parcela gerada hoje
               </span>
               <span className="text-[10px] text-slate-400">
@@ -175,7 +175,7 @@ export function MetaVsRealPanel({
               >
                 {pctMetaDia != null ? `${Math.round(pctMetaDia)}%` : "—"}
               </span>
-              <span className="text-[11px] text-slate-500">
+              <span className="text-[11px] text-slate-500 dark:text-slate-400">
                 {formatBRLCompact(geracaoHojeTotal ?? null)} / meta/dia {formatBRLCompact(metaDia)}
               </span>
             </div>
@@ -183,18 +183,18 @@ export function MetaVsRealPanel({
         )}
 
         {desatualizado && (
-          <div className="flex items-start gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+          <div className="flex items-start gap-2 rounded-md border border-rose-200 dark:border-rose-800/70 bg-rose-50 dark:bg-rose-950/40 px-3 py-2 text-sm text-rose-700 dark:text-rose-300">
             <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" aria-hidden />
             <span>
               {periodoMetas
-                ? <>Metas carregadas são do trimestre <strong>{periodoMetas}</strong>. O trimestre corrente é <strong>{trimestreAtual}</strong> — envie o PDF mais recente para atualizar.</>
+                ? <>Metas carregadas são do trimestre <strong>{periodoMetas}</strong>. O trimestre corrente é <strong>{trimestreAtual}</strong>. Envie o PDF mais recente para atualizar.</>
                 : <>Nenhuma tabela de metas carregada para <strong>{trimestreAtual}</strong>. Envie o PDF do trimestre para habilitar a comparação Meta vs Real.</>}
             </span>
           </div>
         )}
 
         {isMedia && (
-          <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
+          <div className="flex items-start gap-2 rounded-md border border-amber-200 dark:border-amber-800/70 bg-amber-50 dark:bg-amber-950/40 px-3 py-2 text-sm text-amber-700 dark:text-amber-300">
             <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" aria-hidden />
             <span>
               <strong>Todos os Portfólios</strong>: a linha <strong>Total da carteira</strong>{" "}
@@ -208,13 +208,13 @@ export function MetaVsRealPanel({
           <div className="h-48 animate-pulse bg-muted rounded-lg" />
         ) : semMetas ? (
           <div className="flex h-32 flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
-            <FileText className="h-6 w-6 text-slate-300" aria-hidden />
-            Nenhuma meta para exibir. Use <strong className="text-sky-700">Atualizar PDF</strong> acima.
+            <FileText className="h-6 w-6 text-slate-300 dark:text-slate-600" aria-hidden />
+            Nenhuma meta para exibir. Use <strong className="text-sky-700 dark:text-sky-300">Atualizar PDF</strong> acima.
           </div>
         ) : (
           <div className="space-y-1.5">
             {mediaRow && (
-              <div className="mb-2 pb-2 border-b border-slate-200">
+              <div className="mb-2 pb-2 border-b border-slate-200 dark:border-border">
                 <MetaBarRow item={mediaRow} real={mediaReal} />
               </div>
             )}
@@ -225,7 +225,7 @@ export function MetaVsRealPanel({
         )}
 
         {/* Legenda — trilha cheia = meta; cor da barra = % de atingimento do real */}
-        <div className="mt-2 flex flex-wrap items-center gap-3.5 text-[10px] text-slate-500">
+        <div className="mt-2 flex flex-wrap items-center gap-3.5 text-[10px] text-slate-500 dark:text-slate-400">
           <span className="text-slate-400">barra = % da meta (trilha cheia = 100%)</span>
           <span className="flex items-center gap-1">
             <span className="inline-block h-2.5 w-2.5 rounded-sm bg-rose-500" />
@@ -297,8 +297,8 @@ function MetasUploadDialog({ stale }: { stale: boolean }) {
           className={cn(
             "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors",
             stale
-              ? "border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100"
-              : "border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100",
+              ? "border-rose-200 dark:border-rose-800/70 bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-950/60"
+              : "border-sky-200 dark:border-sky-800/70 bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 hover:bg-sky-100 dark:hover:bg-sky-950/60",
           )}
           title="Enviar PDF de metas do trimestre"
         >
@@ -337,23 +337,23 @@ function MetasUploadDialog({ stale }: { stale: boolean }) {
           onDrop={onDrop}
           className={cn(
             "flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed px-6 py-10 text-center transition-colors",
-            dragOver ? "border-sky-400 bg-sky-50" : "border-slate-300 bg-slate-50 hover:bg-slate-100",
+            dragOver ? "border-sky-400 bg-sky-50 dark:bg-sky-950/40" : "border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/10",
             uploading && "opacity-60 cursor-not-allowed",
           )}
         >
           {uploading ? (
             <>
-              <Loader2 className="h-7 w-7 animate-spin text-sky-600" aria-hidden />
-              <span className="text-sm font-medium text-slate-600">Escaneando PDF…</span>
+              <Loader2 className="h-7 w-7 animate-spin text-sky-600 dark:text-sky-400" aria-hidden />
+              <span className="text-sm font-medium text-slate-600 dark:text-slate-300">Escaneando PDF…</span>
             </>
           ) : (
             <>
               <Upload className="h-7 w-7 text-slate-400" aria-hidden />
-              <span className="text-sm font-medium text-slate-700">
+              <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
                 Insira o arquivo aqui para fazer o escaneio do PDF
               </span>
               <span className="text-xs text-slate-400">
-                Arraste e solte ou clique para selecionar — somente .pdf
+                Arraste e solte ou clique para selecionar (somente .pdf)
               </span>
             </>
           )}
@@ -389,7 +389,7 @@ function MetaBarRow({
   const pct = temMeta && realValor != null ? Math.round((realValor / meta_caixa) * 100) : null;
   const realW = pct != null ? Math.min(100, pct) : 0;
   const barColor = _isMedia ? "bg-sky-500" : achievementColor(pct ?? 0);
-  const txtColor = _isMedia ? "text-sky-700" : achievementTextColor(pct ?? 0);
+  const txtColor = _isMedia ? "text-sky-700 dark:text-sky-300" : achievementTextColor(pct ?? 0);
 
   const subtitulo = [
     grupo && !_isMedia ? grupo : null,
@@ -399,7 +399,7 @@ function MetaBarRow({
   return (
     <div className="flex items-center gap-3">
       <div className="w-40 flex-shrink-0">
-        <div className={cn("truncate text-xs font-semibold text-slate-700", _isMedia && "italic")}>
+        <div className={cn("truncate text-xs font-semibold text-slate-700 dark:text-slate-200", _isMedia && "italic")}>
           {portfolio}
         </div>
         {subtitulo && (
@@ -408,7 +408,7 @@ function MetaBarRow({
       </div>
 
       {/* Trilha = meta (100%). Preenchimento sólido = atingimento do real. */}
-      <div className="relative h-7 flex-1 overflow-hidden rounded-md bg-slate-100 ring-1 ring-inset ring-slate-200">
+      <div className="relative h-7 flex-1 overflow-hidden rounded-md bg-slate-100 dark:bg-white/10 ring-1 ring-inset ring-slate-200 dark:ring-slate-700">
         {realW > 0 && (
           <div
             className={cn("absolute inset-y-0 left-0 rounded-md transition-[width] duration-300", barColor)}
@@ -416,7 +416,7 @@ function MetaBarRow({
           />
         )}
         {pct != null ? (
-          <span className="absolute inset-y-0 right-2 flex items-center text-[11px] font-bold tabular-nums text-slate-800">
+          <span className="absolute inset-y-0 right-2 flex items-center text-[11px] font-bold tabular-nums text-slate-800 dark:text-slate-200">
             {pct}%
           </span>
         ) : (

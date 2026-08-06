@@ -66,7 +66,7 @@ const DIAGNOSIS_MAP = {
   },
   cpcAboveConvNd: {
     diagnosis: "CPC saudável",
-    action: "Sem CPC hoje — conversão não mensurável ainda.",
+    action: "Sem CPC hoje: conversão não mensurável ainda.",
   },
   cpcBelowConvNd: {
     diagnosis: "Foco em CPC",
@@ -102,7 +102,7 @@ function buildCards(
     const { diagnosis, action } = DIAGNOSIS_MAP[key];
     return {
       bu: d.bu,
-      color: BU_COLORS[d.bu] ?? "#6b7280",
+      color: BU_COLORS[d.bu] ?? "hsl(var(--chart-label-strong))",
       acionamentos: funnel?.acionamentos ?? 0,
       alo: funnel?.alo ?? 0,
       contatos: funnel?.contatos ?? 0,
@@ -138,7 +138,7 @@ export function HandoffDiagnosticCards({
     : buildCards(data, funnelData, benchByBu, cpcRef, conversaoRef);
 
   return (
-    <Card className="rounded-lg border-slate-200">
+    <Card className="rounded-lg border-slate-200 dark:border-border">
       <CardHeader className="pb-2 pt-3 px-4">
         <CardTitle className="text-base font-semibold leading-snug">{title}</CardTitle>
       </CardHeader>
@@ -270,7 +270,7 @@ function MetricBadge({
       <span
         className={cn(
           "text-lg font-bold tabular-nums leading-tight flex items-center gap-1",
-          above ? "text-emerald-600" : "text-amber-600",
+          above ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400",
         )}
       >
         {fmtPct(value)}

@@ -56,6 +56,23 @@
     --chart-4: 24 95% 53%;
     --chart-5: 338 82% 58%;
 
+    /* Neutros de gráfico (grade, eixo, rótulo) — lidos em JS por lib/chartTheme.ts */
+    --chart-grid: 210 40% 96%;
+    --chart-axis: 213 27% 84%;
+    --chart-label: 215 20% 65%;
+    --chart-label-strong: 215 16% 47%;
+    --chart-ink: 222 47% 11%;
+    --chart-ink-2: 217 33% 17%;
+    --chart-ink-3: 215 25% 27%;
+    --chart-ink-4: 215 19% 35%;
+    --chart-surface: 0 0% 100%;
+
+    /* Rótulos de BU no funil — a barra é fixa, só o texto acompanha o tema */
+    --bu-autos-fg: 244 58% 51%;
+    --bu-consumer-fg: 193 82% 31%;
+
+    --page-glow: 212 100% 97%;
+
     --sidebar-background: 0 0% 100%;
     --sidebar-foreground: 222 47% 11%;
     --sidebar-primary: 221 83% 53%;
@@ -64,6 +81,90 @@
     --sidebar-accent-foreground: 222 47% 11%;
     --sidebar-border: 214 32% 91%;
     --sidebar-ring: 221 83% 53%;
+
+    color-scheme: light;
+  }
+
+  /*
+   * Tema escuro: navy 224° herdado do Modo TV (tvShared.ts bg0 #060912 / card #0e1730),
+   * para que painel de TV e dashboard de mesa leiam como o mesmo produto.
+   * Elevação por luminosidade: background < card < popover.
+   */
+  .dark {
+    --background: 225 50% 5%;
+    --foreground: 221 62% 96%;
+
+    --card: 224 55% 9%;
+    --card-foreground: 221 62% 96%;
+
+    --popover: 224 55% 12%;
+    --popover-foreground: 221 62% 96%;
+
+    --primary: 216 90% 70%;
+    --primary-foreground: 225 50% 6%;
+
+    --secondary: 224 40% 16%;
+    --secondary-foreground: 221 40% 92%;
+
+    --muted: 224 40% 15%;
+    --muted-foreground: 221 26% 72%;
+
+    --accent: 224 45% 19%;
+    --accent-foreground: 221 50% 94%;
+
+    --destructive: 0 72% 58%;
+    --destructive-foreground: 221 62% 96%;
+
+    --border: 224 30% 20%;
+    --input: 224 30% 24%;
+    --ring: 216 90% 66%;
+
+    --warning: 38 92% 60%;
+    --warning-foreground: 30 60% 8%;
+
+    --success: 148 45% 60%;
+    --success-soft: 152 40% 11%;
+    --success-border: 150 28% 26%;
+    --success-fg: 148 48% 66%;
+    --danger: 6 68% 64%;
+    --danger-soft: 353 40% 12%;
+    --danger-border: 353 32% 28%;
+    --danger-fg: 6 70% 74%;
+    --warning-soft: 32 40% 12%;
+    --warning-border: 32 32% 28%;
+    --warning-fg: 30 68% 68%;
+
+    --chart-1: 216 90% 68%;
+    --chart-2: 189 72% 63%;
+    --chart-3: 262 80% 72%;
+    --chart-4: 30 90% 65%;
+    --chart-5: 338 78% 68%;
+
+    --chart-grid: 224 30% 18%;
+    --chart-axis: 224 25% 32%;
+    --chart-label: 221 20% 62%;
+    --chart-label-strong: 221 26% 78%;
+    --chart-ink: 221 62% 96%;
+    --chart-ink-2: 221 45% 90%;
+    --chart-ink-3: 221 30% 82%;
+    --chart-ink-4: 221 24% 74%;
+    --chart-surface: 224 55% 9%;
+
+    --bu-autos-fg: 230 94% 82%;
+    --bu-consumer-fg: 187 92% 69%;
+
+    --page-glow: 224 60% 11%;
+
+    --sidebar-background: 224 52% 7%;
+    --sidebar-foreground: 221 45% 92%;
+    --sidebar-primary: 216 90% 68%;
+    --sidebar-primary-foreground: 225 50% 6%;
+    --sidebar-accent: 224 45% 16%;
+    --sidebar-accent-foreground: 221 55% 95%;
+    --sidebar-border: 224 30% 18%;
+    --sidebar-ring: 216 90% 66%;
+
+    color-scheme: dark;
   }
 }
 
@@ -74,7 +175,7 @@
 
   body {
     @apply bg-background text-foreground;
-    background-image: radial-gradient(circle at top left, hsl(212 100% 97%) 0%, transparent 45%);
+    background-image: radial-gradient(circle at top left, hsl(var(--page-glow)) 0%, transparent 45%);
     min-height: 100vh;
   }
 }

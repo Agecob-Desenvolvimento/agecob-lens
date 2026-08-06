@@ -16,14 +16,14 @@ interface ApiDebugBannerProps {
 function classifyError(msg: string): { icon: typeof WifiOff; color: string; label: string } {
   const m = msg.toLowerCase();
   if (m.includes("failed to fetch") || m.includes("networkerror") || m.includes("err_connection_refused"))
-    return { icon: WifiOff, color: "text-rose-600", label: "Sem conexão com a API (servidor não responde)" };
+    return { icon: WifiOff, color: "text-rose-600 dark:text-rose-400", label: "Sem conexão com a API (servidor não responde)" };
   if (m.includes("http 5"))
-    return { icon: Bug, color: "text-orange-600", label: "Erro interno do servidor (5xx)" };
+    return { icon: Bug, color: "text-orange-600 dark:text-orange-400", label: "Erro interno do servidor (5xx)" };
   if (m.includes("http 4"))
-    return { icon: AlertTriangle, color: "text-amber-600", label: "Requisição inválida (4xx)" };
+    return { icon: AlertTriangle, color: "text-amber-600 dark:text-amber-400", label: "Requisição inválida (4xx)" };
   if (m.includes("non-json") || m.includes("content-type"))
-    return { icon: Bug, color: "text-purple-600", label: "Resposta inesperada da API (não-JSON)" };
-  return { icon: AlertTriangle, color: "text-rose-600", label: "Falha de conexão com a API" };
+    return { icon: Bug, color: "text-purple-600 dark:text-purple-400", label: "Resposta inesperada da API (não-JSON)" };
+  return { icon: AlertTriangle, color: "text-rose-600 dark:text-rose-400", label: "Falha de conexão com a API" };
 }
 
 function parseSource(msg: string): { source: string; detail: string; type: string } {
@@ -85,8 +85,8 @@ export function ApiDebugBanner({ error, warnings = [], onRetry }: ApiDebugBanner
       className={cn(
         "border",
         isCritical
-          ? "border-rose-400/60 bg-rose-50 dark:bg-rose-950/20"
-          : "border-amber-400/60 bg-amber-50 dark:bg-amber-950/20",
+          ? "border-rose-400/60 bg-rose-50 dark:bg-rose-950/40"
+          : "border-amber-400/60 bg-amber-50 dark:bg-amber-950/40",
       )}
     >
       <CardContent className="py-3 px-4 space-y-2">

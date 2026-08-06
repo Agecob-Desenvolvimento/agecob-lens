@@ -37,12 +37,12 @@ export function EfetividadeDiariaChart({
           <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} data-testid="efetividade-svg" style={{ display: "block" }}>
             {[0, 15, 30, 45, 60].map((v) => (
               <g key={`yb${v}`}>
-                <line x1={PAD.l} x2={W - PAD.r} y1={toYB(v)} y2={toYB(v)} stroke="#f1f5f9" strokeWidth={1} />
-                <text x={PAD.l - 4} y={toYB(v) + 3} textAnchor="end" fontSize={9} fill="#94a3b8">{v}</text>
+                <line x1={PAD.l} x2={W - PAD.r} y1={toYB(v)} y2={toYB(v)} stroke="hsl(var(--chart-grid))" strokeWidth={1} />
+                <text x={PAD.l - 4} y={toYB(v) + 3} textAnchor="end" fontSize={9} fill="hsl(var(--chart-label))">{v}</text>
               </g>
             ))}
             {[0, 25, 50, 75, 100].map((v) => (
-              <text key={`ye${v}`} x={W - PAD.r + 4} y={toYE(v) + 3} textAnchor="start" fontSize={9} fill="#94a3b8">{v}%</text>
+              <text key={`ye${v}`} x={W - PAD.r + 4} y={toYE(v) + 3} textAnchor="start" fontSize={9} fill="hsl(var(--chart-label))">{v}%</text>
             ))}
             {data.map((d, i) => {
               const bw = Math.max(step * 0.6, 8);
@@ -85,7 +85,7 @@ export function EfetividadeDiariaChart({
             ))}
             {data.map((d, i) =>
               i % 2 === 0 ? (
-                <text key={`xl${i}`} x={toX(i)} y={H - 4} textAnchor="middle" fontSize={9} fill="#94a3b8">{d.dia}</text>
+                <text key={`xl${i}`} x={toX(i)} y={H - 4} textAnchor="middle" fontSize={9} fill="hsl(var(--chart-label))">{d.dia}</text>
               ) : null,
             )}
             {hov !== null && data[hov] && (

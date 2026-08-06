@@ -16,37 +16,37 @@ const RISK_LABEL: Record<AcordoQuebrado["perfilRisco"], string> = {
 
 export const TONE = {
   rose: {
-    border: "border-rose-200",
-    headBg: "bg-rose-50",
-    headText: "text-rose-800",
-    rowBorder: "border-rose-100",
-    rowActive: "bg-rose-50",
-    rowHover: "hover:bg-rose-50/50",
-    valor: "text-rose-600",
-    subBorder: "border-rose-200",
-    subLabel: "text-rose-700",
+    border: "border-rose-200 dark:border-rose-800/70",
+    headBg: "bg-rose-50 dark:bg-rose-950/40",
+    headText: "text-rose-800 dark:text-rose-300",
+    rowBorder: "border-rose-100 dark:border-rose-900/60",
+    rowActive: "bg-rose-50 dark:bg-rose-950/40",
+    rowHover: "hover:bg-rose-50/50 dark:hover:bg-rose-950/40",
+    valor: "text-rose-600 dark:text-rose-400",
+    subBorder: "border-rose-200 dark:border-rose-800/70",
+    subLabel: "text-rose-700 dark:text-rose-300",
   },
   orange: {
-    border: "border-orange-200",
-    headBg: "bg-orange-50",
-    headText: "text-orange-800",
-    rowBorder: "border-orange-100",
-    rowActive: "bg-orange-50",
-    rowHover: "hover:bg-orange-50/50",
-    valor: "text-orange-600",
-    subBorder: "border-orange-200",
-    subLabel: "text-orange-700",
+    border: "border-orange-200 dark:border-orange-800/70",
+    headBg: "bg-orange-50 dark:bg-orange-950/40",
+    headText: "text-orange-800 dark:text-orange-300",
+    rowBorder: "border-orange-100 dark:border-orange-900/60",
+    rowActive: "bg-orange-50 dark:bg-orange-950/40",
+    rowHover: "hover:bg-orange-50/50 dark:hover:bg-orange-950/40",
+    valor: "text-orange-600 dark:text-orange-400",
+    subBorder: "border-orange-200 dark:border-orange-800/70",
+    subLabel: "text-orange-700 dark:text-orange-300",
   },
   emerald: {
-    border: "border-emerald-200",
-    headBg: "bg-emerald-50",
-    headText: "text-emerald-800",
-    rowBorder: "border-emerald-100",
-    rowActive: "bg-emerald-50",
-    rowHover: "hover:bg-emerald-50/50",
-    valor: "text-emerald-600",
-    subBorder: "border-emerald-200",
-    subLabel: "text-emerald-700",
+    border: "border-emerald-200 dark:border-emerald-800/70",
+    headBg: "bg-emerald-50 dark:bg-emerald-950/40",
+    headText: "text-emerald-800 dark:text-emerald-300",
+    rowBorder: "border-emerald-100 dark:border-emerald-900/60",
+    rowActive: "bg-emerald-50 dark:bg-emerald-950/40",
+    rowHover: "hover:bg-emerald-50/50 dark:hover:bg-emerald-950/40",
+    valor: "text-emerald-600 dark:text-emerald-400",
+    subBorder: "border-emerald-200 dark:border-emerald-800/70",
+    subLabel: "text-emerald-700 dark:text-emerald-300",
   },
 } as const;
 
@@ -90,7 +90,7 @@ export function AcordoRow({
         onClick={onToggle}
         className={cn(
           "w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors",
-          isExpanded ? tone.rowActive : cn("bg-white", tone.rowHover),
+          isExpanded ? tone.rowActive : cn("bg-white dark:bg-card", tone.rowHover),
         )}
       >
         <ChevronRight
@@ -105,7 +105,7 @@ export function AcordoRow({
         <span
           className={cn(
             "px-2 py-0.5 rounded-full text-[10px] font-semibold",
-            acordo.previsaoQuebra ? "bg-rose-100 text-rose-800" : "bg-orange-100 text-orange-800",
+            acordo.previsaoQuebra ? "bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300" : "bg-orange-100 dark:bg-orange-950/60 text-orange-800 dark:text-orange-300",
           )}
         >
           {acordo.previsaoQuebra ? "Prevista" : "Inesperada"}
@@ -115,7 +115,7 @@ export function AcordoRow({
       {isExpanded && (
         <div className={cn("px-4 pb-4", tone.rowActive)}>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-            <div className={cn("bg-white border rounded-md p-3.5", tone.subBorder)}>
+            <div className={cn("bg-white dark:bg-card border rounded-md p-3.5", tone.subBorder)}>
               <div className={cn("text-[10px] font-bold uppercase tracking-[0.12em] mb-2", tone.subLabel)}>
                 Detalhes do Acordo
               </div>
@@ -130,7 +130,7 @@ export function AcordoRow({
               </div>
             </div>
 
-            <div className={cn("bg-white border rounded-md p-3.5", tone.subBorder)}>
+            <div className={cn("bg-white dark:bg-card border rounded-md p-3.5", tone.subBorder)}>
               <div className={cn("text-[10px] font-bold uppercase tracking-[0.12em] mb-2", tone.subLabel)}>
                 Perfil do Devedor
               </div>
@@ -144,7 +144,7 @@ export function AcordoRow({
             </div>
           </div>
 
-          <div className={cn("mt-3 bg-white border rounded-md p-3.5", tone.subBorder)}>
+          <div className={cn("mt-3 bg-white dark:bg-card border rounded-md p-3.5", tone.subBorder)}>
             <div className={cn("text-[10px] font-bold uppercase tracking-[0.12em] mb-1", tone.subLabel)}>
               Diagnóstico (estimativa)
             </div>
@@ -176,12 +176,12 @@ export function AcordoRiscoPanel({
     <div className={cn("border rounded-lg overflow-hidden mt-2", t.border)}>
       <div className={cn("px-4 py-2.5 flex items-center justify-between", t.headBg)}>
         <span className={cn("text-xs font-semibold", t.headText)}>
-          {title} — {portfolio}
+          {title} · {portfolio}
           {!loading && !error && acordos.length > 0 && (
             <span className="font-normal opacity-70"> · {acordos.length} acordo(s)</span>
           )}
         </span>
-        <button onClick={onClose} className="p-0.5 rounded hover:bg-black/5 transition-colors" aria-label="Fechar detalhes">
+        <button onClick={onClose} className="p-0.5 rounded hover:bg-black/5 dark:hover:bg-white/10 transition-colors" aria-label="Fechar detalhes">
           <X className={cn("h-3.5 w-3.5", t.headText)} />
         </button>
       </div>
@@ -193,7 +193,7 @@ export function AcordoRiscoPanel({
             ))}
           </div>
         ) : error ? (
-          <p className="p-3 text-xs text-rose-600">{error}</p>
+          <p className="p-3 text-xs text-rose-600 dark:text-rose-400">{error}</p>
         ) : acordos.length === 0 ? (
           <p className="p-3 text-[11px] italic text-muted-foreground">Sem registros no período.</p>
         ) : (
@@ -209,7 +209,7 @@ export function AcordoRiscoPanel({
               />
             ))}
             <p className="px-4 py-2 text-[10px] italic text-muted-foreground">
-              Perfil de risco e previsão são estimativas por dias em atraso — não são saída de modelo.
+              Perfil de risco e previsão são estimativas por dias em atraso. Não são saída de modelo.
             </p>
           </>
         )}

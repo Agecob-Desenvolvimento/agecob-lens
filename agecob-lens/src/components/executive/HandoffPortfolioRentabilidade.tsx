@@ -210,7 +210,7 @@ function RiskRow({ datum: d, maxBar, riskLabel, riskColor, highRisk, onTooltip }
   return (
     <div
       className={`flex items-center gap-1 text-xs group hover:bg-muted/30 rounded-sm px-1 py-0.5 transition-colors ${
-        highRisk ? "bg-rose-50/30" : ""
+        highRisk ? "bg-rose-50/30 dark:bg-rose-950/40" : ""
       }`}
     >
       {/* Risk dot */}

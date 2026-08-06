@@ -112,7 +112,7 @@ export function HomeRiscoQualidade({
 
       <Link
         to={linkTo}
-        className="inline-flex items-center gap-1.5 text-xs font-medium text-sky-700 hover:text-sky-800 hover:underline"
+        className="inline-flex items-center gap-1.5 text-xs font-medium text-sky-700 dark:text-sky-300 hover:text-sky-800 dark:hover:text-sky-300 hover:underline"
       >
         Para mais detalhes, vá para Análise &amp; Efetividade
         <ArrowRight className="h-3.5 w-3.5" aria-hidden />

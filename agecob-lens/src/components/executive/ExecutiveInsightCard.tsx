@@ -105,19 +105,19 @@ function HandoffBanner({ variant, metric, secondaryMetric, delta, description, c
   const palette = isCritical
     ? {
         wrapper: "bg-danger-soft border-danger-border",
-        iconWrap: "bg-rose-100 border-danger-border text-danger-fg",
+        iconWrap: "bg-rose-100 dark:bg-rose-950/60 border-danger-border text-danger-fg",
         accent: "text-danger-fg",
-        textBody: "text-rose-900/85",
-        badgePill: "bg-white border-danger-border text-danger-fg",
-        ctaBtn: "bg-danger hover:bg-danger-fg text-white",
+        textBody: "text-rose-900/85 dark:text-rose-200",
+        badgePill: "bg-white dark:bg-card border-danger-border text-danger-fg",
+        ctaBtn: "bg-danger hover:bg-danger-fg text-white dark:text-background",
       }
     : {
         wrapper: "bg-success-soft border-success-border",
-        iconWrap: "bg-emerald-100 border-success-border text-success-fg",
+        iconWrap: "bg-emerald-100 dark:bg-emerald-950/60 border-success-border text-success-fg",
         accent: "text-success-fg",
-        textBody: "text-emerald-900/85",
-        badgePill: "bg-white border-success-border text-success-fg",
-        ctaBtn: "bg-transparent text-success-fg underline underline-offset-[3px] hover:text-emerald-900",
+        textBody: "text-emerald-900/85 dark:text-emerald-200",
+        badgePill: "bg-white dark:bg-card border-success-border text-success-fg",
+        ctaBtn: "bg-transparent text-success-fg underline underline-offset-[3px] hover:text-emerald-900 dark:hover:text-emerald-200",
       };
 
   const variantLabel = isCritical ? "Crítico" : "Positivo";
@@ -180,25 +180,25 @@ function HandoffBanner({ variant, metric, secondaryMetric, delta, description, c
               </span>
               {metric?.label && (
                 <>
-                  <span className="text-xs text-rose-900/70">·</span>
-                  <span className="text-xs text-rose-900/70">{metric.label}</span>
+                  <span className="text-xs text-rose-900/70 dark:text-rose-200">·</span>
+                  <span className="text-xs text-rose-900/70 dark:text-rose-200">{metric.label}</span>
                 </>
               )}
             </div>
             <div className="mt-1 flex items-baseline gap-3 flex-wrap">
               {formattedMetric && (
-                <span className="text-[36px] font-bold tracking-tight tabular-nums leading-none text-rose-900">
+                <span className="text-[36px] font-bold tracking-tight tabular-nums leading-none text-rose-900 dark:text-rose-200">
                   {formattedMetric}
                 </span>
               )}
               {delta && <DeltaPill delta={delta} className={palette.badgePill} />}
               {formattedSecondary && (
                 <span className="inline-flex items-baseline gap-1.5 pl-3 border-l border-danger-border/50">
-                  <span className="text-lg font-bold tabular-nums leading-none text-rose-900">
+                  <span className="text-lg font-bold tabular-nums leading-none text-rose-900 dark:text-rose-200">
                     {formattedSecondary}
                   </span>
                   {secondaryMetric?.label && (
-                    <span className="text-xs text-rose-900/70">{secondaryMetric.label}</span>
+                    <span className="text-xs text-rose-900/70 dark:text-rose-200">{secondaryMetric.label}</span>
                   )}
                 </span>
               )}
@@ -215,7 +215,7 @@ function HandoffBanner({ variant, metric, secondaryMetric, delta, description, c
               {variantLabel}
             </span>
             {formattedMetric && (
-              <span className="text-xl font-semibold tabular-nums leading-none text-emerald-900">
+              <span className="text-xl font-semibold tabular-nums leading-none text-emerald-900 dark:text-emerald-200">
                 {formattedMetric}
                 {metric?.label ? ` ${metric.label}` : ""}
               </span>
@@ -272,10 +272,10 @@ const SEVERITY_TILE: Record<InsightSeverity | "action", {
   badgeBg: string;
   label: string;
 }> = {
-  critical: { icon: AlertCircle,   bg: "bg-danger-soft",  ring: "ring-danger-border",  border: "border-danger",   iconColor: "text-danger-fg",  headlineColor: "text-danger-fg",  badgeBg: "bg-danger text-white",    label: "CRÍTICO"  },
-  warning:  { icon: AlertTriangle, bg: "bg-warning-soft", ring: "ring-warning-border", border: "border-warning",  iconColor: "text-warning-fg", headlineColor: "text-warning-fg", badgeBg: "bg-warning text-white",   label: "ATENÇÃO"  },
-  positive: { icon: CheckCircle2,  bg: "bg-success-soft", ring: "ring-success-border", border: "border-success",  iconColor: "text-success-fg", headlineColor: "text-success-fg", badgeBg: "bg-success text-white",   label: "POSITIVO" },
-  action:   { icon: Lightbulb,     bg: "bg-sky-50",       ring: "ring-sky-200",        border: "border-sky-500",  iconColor: "text-sky-600",    headlineColor: "text-sky-700",    badgeBg: "bg-sky-600 text-white",   label: "AÇÃO"     },
+  critical: { icon: AlertCircle,   bg: "bg-danger-soft",  ring: "ring-danger-border",  border: "border-danger",   iconColor: "text-danger-fg",  headlineColor: "text-danger-fg",  badgeBg: "bg-danger text-white dark:text-background",    label: "CRÍTICO"  },
+  warning:  { icon: AlertTriangle, bg: "bg-warning-soft", ring: "ring-warning-border", border: "border-warning",  iconColor: "text-warning-fg", headlineColor: "text-warning-fg", badgeBg: "bg-warning text-white dark:text-background",   label: "ATENÇÃO"  },
+  positive: { icon: CheckCircle2,  bg: "bg-success-soft", ring: "ring-success-border", border: "border-success",  iconColor: "text-success-fg", headlineColor: "text-success-fg", badgeBg: "bg-success text-white dark:text-background",   label: "POSITIVO" },
+  action:   { icon: Lightbulb,     bg: "bg-sky-50 dark:bg-sky-950/40",       ring: "ring-sky-200 dark:ring-sky-800/70",        border: "border-sky-500",  iconColor: "text-sky-600 dark:text-sky-400",    headlineColor: "text-sky-700 dark:text-sky-300",    badgeBg: "bg-sky-600 text-white",   label: "AÇÃO"     },
 };
 
 function LegacyInsight({ data, loading, title = "Resumo do dia", embedded }: LegacyProps) {

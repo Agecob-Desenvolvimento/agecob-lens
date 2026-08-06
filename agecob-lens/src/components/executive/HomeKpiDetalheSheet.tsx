@@ -52,7 +52,7 @@ export function HomeKpiDetalheSheet({
               ))}
             </div>
           ) : error ? (
-            <p className="p-3 text-xs text-rose-600">{error}</p>
+            <p className="p-3 text-xs text-rose-600 dark:text-rose-400">{error}</p>
           ) : acordos.length === 0 ? (
             <p className="p-3 text-[11px] italic text-muted-foreground">{cfg?.empty}</p>
           ) : (

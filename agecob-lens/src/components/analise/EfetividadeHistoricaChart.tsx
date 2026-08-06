@@ -34,8 +34,8 @@ export function EfetividadeHistoricaChart({ data }: EfetividadeHistoricaChartPro
           {/* Y-axis gridlines */}
           {[0, 25, 50, 75, 100].map((v) => (
             <g key={v}>
-              <line x1={PAD.l} x2={W - PAD.r} y1={toY(v)} y2={toY(v)} stroke="#f1f5f9" strokeWidth={1} />
-              <text x={PAD.l - 4} y={toY(v) + 3} textAnchor="end" fontSize={9} fill="#94a3b8">{v}%</text>
+              <line x1={PAD.l} x2={W - PAD.r} y1={toY(v)} y2={toY(v)} stroke="hsl(var(--chart-grid))" strokeWidth={1} />
+              <text x={PAD.l - 4} y={toY(v) + 3} textAnchor="end" fontSize={9} fill="hsl(var(--chart-label))">{v}%</text>
             </g>
           ))}
 
@@ -58,7 +58,7 @@ export function EfetividadeHistoricaChart({ data }: EfetividadeHistoricaChartPro
                 cy={d.y}
                 r={4}
                 fill="#0ea5e9"
-                stroke="#fff"
+                stroke="hsl(var(--chart-surface))"
                 strokeWidth={2}
                 data-testid="efetividade-historica-dot"
               />
@@ -77,7 +77,7 @@ export function EfetividadeHistoricaChart({ data }: EfetividadeHistoricaChartPro
                 y={H - 6}
                 textAnchor="middle"
                 fontSize={9}
-                fill="#64748b"
+                fill="hsl(var(--chart-label-strong))"
               >
                 {d.mes}
               </text>

@@ -41,7 +41,7 @@ export default function RitmoDiaCard({ db, embedded }: { db: DatabaseOption; emb
       <Wrapper embedded={embedded}>
         <CardHeader className="pb-2 pt-3 px-4">
           <CardTitle className="text-sm font-semibold">Ritmo do Dia</CardTitle>
-          <CardDescription className="text-xs text-red-600">{error}</CardDescription>
+          <CardDescription className="text-xs text-red-600 dark:text-red-400">{error}</CardDescription>
         </CardHeader>
       </Wrapper>
     );
@@ -123,7 +123,7 @@ export default function RitmoDiaCard({ db, embedded }: { db: DatabaseOption; emb
                       ? "border-border bg-muted/40"
                       : "border-border bg-card"
                 }`}
-                title={`Hora ${b.hora}h — esperado ${b.esperado} · real ${realText} · acumulado ${acumText} · delta ${deltaText || "—"}${esperadoValorText ? ` · valor esperado ${esperadoValorText} · valor real ${realValorText}` : ""}`}
+                title={`Hora ${b.hora}h: esperado ${b.esperado} · real ${realText} · acumulado ${acumText} · delta ${deltaText || "—"}${esperadoValorText ? ` · valor esperado ${esperadoValorText} · valor real ${realValorText}` : ""}`}
               >
                 <span className="font-semibold">{b.hora}h</span>
                 <span className="text-muted-foreground">esp {b.esperado}</span>

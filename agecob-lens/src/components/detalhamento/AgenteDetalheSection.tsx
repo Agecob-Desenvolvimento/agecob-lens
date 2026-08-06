@@ -18,8 +18,8 @@ function MiniCard({
 }) {
   const [expanded, setExpanded] = useState<string | null>(null);
   const colors = color === "rose"
-    ? { bg: "bg-rose-50", fill: "text-rose-600" }
-    : { bg: "bg-orange-50", fill: "text-orange-600" };
+    ? { bg: "bg-rose-50 dark:bg-rose-950/40", fill: "text-rose-600 dark:text-rose-400" }
+    : { bg: "bg-orange-50 dark:bg-orange-950/40", fill: "text-orange-600 dark:text-orange-400" };
 
   return (
     <Card>

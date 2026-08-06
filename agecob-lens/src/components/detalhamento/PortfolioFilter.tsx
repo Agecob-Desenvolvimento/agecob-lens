@@ -78,7 +78,7 @@ export function PortfolioFilter({ portfolios, selected, onSelect, loading }: Por
               className={cn(
                 "block w-full rounded px-2.5 py-1.5 text-left text-xs",
                 selected === null
-                  ? "bg-sky-50 font-semibold text-sky-700"
+                  ? "bg-sky-50 dark:bg-sky-950/40 font-semibold text-sky-700 dark:text-sky-300"
                   : "font-medium text-foreground hover:bg-muted",
               )}
             >
@@ -92,7 +92,7 @@ export function PortfolioFilter({ portfolios, selected, onSelect, loading }: Por
                 className={cn(
                   "block w-full truncate rounded px-2.5 py-1 text-left text-xs",
                   selected === p.id
-                    ? "bg-sky-50 font-semibold text-sky-700"
+                    ? "bg-sky-50 dark:bg-sky-950/40 font-semibold text-sky-700 dark:text-sky-300"
                     : "text-foreground hover:bg-muted",
                 )}
               >

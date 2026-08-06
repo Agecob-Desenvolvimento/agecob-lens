@@ -99,9 +99,9 @@ export function buildPercentileMap(allValues: number[]): Map<number, number> {
 }
 
 const CELL_CLASS: Record<"good" | "warn" | "bad", string> = {
-  good: "bg-emerald-100 text-emerald-800",
-  warn: "bg-amber-100 text-amber-800",
-  bad: "bg-rose-100 text-rose-800",
+  good: "bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300",
+  warn: "bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300",
+  bad: "bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300",
 };
 
 interface PerformanceHeatmapProps {
@@ -182,7 +182,7 @@ export function PerformanceHeatmap({ agents, highlightId }: PerformanceHeatmapPr
               type="button"
               data-testid="heatmap-maximize"
               onClick={() => setMaximized(true)}
-              className="rounded border border-slate-300 px-2 py-1 text-[10px] text-slate-500 hover:bg-slate-100"
+              className="rounded border border-slate-300 dark:border-slate-700 px-2 py-1 text-[10px] text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/10"
             >
               Tela cheia
             </button>
@@ -196,7 +196,7 @@ export function PerformanceHeatmap({ agents, highlightId }: PerformanceHeatmapPr
               <tr>
                 <th
                   className={cn(
-                    "sticky left-0 z-20 bg-background px-2 py-1.5 text-left text-[10px] font-semibold uppercase tracking-wider border border-slate-400",
+                    "sticky left-0 z-20 bg-background px-2 py-1.5 text-left text-[10px] font-semibold uppercase tracking-wider border border-slate-400 dark:border-slate-600",
                     sortCol === "nome" ? "text-foreground" : "text-muted-foreground",
                   )}
                 >
@@ -221,7 +221,7 @@ export function PerformanceHeatmap({ agents, highlightId }: PerformanceHeatmapPr
                     <th
                       key={m.key}
                       className={cn(
-                        "px-2 py-1.5 text-center text-[10px] font-semibold uppercase tracking-wider border border-slate-400",
+                        "px-2 py-1.5 text-center text-[10px] font-semibold uppercase tracking-wider border border-slate-400 dark:border-slate-600",
                         active ? "text-foreground" : "text-muted-foreground",
                       )}
                     >
@@ -256,7 +256,7 @@ export function PerformanceHeatmap({ agents, highlightId }: PerformanceHeatmapPr
                       isHighlight && "ring-2 ring-primary",
                     )}
                   >
-                    <td className="sticky left-0 z-10 bg-background px-2 py-1.5 text-left font-medium text-foreground border border-slate-400">
+                    <td className="sticky left-0 z-10 bg-background px-2 py-1.5 text-left font-medium text-foreground border border-slate-400 dark:border-slate-600">
                       <div className="max-w-[160px] truncate">{agent.nome}</div>
                       {agent.mat && (
                         <div className="text-[10px] text-muted-foreground">{agent.mat}</div>
@@ -272,7 +272,7 @@ export function PerformanceHeatmap({ agents, highlightId }: PerformanceHeatmapPr
                           data-testid={`cell-${agent.id}-${m.key}`}
                           data-tone={cls}
                           className={cn(
-                            "px-2 py-1.5 text-center font-semibold border border-slate-400",
+                            "px-2 py-1.5 text-center font-semibold border border-slate-400 dark:border-slate-600",
                             CELL_CLASS[cls],
                           )}
                           style={{ padding: "6px 8px" }}
@@ -289,15 +289,15 @@ export function PerformanceHeatmap({ agents, highlightId }: PerformanceHeatmapPr
         </div>
         <div className="mt-3 flex flex-wrap gap-3 text-[10px] text-muted-foreground">
           <span className="inline-flex items-center gap-1">
-            <span className="inline-block h-2.5 w-2.5 rounded-sm bg-emerald-100" />
+            <span className="inline-block h-2.5 w-2.5 rounded-sm bg-emerald-100 dark:bg-emerald-950/60" />
             top 20% (percentil &ge;80)
           </span>
           <span className="inline-flex items-center gap-1">
-            <span className="inline-block h-2.5 w-2.5 rounded-sm bg-amber-100" />
+            <span className="inline-block h-2.5 w-2.5 rounded-sm bg-amber-100 dark:bg-amber-950/60" />
             mediano (40–79)
           </span>
           <span className="inline-flex items-center gap-1">
-            <span className="inline-block h-2.5 w-2.5 rounded-sm bg-rose-100" />
+            <span className="inline-block h-2.5 w-2.5 rounded-sm bg-rose-100 dark:bg-rose-950/60" />
             inferior (&lt;40)
           </span>
         </div>
@@ -308,14 +308,14 @@ export function PerformanceHeatmap({ agents, highlightId }: PerformanceHeatmapPr
   return (
     <>
       {maximized && (
-        <div className="fixed inset-0 z-50 bg-white flex flex-col" data-testid="heatmap-overlay">
-          <div className="flex items-center justify-between px-6 py-3 border-b border-slate-200">
-            <span className="text-sm font-semibold">Heatmap de Performance — Tela cheia</span>
+        <div className="fixed inset-0 z-50 bg-white dark:bg-card flex flex-col" data-testid="heatmap-overlay">
+          <div className="flex items-center justify-between px-6 py-3 border-b border-slate-200 dark:border-border">
+            <span className="text-sm font-semibold">Heatmap de Performance · Tela cheia</span>
             <button
               type="button"
               data-testid="heatmap-minimize"
               onClick={() => setMaximized(false)}
-              className="rounded border border-slate-300 px-3 py-1 text-xs text-slate-600 hover:bg-slate-100"
+              className="rounded border border-slate-300 dark:border-slate-700 px-3 py-1 text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/10"
             >
               ✕
             </button>

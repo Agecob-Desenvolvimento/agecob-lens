@@ -11,14 +11,14 @@ export interface BoletoKpi {
 }
 
 export const MOCK_BOLETOS_KPIS: BoletoKpi[] = [
-  { label: "Boletos Gerados", value: 303, color: "#0f172a" },
-  { label: "Pagos no Prazo", value: 132, color: "#0f172a" },
+  { label: "Boletos Gerados", value: 303, color: "hsl(var(--chart-ink))" },
+  { label: "Pagos no Prazo", value: 132, color: "hsl(var(--chart-ink))" },
   { label: "% Conversão", value: "43,56%", color: "#f59e0b" },
   { label: "Efetividade", value: "48,90%", color: "#f59e0b" },
-  { label: "Valor Boletos Vencendo", value: "R$ 301.628,35", color: "#0f172a" },
+  { label: "Valor Boletos Vencendo", value: "R$ 301.628,35", color: "hsl(var(--chart-ink))" },
   { label: "Valor Recebido", value: "R$ 147.501,57", color: "#16a34a" },
-  { label: "Melhor Dia", value: "05/05 – 100%", color: "#16a34a" },
-  { label: "Pior Dia", value: "01/05 – 0%", color: "#dc2626" },
+  { label: "Melhor Dia", value: "05/05 · 100%", color: "#16a34a" },
+  { label: "Pior Dia", value: "01/05 · 0%", color: "#dc2626" },
 ];
 
 export interface EfetividadeDiaria {

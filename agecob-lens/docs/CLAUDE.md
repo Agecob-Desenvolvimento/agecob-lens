@@ -69,6 +69,13 @@ Fixed semantics: rose=critical, emerald=positive, amber=warning, slate=neutral, 
 Decorative shadows forbidden. Hierarchy via typography + size, not shadow.
 Neutral state: components that should be OMITTED in neutral NEVER render visual placeholder.
 In actual agecob-lens code, tokens enter via HSL CSS vars in src/index.css + tailwind.config.ts (classes bg-success-soft, text-danger-fg, etc). See SPECS.MD §0.6.1–§0.6.3 for apply-and-replace table.
+Dark Theme
+Class-based (.dark on <html>), driven by next-themes ThemeProvider in App.tsx (storageKey agdash-theme, defaultTheme system). Inline script in index.html applies the class before first paint. Toggle lives in ExecutiveHeader via ThemeToggle.
+Surface hue is navy 224°, inherited from Modo TV (tvShared.ts bg0 #060912 / card #0e1730), so TV panel and desk dashboard read as one product. Elevation by lightness: background (5%) < card (9%) < popover (12%).
+Semantic triads keep their meaning and invert their luminance: *-soft becomes a dark tint (11–12% L), *-border a mid stroke (25–28% L), *-fg a bright readable tone (62–74% L).
+Chart neutrals are tokens, never hex: --chart-grid, --chart-axis, --chart-label, --chart-label-strong, --chart-ink through --chart-ink-4, --chart-surface. Consumed in SVG/Recharts as hsl(var(--chart-…)) so they follow the theme with no JS. Series hues (green/amber/rose) stay literal — they read on both surfaces.
+Rule for hardcoded Tailwind colors: add a dark: variant, never repaint the light value. Light mode must stay byte-identical.
+Self-contained dark surfaces (chart tooltips, Modo TV) are exempt — they already work on both themes.
 Baselines
 Every primary KPI displays comparison line below absolute value.
 Fallback priority: period target → MoM/YoD → N-day moving average

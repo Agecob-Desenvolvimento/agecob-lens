@@ -12,6 +12,22 @@
     <meta property="og:title" content="AgDash" />
     <meta property="og:description" content="AgDash — Dashboard SpecOps Supervisor" />
     <meta property="og:type" content="website" />
+
+    <!-- Aplica o tema antes do primeiro paint; sem isso o SPA pisca claro antes do React montar. -->
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem("agdash-theme") || "system";
+          var dark =
+            stored === "dark" ||
+            (stored === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+          if (dark) document.documentElement.classList.add("dark");
+          document.documentElement.style.colorScheme = dark ? "dark" : "light";
+        } catch (e) {
+          /* localStorage bloqueado: segue no tema claro */
+        }
+      })();
+    </script>
   </head>
 
   <body>

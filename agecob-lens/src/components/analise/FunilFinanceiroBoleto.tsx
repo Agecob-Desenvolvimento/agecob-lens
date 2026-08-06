@@ -39,19 +39,19 @@ export function FunilFinanceiroBoleto({ acordado, recebido }: FunilFinanceiroBol
           <text x={barX + 14} y={topY + barH / 2 + 1} dominantBaseline="middle" fontSize={12} fontWeight={600} fill="#0284c7">
             Acordado
           </text>
-          <text x={barX + barW - 14} y={topY + barH / 2 + 1} textAnchor="end" dominantBaseline="middle" fontSize={13} fontWeight={700} fill="#1e293b">
+          <text x={barX + barW - 14} y={topY + barH / 2 + 1} textAnchor="end" dominantBaseline="middle" fontSize={13} fontWeight={700} fill="hsl(var(--chart-ink-2))">
             {formatBRLCompact(acordado)}
           </text>
 
           {/* Center percentage */}
-          <rect x={W / 2 - 28} y={topY + barH + 10} width={56} height={24} rx={12} fill="#f1f5f9" />
+          <rect x={W / 2 - 28} y={topY + barH + 10} width={56} height={24} rx={12} fill="hsl(var(--chart-grid))" />
           <text x={W / 2} y={topY + barH + 26} textAnchor="middle" dominantBaseline="middle" fontSize={14} fontWeight={700} fill="#059669">
             {pct}%
           </text>
 
           {/* Connector lines */}
-          <line x1={barX + 6} y1={topY + barH} x2={barX + 6} y2={midY} stroke="#cbd5e1" strokeWidth={1} />
-          <line x1={barX + barW - 6} y1={topY + barH} x2={barX + barW - 6} y2={midY} stroke="#cbd5e1" strokeWidth={1} />
+          <line x1={barX + 6} y1={topY + barH} x2={barX + 6} y2={midY} stroke="hsl(var(--chart-axis))" strokeWidth={1} />
+          <line x1={barX + barW - 6} y1={topY + barH} x2={barX + barW - 6} y2={midY} stroke="hsl(var(--chart-axis))" strokeWidth={1} />
 
           {/* Bottom bar: Recebido */}
           <rect x={barX} y={midY} width={barW} height={barH} rx={6} fill="#059669" opacity={0.15} />
@@ -59,7 +59,7 @@ export function FunilFinanceiroBoleto({ acordado, recebido }: FunilFinanceiroBol
           <text x={barX + 14} y={midY + barH / 2 + 1} dominantBaseline="middle" fontSize={12} fontWeight={600} fill="#059669">
             Recebido
           </text>
-          <text x={barX + barW - 14} y={midY + barH / 2 + 1} textAnchor="end" dominantBaseline="middle" fontSize={13} fontWeight={700} fill="#1e293b">
+          <text x={barX + barW - 14} y={midY + barH / 2 + 1} textAnchor="end" dominantBaseline="middle" fontSize={13} fontWeight={700} fill="hsl(var(--chart-ink-2))">
             {formatBRLCompact(recebido)}
           </text>
         </svg>

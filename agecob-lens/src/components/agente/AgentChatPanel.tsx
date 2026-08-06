@@ -11,9 +11,9 @@ import { useAgentChat } from "@/hooks/useAgentChat";
 import type { AgentResponse } from "@/services/api";
 
 const HIGHLIGHT_STYLES: Record<AgentResponse["highlights"][number]["type"], string> = {
-  anomaly: "border-rose-200 bg-rose-50 text-rose-700",
-  metric: "border-sky-200 bg-sky-50 text-sky-700",
-  portfolio: "border-slate-200 bg-slate-100 text-slate-700",
+  anomaly: "border-rose-200 dark:border-rose-800/70 bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300",
+  metric: "border-sky-200 dark:border-sky-800/70 bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300",
+  portfolio: "border-slate-200 dark:border-border bg-slate-100 dark:bg-white/10 text-slate-700 dark:text-slate-200",
 };
 
 const CONFIDENCE_STYLES: Record<AgentResponse["confidence"], { dot: string; label: string }> = {
@@ -185,7 +185,7 @@ export function AgentChatPanel() {
         )}
 
         {error && !pending && (
-          <p className="text-sm text-rose-600">{error}</p>
+          <p className="text-sm text-rose-600 dark:text-rose-400">{error}</p>
         )}
       </CardContent>
 

@@ -38,7 +38,7 @@ function ParetoBarShape(props: {
       y={y}
       width={Math.max(0, width)}
       height={Math.max(0, height)}
-      fill={within80 ? "#3b82f6" : "#cbd5e1"}
+      fill={within80 ? "#3b82f6" : "hsl(var(--chart-axis))"}
       rx={2}
       data-testid="pareto-bar"
       data-within80={within80 ? "true" : "false"}
@@ -91,10 +91,10 @@ export function ParetoChart({ points }: ParetoChartProps) {
           margin={{ top: 16, right: 48, left: 8, bottom: 56 }}
           data-testid="pareto-svg"
         >
-          <CartesianGrid stroke="#f1f5f9" strokeDasharray="3 3" vertical={false} />
+          <CartesianGrid stroke="hsl(var(--chart-grid))" strokeDasharray="3 3" vertical={false} />
           <XAxis
             dataKey="nome"
-            tick={{ fontSize: 10, fill: "#64748b" }}
+            tick={{ fontSize: 10, fill: "hsl(var(--chart-label-strong))" }}
             angle={-25}
             textAnchor="end"
             interval={0}
@@ -105,7 +105,7 @@ export function ParetoChart({ points }: ParetoChartProps) {
           <YAxis
             yAxisId="valor"
             tickFormatter={(v: number) => fmtBRL(v, { compact: true })}
-            tick={{ fontSize: 10, fill: "#94a3b8" }}
+            tick={{ fontSize: 10, fill: "hsl(var(--chart-label))" }}
             axisLine={false}
             tickLine={false}
             width={56}
@@ -115,7 +115,7 @@ export function ParetoChart({ points }: ParetoChartProps) {
             orientation="right"
             domain={[0, 100]}
             tickFormatter={(v: number) => `${v}%`}
-            tick={{ fontSize: 10, fill: "#94a3b8" }}
+            tick={{ fontSize: 10, fill: "hsl(var(--chart-label))" }}
             axisLine={false}
             tickLine={false}
             width={40}
@@ -170,7 +170,7 @@ export function ParetoChart({ points }: ParetoChartProps) {
             type="button"
             data-testid="pareto-maximize"
             onClick={() => setMaximized((v) => !v)}
-            className="rounded border border-slate-300 px-2 py-1 text-[10px] text-slate-500 hover:bg-slate-100"
+            className="rounded border border-slate-300 dark:border-slate-700 px-2 py-1 text-[10px] text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/10"
           >
             {maximized ? "Minimizar" : "Tela cheia"}
           </button>
@@ -192,14 +192,14 @@ export function ParetoChart({ points }: ParetoChartProps) {
   if (maximized) {
     return (
       <>
-        <div className="fixed inset-0 z-50 bg-white flex flex-col" data-testid="pareto-overlay">
-          <div className="flex items-center justify-between px-6 py-3 border-b border-slate-200">
-            <span className="text-sm font-semibold">Pareto de Resultado 80/20 — Tela cheia</span>
+        <div className="fixed inset-0 z-50 bg-white dark:bg-card flex flex-col" data-testid="pareto-overlay">
+          <div className="flex items-center justify-between px-6 py-3 border-b border-slate-200 dark:border-border">
+            <span className="text-sm font-semibold">Pareto de Resultado 80/20 · Tela cheia</span>
             <button
               type="button"
               data-testid="pareto-minimize"
               onClick={() => setMaximized(false)}
-              className="rounded border border-slate-300 px-3 py-1 text-xs text-slate-600 hover:bg-slate-100"
+              className="rounded border border-slate-300 dark:border-slate-700 px-3 py-1 text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/10"
             >
               Minimizar
             </button>

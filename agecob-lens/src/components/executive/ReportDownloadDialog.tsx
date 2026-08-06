@@ -71,8 +71,8 @@ export function ReportDownloadDialog({
             <label
               key={s.id}
               className={
-                "flex items-center gap-3 rounded-md border border-slate-200 px-3 py-2.5 text-sm " +
-                (s.available ? "cursor-pointer hover:bg-slate-50" : "opacity-50")
+                "flex items-center gap-3 rounded-md border border-slate-200 dark:border-border px-3 py-2.5 text-sm " +
+                (s.available ? "cursor-pointer hover:bg-slate-50 dark:hover:bg-white/5" : "opacity-50")
               }
             >
               <Checkbox
@@ -80,7 +80,7 @@ export function ReportDownloadDialog({
                 disabled={!s.available}
                 onCheckedChange={() => s.available && toggle(s.id)}
               />
-              <span className="flex-1 text-slate-700">{s.label}</span>
+              <span className="flex-1 text-slate-700 dark:text-slate-200">{s.label}</span>
               {!s.available && (
                 <span className="text-[10px] uppercase tracking-wide text-slate-400">sem dados</span>
               )}
@@ -89,7 +89,7 @@ export function ReportDownloadDialog({
         </div>
 
         <DialogFooter className="sm:justify-between sm:items-center gap-2">
-          <span className="text-xs text-slate-500">{chosen.length} seção(ões) selecionada(s)</span>
+          <span className="text-xs text-slate-500 dark:text-slate-400">{chosen.length} seção(ões) selecionada(s)</span>
           <Button onClick={handleDownload} disabled={chosen.length === 0} className="gap-2">
             <Download className="h-4 w-4" />
             Baixar CSV

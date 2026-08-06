@@ -67,7 +67,7 @@ function BenchmarkLine({ kpi, bench }: { kpi: KpiDatum; bench: KpiBenchmark }) {
   return (
     <div
       title="Referência interna — média do escritório no período."
-      className={cn("text-[10px] font-medium", above ? "text-success-fg" : "text-amber-600")}
+      className={cn("text-[10px] font-medium", above ? "text-success-fg" : "text-amber-600 dark:text-amber-400")}
     >
       Média: {formatByUnit(bench.ref, kpi.unit)}
     </div>

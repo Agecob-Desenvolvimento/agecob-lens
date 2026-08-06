@@ -37,18 +37,18 @@ export function HandoffPortfolio1aParcela({
               data-testid="portfolio-row"
             >
               <span
-                className="w-[130px] shrink-0 truncate text-slate-700"
+                className="w-[130px] shrink-0 truncate text-slate-700 dark:text-slate-200"
                 title={row.label}
               >
                 {row.label}
               </span>
-              <div className="flex-1 h-[22px] bg-slate-100 rounded-[3px] overflow-hidden">
+              <div className="flex-1 h-[22px] bg-slate-100 dark:bg-white/10 rounded-[3px] overflow-hidden">
                 <div
                   className="h-full rounded-[3px] opacity-[0.85] transition-opacity hover:opacity-100"
                   style={{ width: `${pct}%`, background: BAR_COLOR }}
                 />
               </div>
-              <span className="w-[90px] shrink-0 text-right tabular-nums font-semibold text-slate-800">
+              <span className="w-[90px] shrink-0 text-right tabular-nums font-semibold text-slate-800 dark:text-slate-200">
                 {formatBRLCompact(row.value)}
               </span>
             </li>

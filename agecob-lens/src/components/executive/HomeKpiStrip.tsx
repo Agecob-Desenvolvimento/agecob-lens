@@ -1,6 +1,7 @@
 import { ArrowDownRight, ArrowRight, ArrowUpRight } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { usePeriodicBlink } from "@/hooks/usePeriodicBlink";
+import { useAnimatedFormattedValue } from "@/hooks/useAnimatedFormattedValue";
 import { cn } from "@/lib/utils";
 import {
   fmtNum,
@@ -119,6 +120,7 @@ function PrimaryCard({ kpi, onClick, blink }: { kpi: HomeKpiPrimary; onClick?: (
   const unitLabel = kpi.unit === "BRL" ? "BRL" : "";
   const baseline = kpi.baseline;
   const direction = baseline ? deriveDirection(baseline.value) : null;
+  const animatedValue = useAnimatedFormattedValue(formatPrimaryValue(kpi));
 
   return (
     <Card
@@ -143,7 +145,7 @@ function PrimaryCard({ kpi, onClick, blink }: { kpi: HomeKpiPrimary; onClick?: (
         ) : null}
       </div>
       <div className="mt-3 text-3xl md:text-4xl font-bold tabular-nums leading-none tracking-tight text-foreground">
-        {formatPrimaryValue(kpi)}
+        {animatedValue}
       </div>
       <div className="mt-3">
         {baseline && direction ? (
@@ -178,6 +180,7 @@ function PrimaryCard({ kpi, onClick, blink }: { kpi: HomeKpiPrimary; onClick?: (
 function SecondaryCard({ kpi, onClick, blink }: { kpi: HomeKpiSecondary; onClick?: () => void; blink?: boolean }) {
   const baseline = kpi.baseline;
   const direction = baseline ? deriveDirection(baseline.value) : null;
+  const animatedValue = useAnimatedFormattedValue(formatSecondaryValue(kpi));
   const tone = baseline && direction ? deltaTone(direction, baseline.betterWhen) : "muted";
   const Icon = direction ? ICON[direction] : null;
   const base = kpi.base;
@@ -203,7 +206,7 @@ function SecondaryCard({ kpi, onClick, blink }: { kpi: HomeKpiSecondary; onClick
         {kpi.label}
       </div>
       <div className="mt-2 text-xl md:text-2xl font-semibold tabular-nums leading-none text-foreground">
-        {formatSecondaryValue(kpi)}
+        {animatedValue}
       </div>
       <div className="mt-2 min-h-[1rem] space-y-0.5">
         {baseline && direction && Icon ? (
@@ -227,7 +230,7 @@ function SecondaryCard({ kpi, onClick, blink }: { kpi: HomeKpiSecondary; onClick
           <div className="text-[10px] text-muted-foreground/70 mt-0.5">{kpi.caption}</div>
         ) : null}
         {baseReduzida ? (
-          <div className="text-[10px] font-medium text-amber-600 mt-0.5">
+          <div className="text-[10px] font-medium text-amber-600 dark:text-amber-400 mt-0.5">
             ⚠ Base reduzida ({fmtNum(base!.den)} {base!.noun})
           </div>
         ) : null}
@@ -256,8 +259,8 @@ function BenchmarkLine({
       : value != null && value >= benchmark.value;
   return (
     <div
-      title="Referência interna — calculada sobre o histórico de 9 meses por banco."
-      className={cn("text-[10px] font-medium", above ? "text-success-fg" : "text-amber-600")}
+      title="Referência interna: calculada sobre o histórico de 9 meses por banco."
+      className={cn("text-[10px] font-medium", above ? "text-success-fg" : "text-amber-600 dark:text-amber-400")}
     >
       {benchmark.label}: {fmtPct(benchmark.value)}
     </div>

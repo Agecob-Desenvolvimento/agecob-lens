@@ -75,9 +75,9 @@ export function PortfolioDetailPanel({
 }) {
   const titles: Record<string, string> = { valor: "Acordos", excecoes: "Exceções", rejeitados: "Rejeitados" };
   const colors: Record<string, { bg: string; border: string; text: string }> = {
-    valor: { bg: "bg-emerald-50", border: "border-emerald-200", text: "text-emerald-800" },
-    excecoes: { bg: "bg-rose-50", border: "border-rose-200", text: "text-rose-800" },
-    rejeitados: { bg: "bg-orange-50", border: "border-orange-200", text: "text-orange-800" },
+    valor: { bg: "bg-emerald-50 dark:bg-emerald-950/40", border: "border-emerald-200 dark:border-emerald-800/70", text: "text-emerald-800 dark:text-emerald-300" },
+    excecoes: { bg: "bg-rose-50 dark:bg-rose-950/40", border: "border-rose-200 dark:border-rose-800/70", text: "text-rose-800 dark:text-rose-300" },
+    rejeitados: { bg: "bg-orange-50 dark:bg-orange-950/40", border: "border-orange-200 dark:border-orange-800/70", text: "text-orange-800 dark:text-orange-300" },
   };
   const c = colors[type];
   const { rows, loading, error } = usePortfolioDetalhe(type, portfolio);
@@ -87,7 +87,7 @@ export function PortfolioDetailPanel({
       <div className={cn("px-4 py-2.5 flex items-center justify-between", c.bg)}>
         <div className="flex items-center gap-2">
           <span className={cn("text-xs font-semibold", c.text)}>
-            {titles[type]} — {portfolio}
+            {titles[type]} · {portfolio}
             {!loading && !error && rows.length > 0 && (
               <span className="font-normal opacity-70"> · {rows.length} acordos</span>
             )}
@@ -95,7 +95,7 @@ export function PortfolioDetailPanel({
         </div>
         <button
           onClick={onClose}
-          className="p-0.5 rounded hover:bg-black/5 transition-colors"
+          className="p-0.5 rounded hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
           aria-label="Fechar detalhes"
         >
           <X className={cn("h-3.5 w-3.5", c.text)} />
@@ -109,7 +109,7 @@ export function PortfolioDetailPanel({
             ))}
           </div>
         ) : error ? (
-          <p className="text-xs text-rose-600">{error}</p>
+          <p className="text-xs text-rose-600 dark:text-rose-400">{error}</p>
         ) : rows.length === 0 ? (
           <p className="text-[11px] italic text-muted-foreground">Sem acordos no período.</p>
         ) : (
@@ -181,8 +181,8 @@ export function PortfolioSection({
     ratio: d.valor / maxExc,
     valueText: formatBRLCompact(d.valor),
     barColor: "#f43f5e",
-    trackClass: "bg-rose-50",
-    valueClass: "text-rose-600 font-semibold",
+    trackClass: "bg-rose-50 dark:bg-rose-950/40",
+    valueClass: "text-rose-600 dark:text-rose-400 font-semibold",
   }));
 
   const rejeitadosRows: BarRow[] = rejeitadosPorPortfolio.map((d) => ({
@@ -190,8 +190,8 @@ export function PortfolioSection({
     ratio: d.valor / maxRej,
     valueText: formatBRLCompact(d.valor),
     barColor: "#f97316",
-    trackClass: "bg-orange-50",
-    valueClass: "text-orange-600 font-semibold",
+    trackClass: "bg-orange-50 dark:bg-orange-950/40",
+    valueClass: "text-orange-600 dark:text-orange-400 font-semibold",
   }));
 
   return (

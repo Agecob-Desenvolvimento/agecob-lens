@@ -76,17 +76,17 @@ export function BoletosQuebradosChart({ portfolioRows, loading }: BoletosQuebrad
                   }}
                   title={`Clique para detalhar ${row.nome}`}
                   className={cn(
-                    "flex items-center gap-2 rounded-sm -mx-1 px-1 py-0.5 cursor-pointer transition-colors hover:bg-rose-50/70",
-                    isSelected && "bg-rose-50 ring-1 ring-rose-200",
+                    "flex items-center gap-2 rounded-sm -mx-1 px-1 py-0.5 cursor-pointer transition-colors hover:bg-rose-50/70 dark:hover:bg-rose-950/40",
+                    isSelected && "bg-rose-50 dark:bg-rose-950/40 ring-1 ring-rose-200 dark:ring-rose-800/70",
                   )}
                 >
                   <span className="w-32 shrink-0 text-[10px] text-right text-muted-foreground truncate" title={row.nome}>
                     {row.nome}
                   </span>
-                  <div className="flex-1 h-4 bg-rose-50 rounded-sm overflow-hidden">
+                  <div className="flex-1 h-4 bg-rose-50 dark:bg-rose-950/40 rounded-sm overflow-hidden">
                     <div className="h-full bg-rose-400 rounded-sm" style={{ width: `${(row.qtd / max) * 100}%` }} />
                   </div>
-                  <span className="w-8 shrink-0 text-[11px] font-semibold text-rose-600 text-right">{row.qtd}</span>
+                  <span className="w-8 shrink-0 text-[11px] font-semibold text-rose-600 dark:text-rose-400 text-right">{row.qtd}</span>
                   <ChevronRight className={cn("w-4 h-3 shrink-0 text-muted-foreground transition-transform", isSelected && "rotate-90")} />
                 </div>
               );

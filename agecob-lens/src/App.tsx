@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes, useLocation, useSearchParams } from "react-router-dom";
+import { ThemeProvider } from "next-themes";
 import * as Sentry from "@sentry/react";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
@@ -136,26 +137,34 @@ function AppRoutes() {
 }
 
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <GlobalFiltersProvider>
-          <NotificationProvider>
-            <AgentChatProvider>
-              <AppRoutes />
-              <RouteErrorBoundary routeName="agent-chat-panel">
-                <Suspense fallback={null}>
-                  <AgentChatPanel />
-                </Suspense>
-              </RouteErrorBoundary>
-            </AgentChatProvider>
-          </NotificationProvider>
-        </GlobalFiltersProvider>
-      </BrowserRouter>
-    </TooltipProvider>
-  </QueryClientProvider>
+  <ThemeProvider
+    attribute="class"
+    defaultTheme="system"
+    enableSystem
+    disableTransitionOnChange
+    storageKey="agdash-theme"
+  >
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <GlobalFiltersProvider>
+            <NotificationProvider>
+              <AgentChatProvider>
+                <AppRoutes />
+                <RouteErrorBoundary routeName="agent-chat-panel">
+                  <Suspense fallback={null}>
+                    <AgentChatPanel />
+                  </Suspense>
+                </RouteErrorBoundary>
+              </AgentChatProvider>
+            </NotificationProvider>
+          </GlobalFiltersProvider>
+        </BrowserRouter>
+      </TooltipProvider>
+    </QueryClientProvider>
+  </ThemeProvider>
 );
 
 export default App;

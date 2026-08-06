@@ -12,9 +12,9 @@ export interface BarRow {
 type Tone = Pick<BarRow, "barColor" | "trackClass" | "valueClass">;
 
 const TONES: Record<"excecoes" | "rejeitados" | "quebrados", Tone> = {
-  excecoes: { barColor: "#f43f5e", trackClass: "bg-rose-50", valueClass: "text-rose-600 font-semibold" },
-  rejeitados: { barColor: "#f97316", trackClass: "bg-orange-50", valueClass: "text-orange-600 font-semibold" },
-  quebrados: { barColor: "#fb7185", trackClass: "bg-rose-50", valueClass: "text-rose-600 font-semibold" },
+  excecoes: { barColor: "#f43f5e", trackClass: "bg-rose-50 dark:bg-rose-950/40", valueClass: "text-rose-600 dark:text-rose-400 font-semibold" },
+  rejeitados: { barColor: "#f97316", trackClass: "bg-orange-50 dark:bg-orange-950/40", valueClass: "text-orange-600 dark:text-orange-400 font-semibold" },
+  quebrados: { barColor: "#fb7185", trackClass: "bg-rose-50 dark:bg-rose-950/40", valueClass: "text-rose-600 dark:text-rose-400 font-semibold" },
 };
 
 function valorToRows(data: Array<{ nome: string; valor: number }>, tone: Tone): BarRow[] {

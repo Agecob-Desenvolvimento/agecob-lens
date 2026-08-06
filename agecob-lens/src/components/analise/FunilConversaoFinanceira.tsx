@@ -116,7 +116,7 @@ export function FunilConversaoFinanceira({
                   dominantBaseline="middle"
                   fontSize={12}
                   fontWeight={700}
-                  fill={stage.isBRL ? "#1e293b" : "#1e293b"}
+                  fill={stage.isBRL ? "hsl(var(--chart-ink-2))" : "hsl(var(--chart-ink-2))"}
                 >
                   {formatValue(stage)}
                 </text>
@@ -130,7 +130,7 @@ export function FunilConversaoFinanceira({
                       dominantBaseline="middle"
                       fontSize={11}
                       fontWeight={500}
-                      fill="#94a3b8"
+                      fill="hsl(var(--chart-label))"
                     >
                       ↓ {i === 0 ? tx1 : tx2}% conv.
                     </text>
@@ -167,7 +167,7 @@ export function FunilConversaoFinanceira({
                   y1={yTop}
                   x2={xL2}
                   y2={yBot}
-                  stroke="#cbd5e1"
+                  stroke="hsl(var(--chart-axis))"
                   strokeWidth={1}
                 />
                 <line
@@ -175,7 +175,7 @@ export function FunilConversaoFinanceira({
                   y1={yTop}
                   x2={xR2}
                   y2={yBot}
-                  stroke="#cbd5e1"
+                  stroke="hsl(var(--chart-axis))"
                   strokeWidth={1}
                 />
               </g>

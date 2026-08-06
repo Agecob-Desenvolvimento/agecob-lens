@@ -44,10 +44,10 @@ function predictAtEfficiencia(
 // ── R² strength label ─────────────────────────────────────────────────────
 
 function r2Label(r2: number): { text: string; color: string } {
-  if (r2 >= 0.70) return { text: "forte", color: "text-emerald-600" };
-  if (r2 >= 0.40) return { text: "moderada", color: "text-amber-600" };
-  if (r2 >= 0.15) return { text: "fraca", color: "text-amber-700" };
-  return { text: "muito fraca", color: "text-rose-600" };
+  if (r2 >= 0.70) return { text: "forte", color: "text-emerald-600 dark:text-emerald-400" };
+  if (r2 >= 0.40) return { text: "moderada", color: "text-amber-600 dark:text-amber-400" };
+  if (r2 >= 0.15) return { text: "fraca", color: "text-amber-700 dark:text-amber-300" };
+  return { text: "muito fraca", color: "text-rose-600 dark:text-rose-400" };
 }
 
 // ── Chart constants ────────────────────────────────────────────────────────
@@ -61,7 +61,7 @@ type Residual = "super" | "expected" | "sub";
 function residualColor(kind: Residual): string {
   if (kind === "super") return "#22c55e";
   if (kind === "sub") return "#ef4444";
-  return "#94a3b8";
+  return "hsl(var(--chart-label))";
 }
 
 // ── Props ──────────────────────────────────────────────────────────────────
@@ -210,12 +210,12 @@ export function RegressionView({ points, highlightId, periodLabel = "periodo atu
       .sort((a, b) => Math.abs(b.value) - Math.abs(a.value))[0];
 
     if (current.id === "volume" || current.id === "full") {
-      return `Volume de trabalho explica ${(r2 * 100).toFixed(0)}% da variação de resultado entre agentes — relação ${strength.text}.`;
+      return `Volume de trabalho explica ${(r2 * 100).toFixed(0)}% da variação de resultado entre agentes: relação ${strength.text}.`;
     }
     if (current.id === "simple") {
-      return `Eficiência operacional (CPC × conversão) sozinha explica apenas ${(r2 * 100).toFixed(0)}% — use o modelo Volume para ver o fator dominante.`;
+      return `Eficiência operacional (CPC × conversão) sozinha explica apenas ${(r2 * 100).toFixed(0)}%: use o modelo Volume para ver o fator dominante.`;
     }
-    return `Modelo "${current.label}" explica ${(r2 * 100).toFixed(0)}% da variação entre agentes — relação ${strength.text}.`;
+    return `Modelo "${current.label}" explica ${(r2 * 100).toFixed(0)}% da variação entre agentes: relação ${strength.text}.`;
   }, [current, bestByTest]);
 
   return (
@@ -235,9 +235,9 @@ export function RegressionView({ points, highlightId, periodLabel = "periodo atu
 
         {apiError && !loading && (
           <div className="py-4 text-center space-y-2" data-testid="regression-error">
-            <p className="text-sm text-rose-600">{apiError}</p>
-            <p className="text-[11px] text-amber-600 bg-amber-50 rounded px-3 py-1.5 inline-block" data-testid="mock-hint">
-              Backend scikit-learn nao encontrado. Inicie <code className="bg-amber-100 px-1 rounded">uvicorn main:app</code>.
+            <p className="text-sm text-rose-600 dark:text-rose-400">{apiError}</p>
+            <p className="text-[11px] text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 rounded px-3 py-1.5 inline-block" data-testid="mock-hint">
+              Backend scikit-learn nao encontrado. Inicie <code className="bg-amber-100 dark:bg-amber-950/60 px-1 rounded">uvicorn main:app</code>.
             </p>
           </div>
         )}
@@ -251,7 +251,7 @@ export function RegressionView({ points, highlightId, periodLabel = "periodo atu
         {!loading && !apiError && points.length >= 2 && modeloCount === 0 && (
           <div className="py-10 text-center text-sm text-muted-foreground">
             {totalRemoved > 0
-              ? `${totalRemoved} linha(s) removida(s) na limpeza — amostra insuficiente.`
+              ? `${totalRemoved} linha(s) removida(s) na limpeza: amostra insuficiente.`
               : "Modelos nao disponiveis."}
           </div>
         )}
@@ -259,12 +259,12 @@ export function RegressionView({ points, highlightId, periodLabel = "periodo atu
         {!loading && !apiError && modeloCount > 0 && current && (
           <>
             {/* ── Insight bar ──────────────────────────────────────────── */}
-            <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-slate-600" data-testid="insight-bar">
+            <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-slate-600 dark:text-slate-300" data-testid="insight-bar">
               <select
                 data-testid="model-selector"
                 value={selectedModel}
                 onChange={(e) => setSelectedModel(e.target.value as ModelId)}
-                className="rounded border border-slate-300 bg-white px-2 py-1 text-[11px] text-slate-800"
+                className="rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-card px-2 py-1 text-[11px] text-slate-800 dark:text-slate-200"
               >
                 {(apiResult?.modelos ?? []).map((m) => (
                   <option key={m.id} value={m.id}>
@@ -283,7 +283,7 @@ export function RegressionView({ points, highlightId, periodLabel = "periodo atu
               {totalRemoved > 0 && cleaningMeta && (
                 <span
                   data-testid="clean-badge"
-                  className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700 border border-amber-200"
+                  className="rounded-full bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/70"
                 >
                   −{totalRemoved} outliers
                 </span>
@@ -292,7 +292,7 @@ export function RegressionView({ points, highlightId, periodLabel = "periodo atu
 
             {/* ── Business insight ────────────────────────────────────── */}
             {insight && (
-              <p className="mb-3 text-[11px] text-slate-500 leading-relaxed" data-testid="insight-text">
+              <p className="mb-3 text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed" data-testid="insight-text">
                 {insight}
               </p>
             )}
@@ -312,7 +312,7 @@ export function RegressionView({ points, highlightId, periodLabel = "periodo atu
                 return (
                   <g key={`y${i}`}>
                     <line x1={PAD.l} x2={W - PAD.r} y1={toY(v)} y2={toY(v)} stroke="#f1f5f9" strokeWidth={1} />
-                    <text x={PAD.l - 6} y={toY(v) + 3} textAnchor="end" fontSize={9} fill="#94a3b8">
+                    <text x={PAD.l - 6} y={toY(v) + 3} textAnchor="end" fontSize={9} fill="hsl(var(--chart-label))">
                       {v < 1000 ? "R$ 0" : `R$ ${(v / 1000).toFixed(0)}k`}
                     </text>
                   </g>
@@ -343,10 +343,10 @@ export function RegressionView({ points, highlightId, periodLabel = "periodo atu
                   y={PAD.t + plotH / 2}
                   textAnchor="middle"
                   fontSize={10}
-                  fill="#94a3b8"
+                  fill="hsl(var(--chart-label))"
                   data-testid="non-drawable-note"
                 >
-                  Mapa multidimensional — reta nao projetavel no eixo eficiencia
+                  Mapa multidimensional: reta nao projetavel no eixo eficiencia
                 </text>
               )}
 
@@ -387,7 +387,7 @@ export function RegressionView({ points, highlightId, periodLabel = "periodo atu
                   <g data-testid="regression-tooltip">
                     <rect x={tx} y={ty} width={198} height={46} rx={4} fill="#0f172a" opacity={0.92} />
                     <text x={tx + 8} y={ty + 14} fontSize={11} fill="#e2e8f0">{d.nome.substring(0, 28)}</text>
-                    <text x={tx + 8} y={ty + 28} fontSize={10} fill="#94a3b8">
+                    <text x={tx + 8} y={ty + 28} fontSize={10} fill="hsl(var(--chart-label))">
                       real {formatBRLCompact(d.valor)} · prev {formatBRLCompact(Math.max(0, pred))}
                     </text>
                     <text x={tx + 8} y={ty + 40} fontSize={10} fill={dev >= 0 ? "#86efac" : "#fca5a5"}>
@@ -403,7 +403,7 @@ export function RegressionView({ points, highlightId, periodLabel = "periodo atu
               <button
                 data-testid="toggle-details"
                 onClick={() => setShowDetails((v) => !v)}
-                className="text-[10px] text-slate-400 hover:text-slate-600 underline"
+                className="text-[10px] text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 underline"
               >
                 {showDetails ? "Ocultar detalhes tecnicos" : "Detalhes tecnicos"}
               </button>
@@ -411,20 +411,20 @@ export function RegressionView({ points, highlightId, periodLabel = "periodo atu
                 <div className="mt-1 overflow-x-auto">
                   <table className="w-full text-[10px] border-collapse" data-testid="coef-table">
                     <thead>
-                      <tr className="border-b border-slate-200 text-muted-foreground">
+                      <tr className="border-b border-slate-200 dark:border-border text-muted-foreground">
                         <th className="text-left py-1 pr-3">Preditor</th>
                         <th className="text-right py-1 pr-3">Coef</th>
                         <th className="text-right py-1">SE</th>
                       </tr>
                     </thead>
                     <tbody>
-                      <tr className="border-b border-slate-100">
-                        <td className="py-0.5 text-slate-500">(intercepto)</td>
+                      <tr className="border-b border-slate-100 dark:border-border">
+                        <td className="py-0.5 text-slate-500 dark:text-slate-400">(intercepto)</td>
                         <td className="text-right tabular-nums font-medium">{current.intercept.toFixed(2)}</td>
                         <td className="text-right tabular-nums text-slate-400">{current.intercept_se.toFixed(2)}</td>
                       </tr>
                       {current.coefficients.map((c) => (
-                        <tr key={c.name} className="border-b border-slate-100">
+                        <tr key={c.name} className="border-b border-slate-100 dark:border-border">
                           <td className="py-0.5">{c.name}</td>
                           <td className="text-right tabular-nums font-medium">{c.value.toFixed(4)}</td>
                           <td className="text-right tabular-nums text-slate-400">{c.se.toFixed(4)}</td>

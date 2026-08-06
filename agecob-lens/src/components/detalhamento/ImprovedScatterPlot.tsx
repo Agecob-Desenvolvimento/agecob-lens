@@ -76,10 +76,10 @@ export function ImprovedScatterPlot({ points, highlightId }: ImprovedScatterPlot
     <Card>
       <CardHeader>
         <CardTitle className="text-lg">Matriz de Performance</CardTitle>
-        <CardDescription className="text-sm text-slate-600">
+        <CardDescription className="text-sm text-slate-600 dark:text-slate-300">
           Correlação entre produtividade, recuperação financeira e incidência de exceções.
         </CardDescription>
-        <div className="mt-1 flex gap-4 text-xs text-slate-500">
+        <div className="mt-1 flex gap-4 text-xs text-slate-500 dark:text-slate-400">
           <span className="flex items-center gap-1">
             <span className="inline-block h-2 w-2 rounded-full" style={{ background: "#22c55e" }} />
             Taxa exc &lt;5%
@@ -109,29 +109,29 @@ export function ImprovedScatterPlot({ points, highlightId }: ImprovedScatterPlot
           >
             {yTicks.map((v, i) => (
               <g key={`y${i}`}>
-                <line x1={PAD.l} x2={W - PAD.r} y1={toY(v)} y2={toY(v)} stroke="#f1f5f9" strokeWidth={1} />
-                <text x={PAD.l - 6} y={toY(v) + 3} textAnchor="end" fontSize={11} fill="#475569">
+                <line x1={PAD.l} x2={W - PAD.r} y1={toY(v)} y2={toY(v)} stroke="hsl(var(--chart-grid))" strokeWidth={1} />
+                <text x={PAD.l - 6} y={toY(v) + 3} textAnchor="end" fontSize={11} fill="hsl(var(--chart-ink-4))">
                   {v < 1000 ? "R$ 0" : `R$ ${(v / 1000).toFixed(0)}k`}
                 </text>
               </g>
             ))}
             {xTicks.map((v, i) => (
               <g key={`x${i}`}>
-                <line x1={toX(v)} x2={toX(v)} y1={PAD.t} y2={H - PAD.b} stroke="#f1f5f9" strokeWidth={1} />
-                <text x={toX(v)} y={H - PAD.b + 14} textAnchor="middle" fontSize={11} fill="#475569">
+                <line x1={toX(v)} x2={toX(v)} y1={PAD.t} y2={H - PAD.b} stroke="hsl(var(--chart-grid))" strokeWidth={1} />
+                <text x={toX(v)} y={H - PAD.b + 14} textAnchor="middle" fontSize={11} fill="hsl(var(--chart-ink-4))">
                   {v.toFixed(2)}
                 </text>
               </g>
             ))}
-            <line x1={toX(medEff)} x2={toX(medEff)} y1={PAD.t} y2={H - PAD.b} stroke="#94a3b8" strokeWidth={1} strokeDasharray="4 4" data-testid="median-x" />
-            <line x1={PAD.l} x2={W - PAD.r} y1={toY(medY)} y2={toY(medY)} stroke="#94a3b8" strokeWidth={1} strokeDasharray="4 4" data-testid="median-y" />
+            <line x1={toX(medEff)} x2={toX(medEff)} y1={PAD.t} y2={H - PAD.b} stroke="hsl(var(--chart-label))" strokeWidth={1} strokeDasharray="4 4" data-testid="median-x" />
+            <line x1={PAD.l} x2={W - PAD.r} y1={toY(medY)} y2={toY(medY)} stroke="hsl(var(--chart-label))" strokeWidth={1} strokeDasharray="4 4" data-testid="median-y" />
             {/* Quadrant labels */}
-            <text x={toX(medEff) - 6} y={toY(medY) - 10} textAnchor="end" fontSize={11} fill="#334155" opacity={0.85}>Potencial subutilizado</text>
-            <text x={toX(medEff) + 6} y={toY(medY) - 10} textAnchor="start" fontSize={11} fill="#334155" opacity={0.85}>Elite operacional</text>
-            <text x={toX(medEff) - 6} y={toY(medY) + 16} textAnchor="end" fontSize={11} fill="#334155" opacity={0.85}>Necessita intervenção</text>
-            <text x={toX(medEff) + 6} y={toY(medY) + 16} textAnchor="start" fontSize={11} fill="#334155" opacity={0.85}>Resultado caro</text>
-            <text x={W / 2} y={H - 4} textAnchor="middle" fontSize={13} fill="#1e293b">Índice de Eficiência</text>
-            <text x={10} y={H / 2} textAnchor="middle" fontSize={13} fill="#1e293b" transform={`rotate(-90, 10, ${H / 2})`}>Valor Recuperado</text>
+            <text x={toX(medEff) - 6} y={toY(medY) - 10} textAnchor="end" fontSize={11} fill="hsl(var(--chart-ink-3))" opacity={0.85}>Potencial subutilizado</text>
+            <text x={toX(medEff) + 6} y={toY(medY) - 10} textAnchor="start" fontSize={11} fill="hsl(var(--chart-ink-3))" opacity={0.85}>Elite operacional</text>
+            <text x={toX(medEff) - 6} y={toY(medY) + 16} textAnchor="end" fontSize={11} fill="hsl(var(--chart-ink-3))" opacity={0.85}>Necessita intervenção</text>
+            <text x={toX(medEff) + 6} y={toY(medY) + 16} textAnchor="start" fontSize={11} fill="hsl(var(--chart-ink-3))" opacity={0.85}>Resultado caro</text>
+            <text x={W / 2} y={H - 4} textAnchor="middle" fontSize={13} fill="hsl(var(--chart-ink-2))">Índice de Eficiência</text>
+            <text x={10} y={H / 2} textAnchor="middle" fontSize={13} fill="hsl(var(--chart-ink-2))" transform={`rotate(-90, 10, ${H / 2})`}>Valor Recuperado</text>
             {sorted.map((d) => {
               const origIdx = points.findIndex((p) => p.id === d.id);
               const isHov = hov === origIdx;
@@ -159,7 +159,7 @@ export function ImprovedScatterPlot({ points, highlightId }: ImprovedScatterPlot
                     r={r}
                     fill={dotColor(d.excPct)}
                     opacity={isHov || isHl ? 1 : hasHighlight ? 0.45 : 0.78}
-                    stroke={isHov || isHl ? "#0f172a" : "none"}
+                    stroke={isHov || isHl ? "hsl(var(--chart-ink))" : "none"}
                     strokeWidth={isHl ? 2.5 : 2}
                     style={{ cursor: "pointer" }}
                     onMouseEnter={() => setHov(origIdx)}

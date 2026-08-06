@@ -56,7 +56,7 @@ export function ChartShell({
   }
 
   return (
-    <Card className={cn("rounded-lg border-slate-200", className)}>
+    <Card className={cn("rounded-lg border-slate-200 dark:border-border", className)}>
       {hasHeader ? (
         <CardHeader className="pb-2 pt-3 px-4 flex flex-row items-start justify-between gap-2 space-y-0">
           <div className="min-w-0 space-y-1">

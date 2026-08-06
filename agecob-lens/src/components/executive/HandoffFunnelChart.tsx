@@ -10,8 +10,8 @@ interface HandoffFunnelChartProps {
 }
 
 const BU_COLORS: Record<string, { bar: string; text: string }> = {
-  AUTOS: { bar: "#6366f1", text: "#4338ca" },
-  CONSUMER: { bar: "#06b6d4", text: "#0e7490" },
+  AUTOS: { bar: "#6366f1", text: "hsl(var(--bu-autos-fg))" },
+  CONSUMER: { bar: "#06b6d4", text: "hsl(var(--bu-consumer-fg))" },
 };
 
 const STAGE_LABELS = ["Acionamentos", "Contato", "CPC", "Acordos"] as const;

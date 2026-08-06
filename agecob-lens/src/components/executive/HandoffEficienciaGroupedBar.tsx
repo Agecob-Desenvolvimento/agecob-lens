@@ -86,10 +86,10 @@ export function HandoffEficienciaGroupedBar({
           {metaConversao != null && metaConversao > 0 && (
             <ReferenceLine
               y={metaConversao}
-              stroke="#6b7280"
+              stroke="hsl(var(--chart-label-strong))"
               strokeDasharray="5 5"
               strokeWidth={1.5}
-              label={{ value: `Meta ${metaConversao}%`, position: "right", fontSize: 11, fill: "#6b7280" }}
+              label={{ value: `Meta ${metaConversao}%`, position: "right", fontSize: 11, fill: "hsl(var(--chart-label-strong))" }}
               ifOverflow="extendDomain"
             />
           )}
@@ -119,7 +119,7 @@ export function HandoffEficienciaGroupedBar({
           </Bar>
         </BarChart>
       </ResponsiveContainer>
-      <p className="mt-2 text-xs font-medium text-slate-600 tabular-nums">
+      <p className="mt-2 text-xs font-medium text-slate-600 dark:text-slate-300 tabular-nums">
         Média taxa de CPC: {fmtPct(summary.cpcAvg)} · Média Conv.: {fmtPct(summary.conversaoAvg)}
       </p>
     </ChartShell>

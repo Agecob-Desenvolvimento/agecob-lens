@@ -22,7 +22,7 @@ export function WaterfallPerdasChart({ stages }: WaterfallPerdasChartProps) {
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-semibold">Cascata de Perdas</CardTitle>
           <CardDescription className="text-xs">
-            Onde o dinheiro morreu — do acordado ao efetivamente recebido.
+            Onde o dinheiro morreu: do acordado ao efetivamente recebido.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -52,7 +52,7 @@ export function WaterfallPerdasChart({ stages }: WaterfallPerdasChartProps) {
       <CardHeader className="pb-2">
         <CardTitle className="text-sm font-semibold">Cascata de Perdas</CardTitle>
         <CardDescription className="text-xs">
-          Onde o dinheiro morreu — do acordado ao efetivamente recebido.
+          Onde o dinheiro morreu: do acordado ao efetivamente recebido.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -72,7 +72,7 @@ export function WaterfallPerdasChart({ stages }: WaterfallPerdasChartProps) {
               width={plotW}
               height={barH}
               rx={8}
-              fill="#f1f5f9"
+              fill="hsl(var(--chart-grid))"
             />
 
             {/* Received segment (green) */}
@@ -161,7 +161,7 @@ export function WaterfallPerdasChart({ stages }: WaterfallPerdasChartProps) {
             textAnchor="start"
             fontSize={11}
             fontWeight={600}
-            fill="#475569"
+            fill="hsl(var(--chart-ink-4))"
           >
             Total: {formatBRLCompact(total)}
           </text>
@@ -192,10 +192,10 @@ export function WaterfallPerdasChart({ stages }: WaterfallPerdasChartProps) {
 
           {/* Legend dots */}
           <circle cx={PAD.l} cy={barY + barH + 18} r={4} fill="#059669" />
-          <text x={PAD.l + 8} y={barY + barH + 22} fontSize={10} fill="#475569">Pago</text>
+          <text x={PAD.l + 8} y={barY + barH + 22} fontSize={10} fill="hsl(var(--chart-ink-4))">Pago</text>
 
           <circle cx={PAD.l + 80} cy={barY + barH + 18} r={4} fill="#f43f5e" />
-          <text x={PAD.l + 88} y={barY + barH + 22} fontSize={10} fill="#475569">Perdido</text>
+          <text x={PAD.l + 88} y={barY + barH + 22} fontSize={10} fill="hsl(var(--chart-ink-4))">Perdido</text>
         </svg>
       </CardContent>
     </Card>

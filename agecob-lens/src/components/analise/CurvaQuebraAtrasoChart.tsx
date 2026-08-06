@@ -88,7 +88,7 @@ export function CurvaQuebraAtrasoChart({ data }: CurvaQuebraAtrasoChartProps) {
                   x2={curW - curPad.r}
                   y1={toY(v)}
                   y2={toY(v)}
-                  stroke="#f1f5f9"
+                  stroke="hsl(var(--chart-grid))"
                   strokeWidth={1}
                 />
                 <text
@@ -96,7 +96,7 @@ export function CurvaQuebraAtrasoChart({ data }: CurvaQuebraAtrasoChartProps) {
                   y={toY(v) + 3}
                   textAnchor="end"
                   fontSize={9}
-                  fill="#94a3b8"
+                  fill="hsl(var(--chart-label))"
                 >
                   {v}%
                 </text>
@@ -110,7 +110,7 @@ export function CurvaQuebraAtrasoChart({ data }: CurvaQuebraAtrasoChartProps) {
               x2={curW - curPad.r}
               y1={toY(50)}
               y2={toY(50)}
-              stroke="#94a3b8"
+              stroke="hsl(var(--chart-label))"
               strokeWidth={1}
               strokeDasharray="4 3"
             />
@@ -118,7 +118,7 @@ export function CurvaQuebraAtrasoChart({ data }: CurvaQuebraAtrasoChartProps) {
               x={curW - curPad.r + 2}
               y={toY(50) + 3}
               fontSize={9}
-              fill="#94a3b8"
+              fill="hsl(var(--chart-label))"
             >
               50%
             </text>
@@ -158,7 +158,7 @@ export function CurvaQuebraAtrasoChart({ data }: CurvaQuebraAtrasoChartProps) {
                     textAnchor="middle"
                     fontSize={expanded ? 10 : 8}
                     fontWeight={500}
-                    fill="#64748b"
+                    fill="hsl(var(--chart-label-strong))"
                   >
                     Em risco: {d.total}
                   </text>
@@ -168,7 +168,7 @@ export function CurvaQuebraAtrasoChart({ data }: CurvaQuebraAtrasoChartProps) {
                     y={curH - 6}
                     textAnchor="middle"
                     fontSize={expanded ? 10 : 8}
-                    fill="#64748b"
+                    fill="hsl(var(--chart-label-strong))"
                   >
                     {d.faixa}
                   </text>

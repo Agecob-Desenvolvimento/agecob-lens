@@ -38,9 +38,9 @@ function riskLevel(score: number): RiskLevel {
 }
 
 const RISK_STYLE: Record<RiskLevel, { badge: string; rank: string; label: string }> = {
-  alto: { badge: "bg-rose-100 text-rose-700", rank: "bg-rose-500 text-white", label: "Alto" },
-  medio: { badge: "bg-amber-100 text-amber-700", rank: "bg-amber-500 text-white", label: "Médio" },
-  baixo: { badge: "bg-slate-100 text-slate-600", rank: "bg-slate-400 text-white", label: "Baixo" },
+  alto: { badge: "bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300", rank: "bg-rose-500 text-white", label: "Alto" },
+  medio: { badge: "bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300", rank: "bg-amber-500 text-white", label: "Médio" },
+  baixo: { badge: "bg-slate-100 dark:bg-white/10 text-slate-600 dark:text-slate-300", rank: "bg-slate-400 dark:bg-slate-600 text-white", label: "Baixo" },
 };
 
 function Sparkline({ values }: { values: number[] }) {
@@ -113,7 +113,7 @@ export function RankingPrioridade({
                     key={e.id}
                     className={cn(
                       "group flex items-center gap-3 px-4 py-2.5 hover:bg-muted/50 transition-colors",
-                      isHl && "bg-sky-50 ring-1 ring-sky-200",
+                      isHl && "bg-sky-50 dark:bg-sky-950/40 ring-1 ring-sky-200 dark:ring-sky-800/70",
                     )}
                   >
                     <span
@@ -146,16 +146,16 @@ export function RankingPrioridade({
 
             {/* Selected agent rank row (if outside top N) */}
             {showHlRow && (
-              <div className="border-t-2 border-dashed border-sky-200 mt-1">
-                <div className="px-4 py-2.5 flex items-center gap-3 bg-sky-50/50">
+              <div className="border-t-2 border-dashed border-sky-200 dark:border-sky-800/70 mt-1">
+                <div className="px-4 py-2.5 flex items-center gap-3 bg-sky-50/50 dark:bg-sky-950/40">
                   <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold bg-sky-500 text-white">
                     {highlightRank}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <div className="text-sm font-medium text-sky-700">
+                    <div className="text-sm font-medium text-sky-700 dark:text-sky-300">
                       Seu agente
                     </div>
-                    <div className="text-[10px] text-sky-500">
+                    <div className="text-[10px] text-sky-500 dark:text-sky-400">
                       #{highlightRank} de {totalAgents ?? "?"} agentes
                     </div>
                   </div>

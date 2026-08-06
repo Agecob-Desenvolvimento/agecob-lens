@@ -1,5 +1,6 @@
 import { RefreshCw } from "lucide-react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { Input } from "@/components/ui/input";
 import { useGlobalFilters } from "@/contexts/GlobalFiltersContext";
 import { cn } from "@/lib/utils";
@@ -91,6 +92,8 @@ export function ExecutiveHeader({
             );
           })}
         </div>
+
+        <ThemeToggle />
       </div>
     </header>
   );

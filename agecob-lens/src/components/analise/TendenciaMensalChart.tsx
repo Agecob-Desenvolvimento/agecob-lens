@@ -22,14 +22,14 @@ export function TendenciaMensalChart({ data }: TendenciaMensalChartProps) {
   return (
     <Card>
       <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-semibold">Tendência Mensal — % Conversão</CardTitle>
+        <CardTitle className="text-sm font-semibold">Tendência Mensal · % Conversão</CardTitle>
       </CardHeader>
       <CardContent>
         <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} data-testid="tendencia-svg" style={{ display: "block" }}>
           {[0, 25, 50, 75, 100].map((v) => (
             <g key={v}>
-              <line x1={PAD.l} x2={W - PAD.r} y1={toY(v)} y2={toY(v)} stroke="#f1f5f9" strokeWidth={1} />
-              <text x={PAD.l - 4} y={toY(v) + 3} textAnchor="end" fontSize={9} fill="#94a3b8">{v}%</text>
+              <line x1={PAD.l} x2={W - PAD.r} y1={toY(v)} y2={toY(v)} stroke="hsl(var(--chart-grid))" strokeWidth={1} />
+              <text x={PAD.l - 4} y={toY(v) + 3} textAnchor="end" fontSize={9} fill="hsl(var(--chart-label))">{v}%</text>
             </g>
           ))}
           <line
@@ -38,11 +38,11 @@ export function TendenciaMensalChart({ data }: TendenciaMensalChartProps) {
             x2={W - PAD.r}
             y1={toY(media)}
             y2={toY(media)}
-            stroke="#94a3b8"
+            stroke="hsl(var(--chart-label))"
             strokeWidth={1}
             strokeDasharray="4 3"
           />
-          <text x={W - PAD.r + 2} y={toY(media) + 3} fontSize={9} fill="#94a3b8">Média {media}%</text>
+          <text x={W - PAD.r + 2} y={toY(media) + 3} fontSize={9} fill="hsl(var(--chart-label))">Média {media}%</text>
           {data.map((d, i) => {
             const x = PAD.l + i * gap + (gap - barW) / 2;
             const h = (d.conversao / 100) * plotH;
@@ -52,7 +52,7 @@ export function TendenciaMensalChart({ data }: TendenciaMensalChartProps) {
                 <text x={x + barW / 2} y={PAD.t + plotH - h - 6} textAnchor="middle" fontSize={10} fontWeight={600} fill={d.color}>
                   {d.conversao}%
                 </text>
-                <text x={x + barW / 2} y={H - 6} textAnchor="middle" fontSize={9} fill="#64748b">{d.mes}</text>
+                <text x={x + barW / 2} y={H - 6} textAnchor="middle" fontSize={9} fill="hsl(var(--chart-label-strong))">{d.mes}</text>
               </g>
             );
           })}

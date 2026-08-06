@@ -18,7 +18,7 @@ import {
 const navItems = [
   { title: "Dashboard Executivo", url: "/", icon: LayoutDashboard, enabled: true, level: 1 },
   { title: "Detalhamento Agentes", url: "/detalhamento-agentes", icon: Users, enabled: true, level: 2 },
-  { title: "Carteiras — Metas", url: "/carteiras", icon: Target, enabled: true, level: 2 },
+  { title: "Carteiras · Metas", url: "/carteiras", icon: Target, enabled: true, level: 2 },
   { title: "Análise & Efetividade", url: "/efetividade-boletos", icon: TrendingUp, enabled: true, level: 3 },
 ];
 
@@ -75,7 +75,7 @@ export function AppSidebar() {
                           <NavLink
                             to={item.url}
                             end
-                            className="text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-colors"
+                            className="text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-slate-100 transition-colors"
                             activeClassName="!bg-sidebar-accent !text-sidebar-foreground font-semibold"
                           >
                             <item.icon className="h-4 w-4" />
@@ -103,10 +103,10 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem>
-                <SidebarMenuButton asChild tooltip="Modo TV — painel para televisão">
+                <SidebarMenuButton asChild tooltip="Modo TV: painel para televisão">
                   <NavLink
                     to="/modo-tv"
-                    className="text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-colors"
+                    className="text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-slate-100 transition-colors"
                     activeClassName="!bg-sidebar-accent !text-sidebar-foreground font-semibold"
                   >
                     <Tv className="h-4 w-4" />
