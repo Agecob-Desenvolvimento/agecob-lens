@@ -26,8 +26,7 @@ def em_horario(monkeypatch):
     monkeypatch.setattr(rd, "datetime", _FrozenDT)
     monkeypatch.setattr(rd, "_load_artifacts", lambda: (object(), object()))
     monkeypatch.setattr(rd, "_load_lookup", lambda: {})
-    monkeypatch.setattr(rd, "_load_valor_artifacts", lambda: (object(), object()))
-    monkeypatch.setattr(rd, "_load_valor_lookup", lambda: {})
+    monkeypatch.setattr(rd, "_load_ticket_lookup", lambda: {})
 
 
 @pytest.mark.parametrize("status", [500, 504])

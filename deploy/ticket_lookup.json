@@ -1,0 +1,21 @@
+{
+  "modelo": "ticket_1a_parcela",
+  "por_banco": {
+    "COBwebRCBAUTOS": {
+      "estimador": "mediana",
+      "granularidade": "banco",
+      "janela_dias_uteis": 63,
+      "treino_de": "2026-04-10",
+      "treino_ate": "2026-07-07",
+      "tickets": 549.83
+    },
+    "COBwebRCBCONSUMER": {
+      "estimador": "winsor_p5_p95",
+      "granularidade": "banco",
+      "janela_dias_uteis": 63,
+      "treino_de": "2026-03-18",
+      "treino_ate": "2026-06-12",
+      "tickets": 192.75
+    }
+  }
+}

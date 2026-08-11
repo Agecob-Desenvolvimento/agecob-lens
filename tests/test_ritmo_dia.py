@@ -33,8 +33,8 @@ def _stub_artifacts(monkeypatch):
     )
     monkeypatch.setattr(
         rd,
-        "_load_valor_artifacts",
-        lambda: rd.Artifacts(model=_FakeModel(), scaler=_FakeScaler()),
+        "_load_ticket_lookup",
+        lambda: {"por_banco": {"COBwebRCBCONSUMER": {"tickets": 1.0}, "COBwebRCBAUTOS": {"tickets": 1.0}}},
     )
     monkeypatch.setattr(rd, "_coletar_valor_por_banco", lambda db: {})
 
@@ -77,7 +77,7 @@ def test_bandas_valor_mescladas(monkeypatch):
     assert bandas[10]["status_valor"] == "em_andamento"
     assert bandas[11]["status_valor"] == "futuro"
     assert resp["data"]["valor_acumulado_atual"] == 1002.0
-    assert resp["meta"]["modelo_valor"] == "knn_phase2_valor"
+    assert resp["meta"]["modelo_valor"] == "ticket_mediano_x_count_esperado"
 
 
 def test_hora_8_inicio_dia(monkeypatch):

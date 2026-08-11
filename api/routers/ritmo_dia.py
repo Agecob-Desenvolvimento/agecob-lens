@@ -35,9 +35,7 @@ _DEPLOY_DIR = Path(__file__).resolve().parents[2] / "deploy"
 _MODEL_PATH = _DEPLOY_DIR / "knn_phase2_model.joblib"
 _SCALER_PATH = _DEPLOY_DIR / "knn_phase2_scaler.joblib"
 _LOOKUP_PATH = _DEPLOY_DIR / "phase1_lookup.json"
-_VALOR_MODEL_PATH = _DEPLOY_DIR / "knn_phase2_valor_model.joblib"
-_VALOR_SCALER_PATH = _DEPLOY_DIR / "knn_phase2_valor_scaler.joblib"
-_VALOR_LOOKUP_PATH = _DEPLOY_DIR / "phase1_lookup_valor.json"
+_TICKET_LOOKUP_PATH = _DEPLOY_DIR / "ticket_lookup.json"
 _MODEL_TTL = 24 * 60 * 60
 
 _BANCOS_LOOKUP = {"COBwebRCBAUTOS"}  # bancos servidos pelo lookup; demais usam KNN
@@ -84,16 +82,16 @@ def _load_artifacts() -> Artifacts:
     return _load_artifacts_from(_MODEL_PATH, _SCALER_PATH)
 
 
-def _load_valor_artifacts() -> Artifacts:
-    return _load_artifacts_from(_VALOR_MODEL_PATH, _VALOR_SCALER_PATH)
-
-
 def _load_lookup() -> Dict[str, object]:
     return _load_lookup_from(_LOOKUP_PATH)
 
 
-def _load_valor_lookup() -> Dict[str, object]:
-    return _load_lookup_from(_VALOR_LOOKUP_PATH)
+def _load_ticket_lookup() -> Dict[str, object]:
+    return _load_lookup_from(_TICKET_LOOKUP_PATH)
+
+
+def _ticket_banco(lookup: Dict[str, object], banco: str) -> float:
+    return float(lookup["por_banco"][banco]["tickets"])
 
 
 def _feature_vector(
@@ -119,32 +117,14 @@ def _esperado(
     return max(0, math.ceil(pred))
 
 
-def _esperado_valor(
-    model,
-    scaler,
-    hora: int,
-    dias_desde: int,
-    dia_semana: int,
-    acumulado: float,
-    banco_bin: int,
-    acum_primeiras_2h: float,
-) -> float:
-    X = _feature_vector(hora, dias_desde, dia_semana, acumulado, banco_bin, acum_primeiras_2h)
-    pred = float(model.predict(scaler.transform(X))[0])
-    return round(max(0.0, pred), 2)
-
-
 def _esperado_lookup(lookup: Dict[str, object], banco: str, hora: int) -> int:
     pred = float(lookup["medianas"][banco][str(hora)])
     return max(0, math.ceil(pred))
 
 
-def _esperado_lookup_valor(lookup: Dict[str, object], banco: str, hora: int) -> float:
-    pred = float(lookup["medianas"][banco][str(hora)])
-    return round(max(0.0, pred), 2)
-
-
 def _modelo_label(db: str, sufixo: str = "") -> str:
+    if sufixo == "_valor":
+        return "ticket_mediano_x_count_esperado"
     if db == "todos":
         return f"hibrido_autos_p1_consumer_knn{sufixo}"
     return f"phase1_hora_banco{sufixo}" if db in _BANCOS_LOOKUP else f"knn_phase2{sufixo}"
@@ -289,26 +269,16 @@ def _bandas_para_banco(
 
 
 def _bandas_valor_para_banco(
-    model,
-    scaler,
-    lookup: Dict[str, object],
-    banco: str,
-    dias_desde: int,
-    dia_semana: int,
+    bandas_count: List[Dict[str, object]],
+    ticket: float,
     reais: Dict[int, float],
     hora_atual: int,
 ) -> List[Dict[str, object]]:
-    usa_lookup = banco in _BANCOS_LOOKUP
-    acum_2h_full = float(reais.get(8, 0.0) + reais.get(9, 0.0))
     bandas: List[Dict[str, object]] = []
     acumulado = 0.0
-    for h in range(8, 20):
-        if usa_lookup:
-            esp = _esperado_lookup_valor(lookup, banco, h)
-        else:
-            acum_2h = 0.0 if h < 10 else acum_2h_full
-            esp = _esperado_valor(model, scaler, h, dias_desde, dia_semana, acumulado,
-                                   _BANCO_BIN[banco], acum_2h)
+    for banda_count in bandas_count:
+        h = banda_count["hora"]
+        esp = round(float(banda_count["esperado"]) * ticket, 2)
         if not reais and h >= hora_atual:
             real, delta, status = None, None, "futuro"
         elif h < hora_atual:
@@ -429,8 +399,7 @@ def ritmo_dia(db: str) -> Dict[str, object]:
     try:
         model, scaler = _load_artifacts()
         lookup = _load_lookup()
-        valor_model, valor_scaler = _load_valor_artifacts()
-        valor_lookup = _load_valor_lookup()
+        ticket_lookup = _load_ticket_lookup()
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Falha ao carregar modelo: {exc}")
 
@@ -482,9 +451,9 @@ def ritmo_dia(db: str) -> Dict[str, object]:
     bandas = _agregar_bandas(bandas_por_banco)
 
     bandas_valor_por_banco = [
-        _bandas_valor_para_banco(valor_model, valor_scaler, valor_lookup, banco,
-                                  por_banco[banco][0], dia_semana, valor_por_banco.get(banco, {}), hora_atual)
-        for banco in por_banco
+        _bandas_valor_para_banco(bandas_banco, _ticket_banco(ticket_lookup, banco),
+                                  valor_por_banco.get(banco, {}), hora_atual)
+        for banco, bandas_banco in zip(por_banco, bandas_por_banco)
     ]
     bandas_valor = _agregar_bandas_valor(bandas_valor_por_banco)
     for banda, banda_valor in zip(bandas, bandas_valor):
