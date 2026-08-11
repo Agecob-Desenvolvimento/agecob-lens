@@ -43,9 +43,12 @@ export function TopBar({ sub }: { sub: string }) {
 function BuStat({ value, label }: { value: string; label: string }) {
   const animatedValue = useAnimatedFormattedValue(value);
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-end" }}>
-      <span style={{ ...NUM, fontSize: 34, fontWeight: 800, color: TV.t1, lineHeight: 0.9 }}>{animatedValue}</span>
-      <span style={{ fontSize: 15, fontWeight: 600, letterSpacing: "0.14em", color: TV.t3, whiteSpace: "nowrap" }}>{label}</span>
+    // maxWidth + wrap (não nowrap): rótulo mais longo ("Da 1ª parcela") quebra em
+    // 2 linhas em vez de forçar a largura do card — largura previsível, sem risco
+    // de estourar o canvas de 1920px numa TV sem margem de sobra na lateral.
+    <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-end", maxWidth: 82 }}>
+      <span style={{ ...NUM, fontSize: 30, fontWeight: 800, color: TV.t1, lineHeight: 0.9, whiteSpace: "nowrap" }}>{animatedValue}</span>
+      <span style={{ fontSize: 14, fontWeight: 600, letterSpacing: "0.14em", color: TV.t3, textAlign: "right", lineHeight: 1.2 }}>{label}</span>
     </div>
   );
 }
@@ -54,12 +57,12 @@ function BuStat({ value, label }: { value: string; label: string }) {
 function BuCard({ b, share }: { b: TvBu; share: number | null }) {
   const animatedValor = useAnimatedFormattedValue(tvBRLk(b.valor));
   return (
-    <div style={{ flex: 1, minHeight: 0, background: TV.cardHi, borderRadius: 16, padding: "20px 32px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 28 }}>
+    <div style={{ flex: 1, minHeight: 0, background: TV.cardHi, borderRadius: 16, padding: "20px 22px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 20 }}>
       <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
         <span style={{ fontSize: 20, fontWeight: 700, letterSpacing: "0.18em", color: TV.t2 }}>{b.bu}</span>
-        <span style={{ ...NUM, fontSize: 58, fontWeight: 800, color: TV.t1, lineHeight: 0.9, letterSpacing: "-0.02em", whiteSpace: "nowrap" }}>{animatedValor}</span>
+        <span style={{ ...NUM, fontSize: 52, fontWeight: 800, color: TV.t1, lineHeight: 0.9, letterSpacing: "-0.02em", whiteSpace: "nowrap" }}>{animatedValor}</span>
       </div>
-      <div style={{ display: "flex", gap: 36, flexShrink: 0 }}>
+      <div style={{ display: "flex", gap: 24, flexShrink: 0 }}>
         <BuStat value={tvNum(b.acordos)} label="Acordos" />
         <BuStat value={share == null ? "—" : share + "%"} label="Da 1ª parcela" />
       </div>
@@ -75,22 +78,15 @@ export const OVERSCAN_BOTTOM = 60;
 export function VariantScoreboard() {
   const { valor: v, kpis, bu, buTotal } = useTvData();
 
-  // Cor do % = posição vs ritmo esperado do dia. Gold nunca carrega estado (§3.6):
-  // dentro de ±3pp do esperado o número fica neutro.
-  const diff = v.pctMetaDia != null && v.pctEsperado != null ? v.pctMetaDia - v.pctEsperado : null;
-  const pctCor = v.pctMetaDia != null && v.pctMetaDia >= 1 ? TV.good : diff == null ? TV.t1 : diff >= 0.03 ? TV.good : diff <= -0.03 ? TV.warn : TV.t1;
-  // mesmo limiar da barra de meta — um só conceito de "atrás do ritmo" na tela
-  const atrasado = diff != null && diff <= -0.03 && !(v.pctMetaDia != null && v.pctMetaDia >= 1);
-
   const valorAcordosDiaTxt = useAnimatedFormattedValue(tvBRLc(v.valorAcordosDia));
   const realizadoDiaTxt = useAnimatedFormattedValue(tvBRLc(v.realizadoDia));
-  const pctMetaDiaTxt = useAnimatedFormattedValue(v.pctMetaDia == null ? "—" : Math.round(v.pctMetaDia * 100) + "%");
+  const excecoesP1DiaTxt = useAnimatedFormattedValue(tvBRLc(v.excecoesPrimeiraParcelaDia));
 
   return (
     <TvScreen>
       <TopBar sub="Placar do Dia · Modo TV" />
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", padding: "28px 80px 20px", gap: 22, minHeight: 0 }}>
-        <div style={{ display: "grid", gridTemplateColumns: bu.length ? "1fr 620px" : "1fr", gap: 40, alignItems: "stretch", flexShrink: 0, height: 262 }}>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", padding: "28px 64px 20px", gap: 22, minHeight: 0 }}>
+        <div style={{ display: "grid", gridTemplateColumns: bu.length ? "1fr 660px" : "1fr", gap: 40, alignItems: "stretch", flexShrink: 0, height: 262 }}>
           <div style={{ display: "flex", flexDirection: "column", justifyContent: "center" }}>
             <Eyebrow color={TV.goldText}>Hoje</Eyebrow>
             {/* grid de 3 colunas × 3 linhas (rótulo · número · nota). `alignItems:
@@ -114,24 +110,20 @@ export function VariantScoreboard() {
             >
               <Eyebrow size={17} color={TV.t3} style={{ letterSpacing: "0.16em" }}>Valor de acordos</Eyebrow>
               <Eyebrow size={17} color={TV.t3} style={{ letterSpacing: "0.16em" }}>1ª parcela</Eyebrow>
-              <Eyebrow size={17} color={TV.t3} style={{ letterSpacing: "0.16em" }}>Meta do dia</Eyebrow>
+              <Eyebrow size={17} color={TV.t3} style={{ letterSpacing: "0.16em" }}>Exceção · 1ª parcela</Eyebrow>
 
               {/* `nowrap` obrigatório: as trilhas são `auto` e, sem ele, um valor
                   longo ("R$ 1,61 mi") quebra em duas linhas e estoura a faixa por
                   cima da barra de meta. Corpos somam ~1050px em 1100 disponíveis. */}
               <div style={{ ...NUM, fontWeight: 800, fontSize: 76, lineHeight: 0.92, color: TV.t1, letterSpacing: "-0.03em", whiteSpace: "nowrap" }}>{valorAcordosDiaTxt}</div>
               <div style={{ ...NUM, fontWeight: 800, fontSize: 76, lineHeight: 0.92, color: TV.gold, letterSpacing: "-0.03em", whiteSpace: "nowrap" }}>{realizadoDiaTxt}</div>
-              {/* maior glifo da tela — é a métrica que a operação olha primeiro */}
-              <div style={{ ...NUM, fontWeight: 800, fontSize: 110, lineHeight: 0.92, color: pctCor, letterSpacing: "-0.03em", whiteSpace: "nowrap" }}>
-                {pctMetaDiaTxt}
+              {/* goldText, não warn: única cor "amarela" auditada p/ texto < 28px (§ paleta APCA); aqui em corpo grande fica gold cheio */}
+              <div style={{ ...NUM, fontWeight: 800, fontSize: 76, lineHeight: 0.92, color: TV.goldText, letterSpacing: "-0.03em", whiteSpace: "nowrap" }}>
+                {excecoesP1DiaTxt}
               </div>
 
               <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                 <div style={{ ...NUM, fontSize: 17, color: TV.t3, whiteSpace: "nowrap" }}>{tvNum(v.qtdAcordosDia)} acordos</div>
-                {/* goldText, não warn: única cor "amarela" auditada p/ texto < 28px (§ paleta APCA) */}
-                <div style={{ ...NUM, fontSize: 15, fontWeight: 700, color: TV.goldText, whiteSpace: "nowrap" }}>
-                  {tvBRLk(v.excecoesValorDia)} em exceção · {tvNum(v.excecoesQtdDia)} acordos
-                </div>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <DeltaChip value={v.vsOntemDia} size={20} />
@@ -139,22 +131,8 @@ export function VariantScoreboard() {
                   vs dia útil anterior, mesma hora <span style={{ fontSize: 13, color: TV.t3small }}>(estimado por hora do dia)</span>
                 </span>
               </div>
-              {/* único lugar da tela que usa o vermelho saturado (§3.6): fora do
-                  estado atrasado não existe um pixel de `alarm` na tela.
-                  Diz "abaixo da meta", não "abaixo do ritmo": este chip mede CAIXA
-                  (1ª parcela / meta do dia) e a pill do gráfico mede CONTAGEM de
-                  acordos. Podem discordar legitimamente — dois rótulos iguais para
-                  métricas diferentes leem como contradição na parede. */}
-              {atrasado ? (
-                <div style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "5px 14px", borderRadius: 999, background: TV.alarmSoft, border: `1px solid rgba(255,77,66,0.35)`, whiteSpace: "nowrap" }}>
-                  <span style={{ ...NUM, fontSize: 17, fontWeight: 700, color: TV.alarmText }}>▼ {Math.round(Math.abs(diff! * 100))} pp</span>
-                  <span style={{ fontSize: 15, fontWeight: 700, letterSpacing: "0.10em", color: TV.alarmText, textTransform: "uppercase" }}>abaixo da meta</span>
-                </div>
-              ) : (
-                <div style={{ fontSize: 17, color: TV.t2, whiteSpace: "nowrap" }}>
-                  de <strong style={{ color: TV.t1, fontWeight: 700 }}>{tvBRLc(v.metaDia)}</strong>
-                </div>
-              )}
+              {/* total em exceção (não só a 1ª parcela) — demovido a legenda desde que a 1ª parcela virou o número grande */}
+              <div style={{ ...NUM, fontSize: 17, color: TV.t3, whiteSpace: "nowrap" }}>{tvBRLk(v.excecoesValorDia)} total · {tvNum(v.excecoesQtdDia)} acordos</div>
             </div>
           </div>
           {bu.length > 0 && (

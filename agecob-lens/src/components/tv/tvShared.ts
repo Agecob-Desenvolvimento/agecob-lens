@@ -112,6 +112,8 @@ export interface TvHeroValor {
   excecoesValorDia: number | null;
   /** qtd de acordos em exceção gerados HOJE */
   excecoesQtdDia: number | null;
+  /** 1ª parcela dos acordos em exceção gerados HOJE (fatia da entrada) */
+  excecoesPrimeiraParcelaDia: number | null;
   /** 1ª parcela do dia útil anterior (fechado) */
   ontemDia: number | null;
   /** delta fracionário do dia vs dia útil anterior */
@@ -161,6 +163,11 @@ export interface TvRitmoAgg {
   espAteAgora: number | null;
   proj: number | null;
   meta: number | null;
+  /** mesmo agregado, em R$ (valor de acordos) — espelha Home/RitmoDiaCard */
+  valorReal: number | null;
+  valorEspAteAgora: number | null;
+  valorProj: number | null;
+  valorMeta: number | null;
 }
 
 export type TvTickerKind = "win" | "up" | "alert" | "info";

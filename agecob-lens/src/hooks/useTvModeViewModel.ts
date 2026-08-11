@@ -109,6 +109,9 @@ export function useTvModeViewModel(): TvModeViewModel {
     const excecoesQtdDia = agentesHoje.length
       ? agentesHoje.reduce((s, r) => s + (Number(r.qtd_excecoes) || 0), 0)
       : null;
+    const excecoesPrimeiraParcelaDia = agentesHoje.length
+      ? agentesHoje.reduce((s, r) => s + (Number(r.valor_primeira_parcela_excecoes) || 0), 0)
+      : null;
     const valor = {
       metaDia,
       realizadoDia: ppHoje,
@@ -116,6 +119,7 @@ export function useTvModeViewModel(): TvModeViewModel {
       qtdAcordosDia,
       excecoesValorDia,
       excecoesQtdDia,
+      excecoesPrimeiraParcelaDia,
       ontemDia: ppOntem,
       // hoje é parcial; comparar com o dia anterior FECHADO daria ▼80% às 10h por
       // construção. A base é reduzida à mesma fração da janela já decorrida.
@@ -177,6 +181,9 @@ export function useTvModeViewModel(): TvModeViewModel {
     const espAteAgora = bandas
       .filter((b) => b.status !== "futuro" && b.status !== "em_andamento")
       .reduce((s, b) => s + b.esperado, 0);
+    const valorEspAteAgora = bandas
+      .filter((b) => b.status !== "futuro" && b.status !== "em_andamento")
+      .reduce((s, b) => s + (b.esperado_valor ?? 0), 0);
     // meta.em_operacao=false (fora 8h-19h ou fds) → backend retorna acumulado_atual
     // stub (0), não dado real. Sem essa checagem a URA anunciaria "0 acordos".
     const emOperacao = ritmoResp?.meta.em_operacao ?? false;
@@ -185,6 +192,11 @@ export function useTvModeViewModel(): TvModeViewModel {
       espAteAgora: emOperacao && bandas.length ? espAteAgora : null,
       proj: emOperacao ? ritmoResp?.data.projecao_fechamento ?? null : null,
       meta: emOperacao ? ritmoResp?.data.esperado_total ?? null : null,
+      // ritmo de valor de acordos (mesma fonte /ritmo-dia) — espelha RitmoDiaCard da Home
+      valorReal: emOperacao ? ritmoResp?.data.valor_acumulado_atual ?? null : null,
+      valorEspAteAgora: emOperacao && bandas.length ? valorEspAteAgora : null,
+      valorProj: emOperacao ? ritmoResp?.data.valor_projecao_fechamento ?? null : null,
+      valorMeta: emOperacao ? ritmoResp?.data.valor_esperado_total ?? null : null,
     };
     // Ticker — destaques derivados de dados reais. Cada item é [chip · frase · valor]:
     // o rodapé pagina um por vez, então a frase precisa caber sozinha na tela.

@@ -231,6 +231,15 @@ export function RitmoWorm() {
       ? { bg: TV.goodSoft, br: TV.good, fg: TV.good, txt: "acima em acordos", seta: "▲" }
       : { bg: TV.badSoft, br: TV.bad, fg: TV.badText, txt: "abaixo em acordos", seta: "▼" };
 
+  // mesmo ritmo, em R$ (valor de acordos) — espelha o card "Ritmo do Dia" da Home
+  const deltaValor = ritmoAgg.valorReal != null && ritmoAgg.valorEspAteAgora != null ? ritmoAgg.valorReal - ritmoAgg.valorEspAteAgora : null;
+  const noRitmoValor = deltaValor == null || ritmoAgg.valorEspAteAgora == null || Math.abs(deltaValor) <= ritmoAgg.valorEspAteAgora * 0.03;
+  const pillValor = noRitmoValor
+    ? { bg: "rgba(238,242,251,0.08)", br: TV.lineHi, fg: TV.t2, txt: deltaValor == null ? "sem dados" : "no ritmo em valor", seta: "" }
+    : deltaValor > 0
+      ? { bg: TV.goodSoft, br: TV.good, fg: TV.good, txt: "acima em valor", seta: "▲" }
+      : { bg: TV.badSoft, br: TV.bad, fg: TV.badText, txt: "abaixo em valor", seta: "▼" };
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14, height: "100%", minHeight: 0 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 20 }}>
@@ -262,6 +271,35 @@ export function RitmoWorm() {
             {pill.txt}
           </span>
         </div>
+      </div>
+
+      {/* ritmo de valor de acordos (R$) — mesmo dado do card "Ritmo do Dia" da Home,
+          como linha compacta em vez de 2ª curva: o worm já soma 4 camadas visuais
+          (banda + esperado + real + meta) e duplicar em R$ com eixo próprio vira ruído. */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 20, marginTop: -6 }}>
+        <span style={{ ...NUM, fontSize: 17, color: TV.t3, whiteSpace: "nowrap" }}>
+          valor real <strong style={{ color: TV.t2, fontWeight: 700 }}>{tvBRLk(ritmoAgg.valorReal)}</strong> / proj. {tvBRLk(ritmoAgg.valorProj)} / meta {tvBRLk(ritmoAgg.valorMeta)}
+        </span>
+        <span
+          style={{
+            ...NUM,
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
+            padding: "5px 14px",
+            borderRadius: 20,
+            background: pillValor.bg,
+            border: `1px solid ${pillValor.br}`,
+            color: pillValor.fg,
+            fontSize: 16,
+            fontWeight: 700,
+            letterSpacing: "0.06em",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {pillValor.seta} {deltaValor != null && !noRitmoValor ? (deltaValor > 0 ? "+" : "−") + tvBRLk(Math.abs(deltaValor)) + " " : ""}
+          {pillValor.txt}
+        </span>
       </div>
 
       <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
