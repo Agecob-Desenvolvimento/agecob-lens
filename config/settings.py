@@ -226,7 +226,8 @@ EFETIVIDADE_DATA_MINIMA: str = "20260101"
 # Filtro de agentes da EFETIVIDADE — diverge do FILTRO_AGENTES_EXCLUIDOS_SQL de
 # propósito: match por substring (não prefixo/exato) e exclui também SERASA e
 # NEMBUS. Unificar os dois muda os números da página Efetividade — decisão de
-# negócio pendente.
+# negócio pendente. FT5SYSTEM adicionado 2026-08-11: 80 boletos, 100% não
+# pagos, contaminava as séries históricas sem aparecer no card do mês corrente.
 FILTRO_AGENTES_EFETIVIDADE_SQL: str = (
     "AND UPPER(U.CHAVE) NOT LIKE '%SERASA%' "
     "AND UPPER(U.CHAVE) NOT LIKE '%COBDESANTOS%' "
@@ -235,6 +236,7 @@ FILTRO_AGENTES_EFETIVIDADE_SQL: str = (
     "AND UPPER(U.CHAVE) NOT LIKE '%SUPORTE%' "
     "AND UPPER(U.CHAVE) NOT LIKE '%INTERNA%' "
     "AND UPPER(U.CHAVE) NOT LIKE '%SISTEMA%' "
+    "AND UPPER(U.CHAVE) NOT LIKE '%FT5SYSTEM%' "
     "AND UPPER(U.NOME) NOT LIKE '%COBDESANTOS%' "
     "AND UPPER(U.NOME) NOT LIKE '%NEMBUSUSER%'"
 )
