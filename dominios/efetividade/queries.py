@@ -202,7 +202,11 @@ SELECT
     SUM(CASE WHEN DT_VENCIMENTO >= CAST(GETDATE() AS DATE)
              AND (DT_PAGAMENTO IS NULL OR VR_PAGO = 0) THEN 1 ELSE 0 END) AS to_mature,
     SUM(CASE WHEN DT_VENCIMENTO < CAST(GETDATE() AS DATE)
-             AND ({pago_expr}) = 0 THEN 1 ELSE 0 END) AS overdue_unpaid,
+             AND ({pago_expr}) = 0
+             AND DATEADD(DAY, 5, DT_VENCIMENTO) >= CAST(GETDATE() AS DATE) THEN 1 ELSE 0 END) AS em_carencia,
+    SUM(CASE WHEN DT_VENCIMENTO < CAST(GETDATE() AS DATE)
+             AND ({pago_expr}) = 0
+             AND DATEADD(DAY, 5, DT_VENCIMENTO) < CAST(GETDATE() AS DATE) THEN 1 ELSE 0 END) AS overdue_unpaid,
     SUM({pago_expr}) AS paid_on_time,
     SUM(CASE WHEN ID_REC_STATUS = {settings.STATUS_QUEBRADO[0]} THEN 1 ELSE 0 END) AS broken,
     CAST(100.0 * SUM({pago_expr}) / NULLIF(COUNT(*), 0) AS DECIMAL(8, 2)) AS conversion_pct,
@@ -262,10 +266,17 @@ _EF_DETALHE_FILTERS = {
         "AND R.DT_VENCIMENTO >= CAST(GETDATE() AS DATE)\n"
         "              AND (R.DT_PAGAMENTO IS NULL OR R.VR_PAGO = 0)"
     ),
-    # overdue_unpaid: vencido e não pago no prazo
+    # em_carencia: vencido, não pago, ainda dentro dos 5 dias de carência — não é perda
+    "em_carencia": (
+        "AND R.DT_VENCIMENTO < CAST(GETDATE() AS DATE)\n"
+        f"              AND ({_EF_PAGO_PRAZO_EXPR}) = 0\n"
+        "              AND DATEADD(DAY, 5, R.DT_VENCIMENTO) >= CAST(GETDATE() AS DATE)"
+    ),
+    # overdue_unpaid: vencido, não pago, carência de 5 dias já expirada — perda de fato
     "vencidos_nao_pagos": (
         "AND R.DT_VENCIMENTO < CAST(GETDATE() AS DATE)\n"
-        f"              AND ({_EF_PAGO_PRAZO_EXPR}) = 0"
+        f"              AND ({_EF_PAGO_PRAZO_EXPR}) = 0\n"
+        "              AND DATEADD(DAY, 5, R.DT_VENCIMENTO) < CAST(GETDATE() AS DATE)"
     ),
     # broken: boleto quebrado
     "quebrados": f"AND R.ID_REC_STATUS = {settings.STATUS_QUEBRADO[0]}",

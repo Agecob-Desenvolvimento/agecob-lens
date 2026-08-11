@@ -1065,6 +1065,7 @@ export interface EfResumoKpis {
   generated: number;
   total_acordos: number;
   to_mature: number;
+  em_carencia: number;
   overdue_unpaid: number;
   paid_on_time: number;
   broken: number;
@@ -1100,7 +1101,7 @@ export async function fetchEfResumo(
   return request<EfResumoEnvelope>(`/efetividade/resumo?${params.toString()}`);
 }
 
-export type BoletosDetalheKind = "a_vencer" | "vencidos_nao_pagos" | "quebrados" | "pagos_prazo";
+export type BoletosDetalheKind = "a_vencer" | "em_carencia" | "vencidos_nao_pagos" | "quebrados" | "pagos_prazo";
 
 export async function fetchBoletosDetalhe(
   kind: BoletosDetalheKind,

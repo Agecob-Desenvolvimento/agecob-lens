@@ -130,7 +130,7 @@ def get_ef_resumo(
 
 @router.get("/boletos-detalhe")
 def get_ef_boletos_detalhe(
-    kind: str = Query(..., description="a_vencer | vencidos_nao_pagos | quebrados"),
+    kind: str = Query(..., description="a_vencer | em_carencia | vencidos_nao_pagos | quebrados | pagos_prazo"),
     date_from: str = Query(..., description="Start date YYYY-MM-DD (DT_VENCIMENTO >=)"),
     date_to: str = Query(..., description="End date YYYY-MM-DD (DT_VENCIMENTO <=)"),
     db: Optional[str] = Query(default=None),

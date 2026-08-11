@@ -37,6 +37,7 @@ export function mapAcordosQuebrados(
   rows: QuebradoDetalheRow[],
   portfolio: string,
   today: Date = new Date(),
+  valueField: "valor_total" | "valor_primeira_parcela" = "valor_total",
 ): AcordoQuebrado[] {
   return rows.map((r) => {
     const diasAtraso = daysSince(r.data_vencimento, today);
@@ -49,7 +50,7 @@ export function mapAcordosQuebrados(
       mat: r.matricula ?? "—",
       dataAcordo: r.data_acordo ?? "—",
       dataQuebra: r.data_quebra ?? "—",
-      valorAcordo: Number(r.valor_total) || 0,
+      valorAcordo: Number(r[valueField]) || 0,
       parcelas: Number(r.total_parcelas) || null,
       parcelaPaga: r.parcelas_pagas ?? null,
       cpf: r.cpf_mask,

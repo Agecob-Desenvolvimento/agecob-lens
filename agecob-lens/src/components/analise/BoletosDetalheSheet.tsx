@@ -9,7 +9,8 @@ import type { TipoParcela } from "@/hooks/useEfetividadeViewModel";
 
 const KIND_CFG: Record<BoletosDetalheKind, { title: string; tone: keyof typeof TONE; empty: string }> = {
   a_vencer: { title: "Boletos a Vencer", tone: "rose", empty: "Nenhum boleto a vencer no período." },
-  vencidos_nao_pagos: { title: "Vencidos não Pagos", tone: "orange", empty: "Nenhum boleto vencido não pago no período." },
+  em_carencia: { title: "Em Carência", tone: "orange", empty: "Nenhum boleto em carência no período." },
+  vencidos_nao_pagos: { title: "Vencidos não Pagos", tone: "rose", empty: "Nenhum boleto vencido não pago no período." },
   quebrados: { title: "Boletos Quebrados", tone: "rose", empty: "Nenhum boleto quebrado no período." },
   pagos_prazo: { title: "Pagos no Prazo", tone: "emerald", empty: "Nenhum boleto pago no prazo no período." },
 };
@@ -27,7 +28,7 @@ export function BoletosDetalheSheet({
 }) {
   const { rows, loading, error } = useBoletosDetalhe(kind, tipo);
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const acordos = mapAcordosQuebrados(rows, "—");
+  const acordos = mapAcordosQuebrados(rows, "—", new Date(), "valor_primeira_parcela");
   const valorTotal = acordos.reduce((acc, a) => acc + a.valorAcordo, 0);
   const cfg = kind ? KIND_CFG[kind] : null;
   const t = TONE[cfg?.tone ?? "rose"];

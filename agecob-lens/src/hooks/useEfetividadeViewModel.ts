@@ -68,11 +68,12 @@ export interface EfetividadeViewModel {
 
 const MESES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
-function efResumoToKpis(kpis: EfResumoKpis | undefined, bestDay: EfResumoDayRow | null, worstDay: EfResumoDayRow | null): BoletoKpi[] {
+function efResumoToKpis(kpis: EfResumoKpis | undefined, worstDay: EfResumoDayRow | null): BoletoKpi[] {
   if (!kpis) return [];
   return [
     { label: "Boletos a Vencer", value: kpis.to_mature, color: "hsl(var(--chart-ink))", unit: "count", sub: kpis.generated > 0 ? `${((kpis.to_mature / kpis.generated) * 100).toFixed(1).replace(".", ",")}% em aberto` : undefined },
-    { label: "Vencidos não Pagos", value: kpis.overdue_unpaid, color: "#dc2626", unit: "count", sub: kpis.generated > 0 ? `${((kpis.overdue_unpaid / kpis.generated) * 100).toFixed(1).replace(".", ",")}% do período` : undefined },
+    { label: "Em Carência", value: kpis.em_carencia, color: "#f59e0b", unit: "count", sub: kpis.generated > 0 ? `${((kpis.em_carencia / kpis.generated) * 100).toFixed(1).replace(".", ",")}% no prazo` : undefined },
+    { label: "Vencidos não Pagos", value: kpis.overdue_unpaid, color: "#dc2626", unit: "count", sub: kpis.generated > 0 ? `${((kpis.overdue_unpaid / kpis.generated) * 100).toFixed(1).replace(".", ",")}% perdido` : undefined },
     { label: "Valor Boletos Vencendo", value: `R$ ${kpis.amount_maturing.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`, color: "hsl(var(--chart-ink))", unit: "BRL" },
     { label: "Pagos no Prazo", value: kpis.paid_on_time, color: "hsl(var(--chart-ink))", unit: "count" },
     { label: "Boletos Quebrados", value: kpis.broken, color: "#dc2626", unit: "count", sub: kpis.generated > 0 ? `${((kpis.broken / kpis.generated) * 100).toFixed(1).replace(".", ",")}%` : undefined },
@@ -80,7 +81,6 @@ function efResumoToKpis(kpis: EfResumoKpis | undefined, bestDay: EfResumoDayRow 
     { label: "Efetividade", value: `${kpis.effectiveness_pct.toFixed(2).replace(".", ",")}%`, color: "#f59e0b", unit: "percent" },
     { label: "Valor Recebido", value: `R$ ${kpis.amount_received.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`, color: "#16a34a", unit: "BRL" },
     { label: "Boletos Gerados", value: kpis.generated, color: "hsl(var(--chart-ink))", unit: "count" },
-    { label: "Melhor Dia", value: bestDay ? `${bestDay.dia.slice(5)} · ${bestDay.effectiveness_pct}%` : "—", color: "#16a34a" },
   ];
 }
 
@@ -189,7 +189,7 @@ export function useEfetividadeViewModel(tipo: TipoParcela): EfetividadeViewModel
   );
 
   const kpis = useMemo(
-    () => efResumoToKpis(resumoData?.kpis, resumoData?.best_day ?? null, resumoData?.worst_day ?? null),
+    () => efResumoToKpis(resumoData?.kpis, resumoData?.worst_day ?? null),
     [resumoData],
   );
   const diaria = useMemo(() => (resumoData?.daily ? efResumoDailyToDiaria(resumoData.daily) : []), [resumoData]);
