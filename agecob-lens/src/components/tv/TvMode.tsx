@@ -46,13 +46,27 @@ export default function TvMode({ vm, onClose }: { vm: TvModeViewModel; onClose: 
   const ura = useAcordoAnnouncer(vm.valor.metaDia, vm.ritmoAgg, vm.topAgentes);
 
   useEffect(() => {
+    // Sem o fator de zoom o canvas ignora Ctrl+ / Ctrl−: o zoom encolhe o viewport
+    // em px CSS, o ajuste-à-janela reexpande na mesma proporção e o resultado
+    // físico não muda. Zoom não tem API própria — devicePixelRatio é o proxy: a
+    // referência é o dpr de quando o Modo TV abriu, então 100% do momento da
+    // entrada é o estado neutro e o resto é relativo a ele.
+    const dprBase = window.devicePixelRatio || 1;
     const medir = () => {
-      const scale = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+      const zoom = (window.devicePixelRatio || 1) / dprBase;
+      const scale = Math.min(window.innerWidth / 1920, window.innerHeight / 1080) * zoom;
       setFit({ scale, w: Math.max(1920, window.innerWidth / scale), h: Math.max(1080, window.innerHeight / scale) });
     };
     medir();
+    // `resize` cobre o zoom nos navegadores atuais; o listener de dppx é o seguro
+    // para quem só troca a densidade (mudança de monitor, Ctrl+ sem reflow).
+    const dppx = window.matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`);
     window.addEventListener("resize", medir);
-    return () => window.removeEventListener("resize", medir);
+    dppx.addEventListener("change", medir);
+    return () => {
+      window.removeEventListener("resize", medir);
+      dppx.removeEventListener("change", medir);
+    };
   }, []);
 
   useEffect(() => {
