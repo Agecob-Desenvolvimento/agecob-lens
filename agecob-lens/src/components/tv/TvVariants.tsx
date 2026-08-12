@@ -80,7 +80,7 @@ export function VariantScoreboard() {
 
   const valorAcordosDiaTxt = useAnimatedFormattedValue(tvBRLc(v.valorAcordosDia));
   const realizadoDiaTxt = useAnimatedFormattedValue(tvBRLc(v.realizadoDia));
-  const excecoesValorDiaTxt = useAnimatedFormattedValue(tvBRLc(v.excecoesValorDia));
+  const excecoesP1DiaTxt = useAnimatedFormattedValue(tvBRLc(v.excecoesPrimeiraParcelaDia));
 
   return (
     <TvScreen>
@@ -110,7 +110,7 @@ export function VariantScoreboard() {
             >
               <Eyebrow size={17} color={TV.t3} style={{ letterSpacing: "0.16em" }}>Valor de acordos</Eyebrow>
               <Eyebrow size={17} color={TV.t3} style={{ letterSpacing: "0.16em" }}>1ª parcela</Eyebrow>
-              <Eyebrow size={17} color={TV.t3} style={{ letterSpacing: "0.16em" }}>Acordos em exceção</Eyebrow>
+              <Eyebrow size={17} color={TV.t3} style={{ letterSpacing: "0.16em" }}>Exceção · 1ª parcela</Eyebrow>
 
               {/* `nowrap` obrigatório: as trilhas são `auto` e, sem ele, um valor
                   longo ("R$ 1,61 mi") quebra em duas linhas e estoura a faixa por
@@ -119,7 +119,7 @@ export function VariantScoreboard() {
               <div style={{ ...NUM, fontWeight: 800, fontSize: 76, lineHeight: 0.92, color: TV.gold, letterSpacing: "-0.03em", whiteSpace: "nowrap" }}>{realizadoDiaTxt}</div>
               {/* goldText, não warn: única cor "amarela" auditada p/ texto < 28px (§ paleta APCA); aqui em corpo grande fica gold cheio */}
               <div style={{ ...NUM, fontWeight: 800, fontSize: 76, lineHeight: 0.92, color: TV.goldText, letterSpacing: "-0.03em", whiteSpace: "nowrap" }}>
-                {excecoesValorDiaTxt}
+                {excecoesP1DiaTxt}
               </div>
 
               <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
@@ -131,8 +131,8 @@ export function VariantScoreboard() {
                   vs dia útil anterior, mesma hora <span style={{ fontSize: 13, color: TV.t3small }}>(estimado por hora do dia)</span>
                 </span>
               </div>
-              {/* 1ª parcela dos acordos em exceção — legenda sob o total geral */}
-              <div style={{ ...NUM, fontSize: 17, color: TV.t3, whiteSpace: "nowrap" }}>{tvBRLk(v.excecoesPrimeiraParcelaDia)} 1ª parcela · {tvNum(v.excecoesQtdDia)} acordos</div>
+              {/* total geral em exceção — legenda sob a 1ª parcela */}
+              <div style={{ ...NUM, fontSize: 17, color: TV.t3, whiteSpace: "nowrap" }}>{tvBRLk(v.excecoesValorDia)} total · {tvNum(v.excecoesQtdDia)} acordos</div>
             </div>
           </div>
           {bu.length > 0 && (
