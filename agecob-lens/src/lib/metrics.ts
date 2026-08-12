@@ -17,6 +17,8 @@ export interface MetricTotals {
   qtd_alo: number;
   qtd_contatos: number;
   qtd_acordos: number;
+  /** Grão de contrato/dívida — só para o KPI global. Nunca denominador de ticket/conversão. */
+  qtd_acordos_por_contrato: number;
   qtd_boletos_emitidos: number;
   qtd_boletos_pagos: number;
   qtd_excecoes: number;
@@ -40,6 +42,7 @@ export function aggregateTotals(rows: ProdutividadeRowWithSource[]): MetricTotal
       acc.qtd_alo += Number(row.qtd_alo || 0);
       acc.qtd_contatos += Number(row.qtd_contatos || 0);
       acc.qtd_acordos += Number(row.qtd_acordos || 0);
+      acc.qtd_acordos_por_contrato += Number(row.qtd_acordos_por_contrato || 0);
       acc.qtd_boletos_emitidos += Number(row.qtd_boletos_emitidos || 0);
       acc.qtd_boletos_pagos += Number(row.qtd_boletos_pagos || 0);
       acc.qtd_excecoes += Number(row.qtd_excecoes || 0);
@@ -59,6 +62,7 @@ export function aggregateTotals(rows: ProdutividadeRowWithSource[]): MetricTotal
       qtd_alo: 0,
       qtd_contatos: 0,
       qtd_acordos: 0,
+      qtd_acordos_por_contrato: 0,
       qtd_boletos_emitidos: 0,
       qtd_boletos_pagos: 0,
       qtd_excecoes: 0,

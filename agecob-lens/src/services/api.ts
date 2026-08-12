@@ -49,6 +49,12 @@ export interface ProdutividadeRow {
   qtd_contatos: number;
   cpc_percentual: number;
   qtd_acordos: number;
+  /**
+   * Acordos contados por contrato/dívida: 1 por (NR_RECEBIMENTO, ID_CARTEIRA,
+   * ID_DIVIDA). Acordo com N dívidas conta N — só alimenta o KPI global
+   * "Qtd Acordos" da Home. Ticket e conversão seguem em qtd_acordos.
+   */
+  qtd_acordos_por_contrato: number;
   qtd_boletos_emitidos: number;
   qtd_boletos_pagos: number;
   acordos_percentual: number;

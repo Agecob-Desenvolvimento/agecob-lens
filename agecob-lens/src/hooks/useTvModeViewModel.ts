@@ -15,7 +15,7 @@ import { useMetasData } from "@/hooks/useMetasData";
 import { useProdutividadeData } from "@/hooks/useProdutividadeData";
 import { fetchRitmoDia, fetchPrimeiraParcelaDia } from "@/services/api";
 import { currentMonthKey, isBusinessDay, previousBusinessDayStr, todayStr } from "@/lib/dates";
-import { DIAS_UTEIS_MES, calcConversao } from "@/lib/metrics";
+import { DIAS_UTEIS_MES, aggregateTotals, calcConversao, calcTicketMedio } from "@/lib/metrics";
 import {
   tvBRLk,
   tvNum,
@@ -135,8 +135,11 @@ export function useTvModeViewModel(): TvModeViewModel {
     const qtdAcordos = kpiVal("Qtd Acordos");
     const cpcCount = kpiVal("CPC");
     const conv = kpiVal("Conversão %");
-    const valorAcordos = typeof home.kpiPrimary[0]?.value === "number" ? home.kpiPrimary[0].value : null;
-    const ticket = qtdAcordos && qtdAcordos > 0 && valorAcordos != null ? valorAcordos / qtdAcordos : null;
+    // Ticket médio fica no grão do ACORDO: o KPI "Qtd Acordos" da Home passou a
+    // contar por contrato (1 por dívida), e dividir valor por contratos daria um
+    // ticket menor que o do acordo real. Mesmas linhas/filtros do KPI da Home.
+    const ticketTotals = aggregateTotals(agentesRows);
+    const ticket = ticketTotals.qtd_acordos > 0 ? calcTicketMedio(ticketTotals) : null;
     // Referência do KPI — reaproveita o baseline que a Home já calcula (média do
     // escritório / período anterior). Sem baseline no payload, a tile omite a linha
     // em vez de mostrar placeholder.
@@ -155,7 +158,7 @@ export function useTvModeViewModel(): TvModeViewModel {
       { id: "acordos", label: "Acordos", value: tvNum(qtdAcordos), sub: "no período", tone: "neutral", ...refDe("Qtd Acordos", tvNum) },
       { id: "cpc", label: "CPC", value: tvNum(cpcCount), sub: "contatos (RPC)", tone: "neutral", ...refDe("CPC", tvNum) },
       { id: "conversao", label: "Conversão", value: tvPct(conv), sub: "acordos / CPC", tone: "neutral", ...refDe("Conversão %", tvPct) },
-      { id: "ticket", label: "Ticket médio", value: tvBRLk(ticket), sub: `${tvNum(qtdAcordos)} acordos`, tone: "neutral" },
+      { id: "ticket", label: "Ticket médio", value: tvBRLk(ticket), sub: "por acordo", tone: "neutral" },
     ];
 
     // BU — 1ª parcela (real) + qtd acordos do funil (real); metas sem fonte

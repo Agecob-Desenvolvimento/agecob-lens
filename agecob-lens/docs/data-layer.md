@@ -372,6 +372,23 @@ Frontend lazy-loads via `AgenteDetalheSection` (in DetalhamentoAgentes page, ins
 
 All defined in `lib/metrics.ts` → `calcConversao()`, `calcComposicaoEntrada()`, `calcEfetividadeCaixa()` (single source of truth, cascades to all charts/pages).
 
+## Two grains for acordos count (2026-08-12)
+
+Management decision: the **global** "Qtd Acordos" KPI on the Home counts by **contract**, not by
+agreement. One agreement bundling N dívidas counts N. Duplication caused by bad data in
+`REC_DIVIDAS` is accepted — the decision was taken with that known.
+
+| Field | Grain | Where it is used |
+|---|---|---|
+| `qtd_acordos` | agreement (`ID_USUARIO`, `NR_RECEBIMENTO`, `ID_REC_STATUS`) | per-agent rows, rankings, portfolio charts, **ticket médio**, **Conversão %** |
+| `qtd_acordos_por_contrato` | contract — `COUNT(DISTINCT NR_RECEBIMENTO\|ID_CARTEIRA\|ID_DIVIDA)` via `REC_DIVIDAS` | **only** the Home global "Qtd Acordos" card (and the Modo TV "Acordos" tile that mirrors it) |
+
+Produced by `CTE_Contratos_Agente` in `build_produtividade_query(use_distinct_esforco=True)`
+(`/dashboard/produtividade-hoje/{db}`), aggregated per agent and summed in
+`aggregateTotals()`. Never use it as a denominator: dividing value by contracts understates
+ticket médio, and `Conversão %` stays `qtd_acordos / qtd_contatos`. Modo TV computes ticket
+médio from `qtd_acordos` for this reason.
+
 ## Name collision resolved (2026-08-03)
 
 Three backend producers emitted a **different** metric under the Conversão name. They were not competing formulas

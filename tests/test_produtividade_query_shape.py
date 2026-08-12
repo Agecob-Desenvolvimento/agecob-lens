@@ -22,6 +22,7 @@ CTES_COM_FILTRO_DE_PORTFOLIO = [
     "CTE_Saldo_Original",
     "CTE_Horas_Agente",
     "CTE_Boletos_Agente",
+    "CTE_Contratos_Agente",
 ]
 
 

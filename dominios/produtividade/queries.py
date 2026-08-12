@@ -166,6 +166,23 @@ CTE_Boletos_Agente AS (
        AND RM.DT_VENCIMENTO < CAST(GETDATE() AS DATE)
        {cart_filter}
      GROUP BY RM.ID_USUARIO
+),
+-- Acordos contados por CONTRATO (dívida): 1 por (NR_RECEBIMENTO, ID_CARTEIRA,
+-- ID_DIVIDA) em REC_DIVIDAS, então o acordo que agrupa N dívidas conta N. Alimenta
+-- só o KPI global "Qtd Acordos" da Home — qtd_acordos (grão do acordo) continua
+-- sendo o número por agente e o denominador de ticket médio e conversão.
+CTE_Contratos_Agente AS (
+    SELECT
+        RM.ID_USUARIO,
+        COUNT(DISTINCT CONCAT(RM.NR_RECEBIMENTO, '|', RM.ID_CARTEIRA, '|', RD.ID_DIVIDA)) AS qtd_acordos_por_contrato
+     FROM REC_MASTER RM (NOLOCK)
+     JOIN REC_DIVIDAS RD (NOLOCK)
+       ON RD.NR_RECEBIMENTO = RM.NR_RECEBIMENTO
+      AND RD.ID_CARTEIRA = RM.ID_CARTEIRA
+     WHERE RM.DT_EMISSAO >= @Hoje AND RM.DT_EMISSAO < @Amanha
+       AND RM.ID_REC_STATUS IN {settings.STATUS_GERADOS_SQL}
+       {cart_filter}
+     GROUP BY RM.ID_USUARIO
 )
 SELECT
     U.CHAVE,
@@ -181,6 +198,7 @@ SELECT
         CEILING(ISNULL(E.qtd_contatos, 0) * 100.0 / NULLIF(E.qtd_alo, 0))
     AS INT) AS cpc_percentual,
     ISNULL(F.qtd_acordos, 0) AS qtd_acordos,
+    ISNULL(CT.qtd_acordos_por_contrato, 0) AS qtd_acordos_por_contrato,
     ISNULL(BA.qtd_boletos_emitidos, 0) AS qtd_boletos_emitidos,
     ISNULL(BA.qtd_boletos_pagos, 0) AS qtd_boletos_pagos,
     CAST(
@@ -208,6 +226,8 @@ LEFT JOIN CTE_Horas_Agente H
     ON U.ID_USUARIO = H.ID_USUARIO
 LEFT JOIN CTE_Boletos_Agente BA
     ON U.ID_USUARIO = BA.ID_USUARIO
+LEFT JOIN CTE_Contratos_Agente CT
+    ON U.ID_USUARIO = CT.ID_USUARIO
 WHERE
     (E.ID_USUARIO IS NOT NULL OR F.ID_USUARIO IS NOT NULL)
     {settings.FILTRO_AGENTES_EXCLUIDOS_SQL}
@@ -393,8 +413,8 @@ OPTION (USE HINT('ENABLE_PARALLEL_PLAN_PREFERENCE'), MAXDOP 0);
 def build_produtividade_hoje_params(portfolio: Optional[str]) -> Optional[Tuple[Any, ...]]:
     """Params tuple for build_produtividade_query with use_distinct_esforco=True."""
     if portfolio:
-        # One `?` per REC_MASTER reference → 4 placeholders
-        return (portfolio, portfolio, portfolio, portfolio)
+        # One `?` per REC_MASTER reference → 5 placeholders
+        return (portfolio, portfolio, portfolio, portfolio, portfolio)
     return None
 
 

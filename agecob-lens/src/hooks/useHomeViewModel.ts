@@ -222,7 +222,10 @@ export function useHomeViewModel(): HomeViewModel {
       { label: "Conversão %", value: conv, unit: "percent" as const, baseline: mkBench(conv, bench?.taxa_conversao?.mean, "up"), base: { num: totals.qtd_acordos, den: totals.qtd_contatos, noun: "CPC" } },
       { label: "Rejeitados", value: totals.qtd_rejeitados, unit: "count" as const, baseline: mk(totals.qtd_rejeitados, prevTotals.qtd_rejeitados, "down"), caption: "acordos rejeitados" },
       { label: "Exceções", value: totals.qtd_excecoes, unit: "count" as const, baseline: mk(totals.qtd_excecoes, prevTotals.qtd_excecoes, "down"), caption: "acordos em exceção" },
-      { label: "Qtd Acordos", value: totals.qtd_acordos, unit: "count" as const, caption: `${diasUteisPeriodo} dias úteis` },
+      // Grão de contrato (1 por dívida do acordo), decisão de gestão 2026-08-12: o
+      // acordo que agrupa N dívidas conta N. Só aqui — ticket médio e Conversão %
+      // seguem em totals.qtd_acordos (grão do acordo).
+      { label: "Qtd Acordos", value: totals.qtd_acordos_por_contrato, unit: "count" as const, caption: `por contrato · ${diasUteisPeriodo} dias úteis` },
       { label: "Gap de Performance", value: gapDePerformance, unit: "BRL" as const, caption: "Top agente vs piso da equipe" },
       { label: "Qtd Acionamentos", value: totals.qtd_acionamentos, unit: "count" as const, baseline: mk(totals.qtd_acionamentos, prevTotals.qtd_acionamentos, "up") },
     ];

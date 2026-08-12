@@ -34,6 +34,7 @@ def validate_produtividade_rows(
         "qtd_contatos",
         "cpc_percentual",
         "qtd_acordos",
+        "qtd_acordos_por_contrato",
         "acordos_percentual",
         "valor_acordos",
         "acordo_medio",
