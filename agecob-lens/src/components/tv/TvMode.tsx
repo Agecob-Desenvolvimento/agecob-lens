@@ -37,17 +37,22 @@ const TV_KEYFRAMES = `
 
 export default function TvMode({ vm, onClose }: { vm: TvModeViewModel; onClose: () => void }) {
   // Escala uniforme: esticar por eixo distorce o texto em janela fora de 16:9
-  // (21% numa 2.16:1). Numa TV 16:9 — o alvo real — isso preenche 100%. A sobra
-  // em outras proporções recebe o mesmo fundo do canvas, então não vira tarja.
-  const [scale, setScale] = useState(1);
+  // (21% numa 2.16:1). Numa TV 16:9 — o alvo real — o canvas é exatamente
+  // 1920×1080 e nada muda. Fora de 16:9, em vez de sobrar tarja, o canvas CRESCE
+  // em px lógicos (nunca encolhe abaixo do projeto) até cobrir o viewport: o eixo
+  // folgado vira altura/largura real de layout, que os `flex: 1`/`1fr` distribuem.
+  const [fit, setFit] = useState({ scale: 1, w: 1920, h: 1080 });
   const [mode, setMode] = useState<"ritmo" | "operacional">("ritmo");
   const ura = useAcordoAnnouncer(vm.valor.metaDia, vm.ritmoAgg, vm.topAgentes);
 
   useEffect(() => {
-    const fit = () => setScale(Math.min(window.innerWidth / 1920, window.innerHeight / 1080));
-    fit();
-    window.addEventListener("resize", fit);
-    return () => window.removeEventListener("resize", fit);
+    const medir = () => {
+      const scale = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+      setFit({ scale, w: Math.max(1920, window.innerWidth / scale), h: Math.max(1080, window.innerHeight / scale) });
+    };
+    medir();
+    window.addEventListener("resize", medir);
+    return () => window.removeEventListener("resize", medir);
   }, []);
 
   useEffect(() => {
@@ -62,7 +67,7 @@ export default function TvMode({ vm, onClose }: { vm: TvModeViewModel; onClose: 
     <TvDataContext.Provider value={vm}>
       <style>{TV_KEYFRAMES}</style>
       <div style={{ position: "fixed", inset: 0, zIndex: 9999, background: TV_BG, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-        <div style={{ width: 1920, height: 1080, flexShrink: 0, transform: `scale(${scale})`, transformOrigin: "center center" }}>
+        <div style={{ width: fit.w, height: fit.h, flexShrink: 0, transform: `scale(${fit.scale})`, transformOrigin: "center center" }}>
           {mode === "ritmo" ? <VariantScoreboard /> : <TvOperacional />}
         </div>
         {/* abas com sublinhado reto, não pill arredondada: o pill iOS é o mesmo

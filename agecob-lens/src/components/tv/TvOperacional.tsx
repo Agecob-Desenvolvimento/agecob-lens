@@ -1,8 +1,9 @@
 /**
  * Modo TV Operacional — segundo modo TV (não substitui "Ritmo de Acordos").
- * Heatmap de performance por agente em tela cheia (1920×1080): dois painéis
- * lado a lado (ranking 01–10 · 11–20), cor por percentil na distribuição do
- * período. Mesmo topo (marca + relógio ao vivo) e rodapé/ticker do modo original.
+ * Heatmap de performance por agente em tela cheia (1920×1080): a coluna fecha
+ * em ROWS_PER_COL agentes e só então abre a segunda (ranking 01–10 · 11–20),
+ * cor por percentil na distribuição do período. Mesmo topo (marca + relógio ao
+ * vivo) e rodapé/ticker do modo original.
  */
 import { useMemo, useState } from "react";
 import { NUM, TV, TV_BG, TV_SANS, tvBRL, tvNum, tvPct, useTvData, type TvAgenteRow } from "./tvShared";
@@ -31,6 +32,13 @@ const COLS: Col[] = [
   { key: "conv", label: "Conv. %", w: 6, kind: "pct" },
   { key: "acion", label: "Acionam.", w: 6.4, kind: "num" },
 ];
+
+/**
+ * Regra visual: a coluna fecha em 10 agentes — a 11ª linha é que abre a segunda
+ * coluna. Constante única: alimenta o corte da lista e as trilhas do grid, então
+ * altura de linha e ponto de quebra nunca divergem.
+ */
+const ROWS_PER_COL = 10;
 
 const BAND_BG: Record<"good" | "warn" | "bad", string> = {
   good: TV.goodSoft,
@@ -91,7 +99,7 @@ function AgentRowView({ a, rank, pctMaps, podio }: { a: TvAgenteRow; rank: numbe
   // não colocação — dourar o topo de um "CPC crescente" premiaria os piores.
   const rankColor = podio && rank <= 3 ? TV.goldText : TV.t3small;
   return (
-    <div style={{ flex: 1, display: "flex", gap: 6, minHeight: 0 }}>
+    <div style={{ display: "flex", gap: 6, minHeight: 0 }}>
       <div style={{ flex: "18 1 0", display: "flex", alignItems: "center", gap: 14, padding: "0 16px", background: "rgba(255,255,255,0.04)", borderRadius: 6, minWidth: 0 }}>
         <div style={{ ...NUM, fontSize: 20, fontWeight: 700, color: rankColor, width: 30, flexShrink: 0 }}>
           {String(rank).padStart(2, "0")}
@@ -115,11 +123,14 @@ function AgentRowView({ a, rank, pctMaps, podio }: { a: TvAgenteRow; rank: numbe
   );
 }
 
-function Panel({ rows, startRank, pctMaps, divider = false, sortCol, sortDir, onSort }: { rows: TvAgenteRow[]; startRank: number; pctMaps: Record<string, Map<number, number>>; divider?: boolean; sortCol: SortKey | null; sortDir: SortDir; onSort: (k: SortKey) => void }) {
+function Panel({ rows, tracks, startRank, pctMaps, divider = false, sortCol, sortDir, onSort }: { rows: TvAgenteRow[]; tracks: number; startRank: number; pctMaps: Record<string, Map<number, number>>; divider?: boolean; sortCol: SortKey | null; sortDir: SortDir; onSort: (k: SortKey) => void }) {
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, ...(divider ? { borderLeft: `1px solid ${TV.line}`, paddingLeft: 32 } : {}) }}>
       <ColHeader sortCol={sortCol} sortDir={sortDir} onSort={onSort} />
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6, minHeight: 0 }}>
+      {/* `tracks` × `1fr`: a altura de cada linha sai da altura disponível, nunca
+          de px — a lista preenche a coluna inteira em qualquer resolução.
+          `minmax(0,1fr)` impede que a trilha cresça além da fatia e vaze o canvas. */}
+      <div style={{ flex: 1, display: "grid", gridTemplateRows: `repeat(${tracks}, minmax(0, 1fr))`, gap: 6, minHeight: 0 }}>
         {rows.map((a, i) => (
           <AgentRowView key={a.id} a={a} rank={startRank + i} pctMaps={pctMaps} podio={sortCol == null} />
         ))}
@@ -168,7 +179,8 @@ export default function TvOperacional() {
   };
 
   // Padrão (desempate decrescente): 1ª Parcela → Acordos → CPC → Conversão →
-  // Acionamento → nome. Rank 01–20; painel A = 01–10, painel B = 11–20.
+  // Acionamento → nome. Rank 01–20; painel A = 01–10, painel B = 11–20 (só existe
+  // quando há 11º agente).
   const rows = useMemo(() => {
     const copy = [...agentes];
     if (sortCol === "nome") {
@@ -181,7 +193,7 @@ export default function TvOperacional() {
     } else {
       copy.sort((a, b) => b.parc1 - a.parc1 || b.acordos - a.acordos || b.cpc - a.cpc || b.conv - a.conv || b.acion - a.acion || a.nome.localeCompare(b.nome, "pt-BR"));
     }
-    return copy.slice(0, 20);
+    return copy.slice(0, ROWS_PER_COL * 2);
   }, [agentes, sortCol, sortDir]);
 
   // Percentil sobre a POPULAÇÃO, não sobre as 20 linhas exibidas: senão reordenar
@@ -194,17 +206,24 @@ export default function TvOperacional() {
     return m;
   }, [agentes]);
 
-  const rowsA = rows.slice(0, 10);
-  const rowsB = rows.slice(10, 20);
+  const rowsA = rows.slice(0, ROWS_PER_COL);
+  const rowsB = rows.slice(ROWS_PER_COL);
+  // Coluna única: as trilhas seguem a quantidade de agentes e a lista ocupa a
+  // altura toda. Com as duas colunas, ambas travam em ROWS_PER_COL — a coluna B
+  // costuma ser parcial e, esticada, sairia com linhas maiores que as da A e o
+  // rank 11 deixaria de alinhar com o rank 01.
+  const tracks = rowsB.length > 0 ? ROWS_PER_COL : Math.max(rowsA.length, 1);
 
   return (
-    <div style={{ width: 1920, height: 1080, background: TV_BG, color: TV.t1, fontFamily: TV_SANS, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+    <div style={{ width: "100%", height: "100%", background: TV_BG, color: TV.t1, fontFamily: TV_SANS, display: "flex", flexDirection: "column", overflow: "hidden" }}>
       <TopBar sub="Operacional · Modo TV" />
       <div style={{ flex: 1, display: "flex", flexDirection: "column", padding: "28px 80px 22px", minHeight: 0 }}>
         <Legend />
         <div style={{ flex: 1, display: "flex", gap: 40, minHeight: 0 }}>
-          <Panel rows={rowsA} startRank={1} pctMaps={pctMaps} sortCol={sortCol} sortDir={sortDir} onSort={onSort} />
-          <Panel rows={rowsB} startRank={11} pctMaps={pctMaps} divider sortCol={sortCol} sortDir={sortDir} onSort={onSort} />
+          <Panel rows={rowsA} tracks={tracks} startRank={1} pctMaps={pctMaps} sortCol={sortCol} sortDir={sortDir} onSort={onSort} />
+          {rowsB.length > 0 && (
+            <Panel rows={rowsB} tracks={tracks} startRank={ROWS_PER_COL + 1} pctMaps={pctMaps} divider sortCol={sortCol} sortDir={sortDir} onSort={onSort} />
+          )}
         </div>
       </div>
       <div style={{ flexShrink: 0, height: 96, marginBottom: OVERSCAN_BOTTOM }}>

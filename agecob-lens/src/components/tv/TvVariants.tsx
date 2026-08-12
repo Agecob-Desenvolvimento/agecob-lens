@@ -10,8 +10,10 @@ function TvScreen({ children }: { children: ReactNode }) {
   return (
     <div
       style={{
-        width: 1920,
-        height: 1080,
+        // dimensão vem do canvas (TvMode): 1920×1080 na TV 16:9, maior quando a
+        // janela tem outra proporção — a tela se estende em vez de virar tarja
+        width: "100%",
+        height: "100%",
         background: TV_BG,
         color: TV.t1,
         fontFamily: TV_SANS,
@@ -86,7 +88,11 @@ export function VariantScoreboard() {
     <TvScreen>
       <TopBar sub="Placar do Dia · Modo TV" />
       <div style={{ flex: 1, display: "flex", flexDirection: "column", padding: "28px 64px 20px", gap: 22, minHeight: 0 }}>
-        <div style={{ display: "grid", gridTemplateColumns: bu.length ? "1fr 660px" : "1fr", gap: 40, alignItems: "stretch", flexShrink: 0, height: 262 }}>
+        {/* `minmax(0, …)`, não `1fr` puro: `1fr` = `minmax(auto, 1fr)` e o auto é o
+            min-content do hero — qualquer texto `nowrap` mais largo que a fatia
+            estoura a trilha e empurra os cards de BU para fora do canvas (ficavam
+            cortados pelo `overflow: hidden`). */}
+        <div style={{ display: "grid", gridTemplateColumns: bu.length ? "minmax(0, 1fr) 660px" : "minmax(0, 1fr)", gap: 40, alignItems: "stretch", flexShrink: 0, height: 262 }}>
           <div style={{ display: "flex", flexDirection: "column", justifyContent: "center" }}>
             <Eyebrow color={TV.goldText}>Hoje</Eyebrow>
             {/* grid de 3 colunas × 3 linhas (rótulo · número · nota). `alignItems:
@@ -127,7 +133,9 @@ export function VariantScoreboard() {
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <DeltaChip value={v.vsOntemDia} size={20} />
-                <span style={{ fontSize: 17, color: TV.t3, whiteSpace: "nowrap" }}>
+                {/* sem `nowrap`: é a única prosa longa do hero e, travada em uma
+                    linha, era ela quem definia o min-content da trilha (595px) */}
+                <span style={{ fontSize: 17, color: TV.t3 }}>
                   vs dia útil anterior, mesma hora <span style={{ fontSize: 13, color: TV.t3small }}>(estimado por hora do dia)</span>
                 </span>
               </div>
