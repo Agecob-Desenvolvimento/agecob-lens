@@ -72,6 +72,34 @@ export const NUM = {
   fontVariantNumeric: "tabular-nums",
 } as const;
 
+/**
+ * Unidades fluidas do Modo TV.
+ *
+ * O design foi desenhado em px sobre 1920×1080. Isso é a PROPORÇÃO de referência,
+ * não uma resolução alvo: cada medida vira % do viewport real, então o layout se
+ * recompõe em qualquer tela em vez de ser um bloco escalado por `transform`.
+ *
+ * `tvW` mede largura, `tvH` mede altura, `tvF` mede fonte. A fonte pega o MENOR
+ * dos dois eixos, então numa janela larga e baixa o texto segue a altura (não
+ * estoura a linha) e numa alta e estreita segue a largura (não estoura a coluna),
+ * e o `clamp()` prende esse valor entre um piso e um teto.
+ *
+ * Só a FONTE leva `clamp`. Largura, altura, gap e padding ficam proporcionais
+ * puros de propósito: numa faixa de grid a soma das partes tem que continuar
+ * fechando 100% e, se uma medida trava no piso enquanto a vizinha continua
+ * encolhendo, a soma estoura e volta o overflow que a mudança quer eliminar.
+ */
+const proporcao = (px: number, base: number) => ((px / base) * 100).toFixed(3);
+/** Piso: abaixo de 0,55× o rótulo fica ilegível numa janela pequena.
+ *  Teto: acima de 2,5× o número passa a brigar com a célula em telas enormes
+ *  (4K entra inteiro em 2×, então o teto só age de 5K/8K em diante). */
+const FONTE_PISO = 0.55;
+const FONTE_TETO = 2.5;
+export const tvW = (px: number) => `${proporcao(px, 1920)}vw`;
+export const tvH = (px: number) => `${proporcao(px, 1080)}vh`;
+export const tvF = (px: number) =>
+  `clamp(${(px * FONTE_PISO).toFixed(2)}px, min(${proporcao(px, 1080)}vh, ${proporcao(px, 1920)}vw), ${(px * FONTE_TETO).toFixed(2)}px)`;
+
 // ---------- Formatadores (null → "—") ----------
 export const tvBRL = (v: number | null | undefined, dec = 0): string =>
   v == null

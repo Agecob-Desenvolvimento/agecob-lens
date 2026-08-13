@@ -3,23 +3,26 @@
  * Transcrição do design standalone para TSX. Dados reais vêm de useTvData().
  */
 import { useEffect, useId, useState, type CSSProperties, type ReactNode } from "react";
-import { NUM, TV, TONE, TV_MONO, tvBRLk, tvNum, type TvKpi, useTvData } from "./tvShared";
+import { NUM, TV, TONE, TV_MONO, tvBRLk, tvF, tvH, tvNum, tvW, type TvKpi, useTvData } from "./tvShared";
 import { isDemoMode } from "@/services/demoMask";
 import { useAnimatedFormattedValue } from "@/hooks/useAnimatedFormattedValue";
 
 export function Eyebrow({
   children,
   color = TV.t3,
-  size = 20,
+  size = tvF(20),
   style,
+  className,
 }: {
   children: ReactNode;
   color?: string;
-  size?: number;
+  /** aceita string p/ as unidades fluidas (`tvF`) além do px do design */
+  size?: number | string;
   style?: CSSProperties;
+  className?: string;
 }) {
   return (
-    <div style={{ fontSize: size, fontWeight: 700, letterSpacing: "0.22em", textTransform: "uppercase", color, ...style }}>
+    <div className={className} style={{ fontSize: size, fontWeight: 700, letterSpacing: "0.22em", textTransform: "uppercase", color, ...style }}>
       {children}
     </div>
   );
@@ -37,31 +40,31 @@ export function TvClock({ compact = false }: { compact?: boolean }) {
   const dia = now.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" });
   return (
     <div style={{ textAlign: "right", lineHeight: 1 }}>
-      <div style={{ fontFamily: TV_MONO, fontWeight: 700, color: TV.t1, fontSize: compact ? 40 : 54, letterSpacing: "0.02em", fontVariantNumeric: "tabular-nums" }}>
+      <div style={{ fontFamily: TV_MONO, fontWeight: 700, color: TV.t1, fontSize: tvF(compact ? 40 : 54), letterSpacing: "0.02em", fontVariantNumeric: "tabular-nums" }}>
         {hh}:{mm}
         <span style={{ color: TV.t3 }}>:{ss}</span>
       </div>
-      <div style={{ marginTop: 8, fontSize: 18, color: TV.t2, textTransform: "capitalize", letterSpacing: "0.04em" }}>{dia}</div>
+      <div style={{ marginTop: tvH(8), fontSize: tvF(18), color: TV.t2, textTransform: "capitalize", letterSpacing: "0.04em" }}>{dia}</div>
     </div>
   );
 }
 
 export function LivePulse({ label = "Ao vivo" }: { label?: string }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-      <span className="tv-pulse" style={{ width: 12, height: 12, borderRadius: "50%", background: TV.good, display: "inline-block" }} />
-      <span style={{ fontSize: 18, fontWeight: 600, letterSpacing: "0.16em", textTransform: "uppercase", color: TV.t2 }}>{label}</span>
+    <div style={{ display: "flex", alignItems: "center", gap: tvW(10) }}>
+      <span className="tv-pulse" style={{ width: tvF(12), height: tvF(12), borderRadius: "50%", background: TV.good, display: "inline-block", flexShrink: 0 }} />
+      <span style={{ fontSize: tvF(18), fontWeight: 600, letterSpacing: "0.16em", textTransform: "uppercase", color: TV.t2 }}>{label}</span>
     </div>
   );
 }
 
 export function TvBrand({ sub = "Dashboard · Modo TV" }: { sub?: string }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
-      <div style={{ width: 14, height: 44, background: TV.gold, borderRadius: 2 }} />
+    <div style={{ display: "flex", alignItems: "center", gap: tvW(18) }}>
+      <div style={{ width: tvW(14), height: tvH(44), background: TV.gold, borderRadius: 2, flexShrink: 0 }} />
       <div style={{ lineHeight: 1 }}>
-        <div style={{ fontWeight: 800, fontSize: 32, letterSpacing: "0.06em", color: TV.t1 }}>{isDemoMode() ? "AGDASH" : "AGECOB"}</div>
-        <div style={{ marginTop: 6, fontSize: 16, letterSpacing: "0.18em", textTransform: "uppercase", color: TV.t2 }}>{sub}</div>
+        <div style={{ fontWeight: 800, fontSize: tvF(32), letterSpacing: "0.06em", color: TV.t1 }}>{isDemoMode() ? "AGDASH" : "AGECOB"}</div>
+        <div style={{ marginTop: tvH(6), fontSize: tvF(16), letterSpacing: "0.18em", textTransform: "uppercase", color: TV.t2 }}>{sub}</div>
       </div>
     </div>
   );
@@ -73,7 +76,7 @@ export function TvBrand({ sub = "Dashboard · Modo TV" }: { sub?: string }) {
  * Fill = realizado · marcador ciano = ritmo esperado · réguas = 25/50/75.
  * O trecho entre o fill e o marcador só acende quando está atrás do ritmo.
  */
-export function MetaProgressBar({ pct, pctEsperado, height = 52 }: { pct: number | null; pctEsperado: number | null; height?: number }) {
+export function MetaProgressBar({ pct, pctEsperado, height = tvH(52) }: { pct: number | null; pctEsperado: number | null; height?: number | string }) {
   const w = pct == null ? 0 : Math.min(pct, 1) * 100;
   const esp = pctEsperado == null ? null : Math.min(pctEsperado, 1) * 100;
   const bateu = pct != null && pct >= 1;
@@ -83,7 +86,7 @@ export function MetaProgressBar({ pct, pctEsperado, height = 52 }: { pct: number
     : `linear-gradient(90deg, ${TV.goldDeep} 0%, ${TV.gold} 55%, ${TV.goldLight} 100%)`;
   return (
     <div style={{ position: "relative" }}>
-      <div style={{ position: "relative", height, borderRadius: 12, background: TV.card, border: `1px solid ${TV.lineHi}` }}>
+      <div style={{ position: "relative", height, borderRadius: tvW(12), background: TV.card, border: `1px solid ${TV.lineHi}` }}>
         <div style={{ position: "absolute", inset: 1, borderRadius: 11, overflow: "hidden" }}>
           <div
             style={{
@@ -107,23 +110,23 @@ export function MetaProgressBar({ pct, pctEsperado, height = 52 }: { pct: number
           ))}
         </div>
         {esp != null && (
-          <div style={{ position: "absolute", top: -10, bottom: -10, left: esp + "%", width: 4, marginLeft: -2, background: TV.cyan, borderRadius: 2 }} />
+          <div style={{ position: "absolute", top: tvH(-10), bottom: tvH(-10), left: esp + "%", width: tvW(4), marginLeft: tvW(-2), background: TV.cyan, borderRadius: 2 }} />
         )}
       </div>
-      <div style={{ position: "relative", height: 22, marginTop: 8 }}>
+      <div style={{ position: "relative", height: tvH(22), marginTop: tvH(8) }}>
         {/* marco a menos de 8pp do marcador é suprimido: os dois rótulos se
             sobrepõem, e quem manda na leitura é o "esperado" */}
         {[25, 50, 75]
           .filter((m) => esp == null || Math.abs(m - esp) >= 8)
           .map((m) => (
-            <span key={m} style={{ ...NUM, position: "absolute", left: m + "%", transform: "translateX(-50%)", fontSize: 15, color: TV.t3 }}>
+            <span key={m} style={{ ...NUM, position: "absolute", left: m + "%", transform: "translateX(-50%)", fontSize: tvF(15), color: TV.t3 }}>
               {m}%
             </span>
           ))}
         {/* no fim do mês o marcador chega perto de 100% e os dois rótulos brigam
             pelo mesmo canto — "Esperado" ganha, porque é ele que muda */}
         {(esp == null || esp < 96) && (
-          <span style={{ position: "absolute", right: 0, fontSize: 15, fontWeight: 700, letterSpacing: "0.14em", color: TV.goldText }}>Meta</span>
+          <span style={{ position: "absolute", right: 0, fontSize: tvF(15), fontWeight: 700, letterSpacing: "0.14em", color: TV.goldText }}>Meta</span>
         )}
         {esp != null && (
           <span
@@ -132,8 +135,8 @@ export function MetaProgressBar({ pct, pctEsperado, height = 52 }: { pct: number
               left: esp + "%",
               // perto do fim da barra o rótulo ancora à direita para não invadir "Meta"
               transform: esp >= 88 ? "translateX(-100%)" : "translateX(-50%)",
-              marginLeft: esp >= 88 ? -14 : 0,
-              fontSize: 15,
+              marginLeft: esp >= 88 ? tvW(-14) : 0,
+              fontSize: tvF(15),
               fontWeight: 700,
               letterSpacing: "0.12em",
               color: TV.cyan,
@@ -148,14 +151,15 @@ export function MetaProgressBar({ pct, pctEsperado, height = 52 }: { pct: number
   );
 }
 
+/** `size` continua em px do design — vira proporção do viewport aqui dentro. */
 export function DeltaChip({ value, size = 20 }: { value: number | null; size?: number }) {
-  if (value == null) return <span style={{ ...NUM, fontSize: size, fontWeight: 700, color: TV.t3 }}>—</span>;
+  if (value == null) return <span style={{ ...NUM, fontSize: tvF(size), fontWeight: 700, color: TV.t3 }}>—</span>;
   const up = value >= 0;
   // `bad` só é legível a 3–6 m em ≥48px/700; chip é menor que isso → badText
   const c = up ? TV.good : TV.badText;
   return (
-    <span style={{ ...NUM, display: "inline-flex", alignItems: "center", gap: 6, fontSize: size, fontWeight: 700, color: c }}>
-      <svg width={size * 0.8} height={size * 0.8} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="3">
+    <span style={{ ...NUM, display: "inline-flex", alignItems: "center", gap: tvW(6), fontSize: tvF(size), fontWeight: 700, color: c }}>
+      <svg width={tvF(size * 0.8)} height={tvF(size * 0.8)} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="3">
         {up ? <path d="M7 17L17 7M17 7H9M17 7v8" /> : <path d="M7 7l10 10M17 7v10H7" transform="rotate(90 12 12)" />}
       </svg>
       {up ? "+" : "−"}
@@ -241,13 +245,13 @@ export function RitmoWorm() {
       : { bg: TV.badSoft, br: TV.bad, fg: TV.badText, txt: "abaixo em valor", seta: "▼" };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 14, height: "100%", minHeight: 0 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 20 }}>
-        <Eyebrow color={TV.cyan} size={22}>
+    <div style={{ display: "flex", flexDirection: "column", gap: tvH(14), height: "100%", minHeight: 0 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: tvW(20) }}>
+        <Eyebrow color={TV.cyan} size={tvF(22)}>
           Ritmo de acordos do dia
         </Eyebrow>
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <span style={{ ...NUM, fontSize: 17, color: TV.t3, whiteSpace: "nowrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: tvW(16) }}>
+          <span style={{ ...NUM, fontSize: tvF(17), color: TV.t3, whiteSpace: "nowrap" }}>
             proj. <strong style={{ color: TV.t2, fontWeight: 700 }}>{ritmoAgg.proj ?? "—"}</strong> / meta {ritmoAgg.meta ?? "—"}
           </span>
           <span
@@ -255,13 +259,13 @@ export function RitmoWorm() {
               ...NUM,
               display: "inline-flex",
               alignItems: "center",
-              gap: 8,
-              padding: "7px 16px",
-              borderRadius: 20,
+              gap: tvW(8),
+              padding: `${tvH(7)} ${tvW(16)}`,
+              borderRadius: 999,
               background: pill.bg,
               border: `1px solid ${pill.br}`,
               color: pill.fg,
-              fontSize: 19,
+              fontSize: tvF(19),
               fontWeight: 700,
               letterSpacing: "0.06em",
               whiteSpace: "nowrap",
@@ -276,8 +280,8 @@ export function RitmoWorm() {
       {/* ritmo de valor de acordos (R$) — mesmo dado do card "Ritmo do Dia" da Home,
           como linha compacta em vez de 2ª curva: o worm já soma 4 camadas visuais
           (banda + esperado + real + meta) e duplicar em R$ com eixo próprio vira ruído. */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 20, marginTop: -6 }}>
-        <span style={{ ...NUM, fontSize: 17, color: TV.t3, whiteSpace: "nowrap" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: tvW(20), marginTop: tvH(-6) }}>
+        <span style={{ ...NUM, fontSize: tvF(17), color: TV.t3, whiteSpace: "nowrap" }}>
           valor real <strong style={{ color: TV.t2, fontWeight: 700 }}>{tvBRLk(ritmoAgg.valorReal)}</strong> / proj. {tvBRLk(ritmoAgg.valorProj)} / meta {tvBRLk(ritmoAgg.valorMeta)}
         </span>
         <span
@@ -285,13 +289,13 @@ export function RitmoWorm() {
             ...NUM,
             display: "inline-flex",
             alignItems: "center",
-            gap: 8,
-            padding: "5px 14px",
-            borderRadius: 20,
+            gap: tvW(8),
+            padding: `${tvH(5)} ${tvW(14)}`,
+            borderRadius: 999,
             background: pillValor.bg,
             border: `1px solid ${pillValor.br}`,
             color: pillValor.fg,
-            fontSize: 16,
+            fontSize: tvF(16),
             fontWeight: 700,
             letterSpacing: "0.06em",
             whiteSpace: "nowrap",
@@ -304,11 +308,11 @@ export function RitmoWorm() {
 
       <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
         {semDados ? (
-          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 8, textAlign: "center" }}>
-            <Eyebrow color={TV.t3} size={18}>
+          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: tvH(8), textAlign: "center" }}>
+            <Eyebrow color={TV.t3} size={tvF(18)}>
               Ritmo do dia indisponível
             </Eyebrow>
-            <span style={{ fontSize: 15, color: TV.t3small, letterSpacing: "0.04em", textTransform: "none" }}>
+            <span style={{ fontSize: tvF(15), color: TV.t3small, letterSpacing: "0.04em", textTransform: "none" }}>
               fora do horário operacional ou sem dados
             </span>
           </div>
@@ -357,8 +361,8 @@ export function RitmoWorm() {
                 position: "absolute",
                 left: xPct(pts.length - 1) + "%",
                 top: (yAt(pts[pts.length - 1].esp) / H) * 100 + "%",
-                transform: "translate(10px, -50%)",
-                fontSize: 15,
+                transform: `translate(${tvW(10)}, -50%)`,
+                fontSize: tvF(15),
                 fontWeight: 700,
                 letterSpacing: "0.10em",
                 color: TV.goldText,
@@ -373,8 +377,8 @@ export function RitmoWorm() {
                 position: "absolute",
                 left: xPct(lastReal) + "%",
                 top: (yAt(pts[lastReal].real as number) / H) * 100 + "%",
-                transform: "translate(-50%, -32px)",
-                fontSize: 22,
+                transform: `translate(-50%, ${tvH(-32)})`,
+                fontSize: tvF(22),
                 fontWeight: 800,
                 color: TV.t1,
                 whiteSpace: "nowrap",
@@ -386,7 +390,7 @@ export function RitmoWorm() {
         )}
       </div>
 
-      <div style={{ position: "relative", height: 20, flexShrink: 0 }}>
+      <div style={{ position: "relative", height: tvH(20), flexShrink: 0 }}>
         {pts.map((p, i) => (
           <span
             key={p.h}
@@ -395,7 +399,7 @@ export function RitmoWorm() {
               left: xPct(i) + "%",
               transform: "translateX(-50%)",
               fontFamily: TV_MONO,
-              fontSize: 16,
+              fontSize: tvF(16),
               color: i === lastReal ? TV.t1 : TV.t3,
               fontWeight: i === lastReal ? 700 : 400,
               textTransform: "none",
@@ -406,18 +410,18 @@ export function RitmoWorm() {
         ))}
       </div>
 
-      <div style={{ display: "flex", gap: 24, fontSize: 15, color: TV.t3, flexShrink: 0 }}>
-        <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ width: 18, height: 5, background: TV.gold, borderRadius: 3, display: "inline-block" }} />acumulado real
+      <div style={{ display: "flex", gap: tvW(24), fontSize: tvF(15), color: TV.t3, flexShrink: 0 }}>
+        <span style={{ display: "flex", alignItems: "center", gap: tvW(8) }}>
+          <span style={{ width: tvW(18), height: tvH(5), background: TV.gold, borderRadius: 3, display: "inline-block", flexShrink: 0 }} />acumulado real
         </span>
-        <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ width: 18, height: 3, background: TV.cyan, opacity: 0.55, borderRadius: 3, display: "inline-block" }} />esperado
+        <span style={{ display: "flex", alignItems: "center", gap: tvW(8) }}>
+          <span style={{ width: tvW(18), height: tvH(3), background: TV.cyan, opacity: 0.55, borderRadius: 3, display: "inline-block", flexShrink: 0 }} />esperado
         </span>
-        <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ width: 18, height: 12, background: TV.good, opacity: 0.34, borderRadius: 2, display: "inline-block" }} />à frente
+        <span style={{ display: "flex", alignItems: "center", gap: tvW(8) }}>
+          <span style={{ width: tvW(18), height: tvH(12), background: TV.good, opacity: 0.34, borderRadius: 2, display: "inline-block", flexShrink: 0 }} />à frente
         </span>
-        <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ width: 18, height: 12, background: TV.bad, opacity: 0.3, borderRadius: 2, display: "inline-block" }} />atrás
+        <span style={{ display: "flex", alignItems: "center", gap: tvW(8) }}>
+          <span style={{ width: tvW(18), height: tvH(12), background: TV.bad, opacity: 0.3, borderRadius: 2, display: "inline-block", flexShrink: 0 }} />atrás
         </span>
       </div>
     </div>
@@ -434,7 +438,7 @@ function KpiDelta({ delta }: { delta: NonNullable<TvKpi["delta"]> }) {
   const fundo = bom ? TV.goodSoft : TV.badSoft;
   const borda = bom ? "rgba(121,198,147,0.35)" : "rgba(224,117,106,0.35)";
   return (
-    <span style={{ ...NUM, flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: 999, background: fundo, border: `1px solid ${borda}`, color: cor, fontSize: 18, fontWeight: 700 }}>
+    <span style={{ ...NUM, flexShrink: 0, display: "inline-flex", alignItems: "center", gap: tvW(5), padding: `${tvH(4)} ${tvW(10)}`, borderRadius: 999, background: fundo, border: `1px solid ${borda}`, color: cor, fontSize: tvF(18), fontWeight: 700 }}>
       {pp > 0 ? "▲" : "▼"} {Math.abs(pp).toFixed(0)}%
     </span>
   );
@@ -446,15 +450,15 @@ export function KpiTile({ kpi }: { kpi: TvKpi }) {
   return (
     // line-height explícito nos rótulos: com `justifyContent: center` o conteúdo
     // que não cabe come o padding em vez de transbordar, e a tile fica sem respiro.
-    <div style={{ background: TV.card, borderRadius: 16, padding: "18px 26px", display: "flex", flexDirection: "column", justifyContent: "center", gap: 10, minHeight: 0 }}>
-      <Eyebrow size={18} color={TV.t1} style={{ whiteSpace: "nowrap", lineHeight: 1.2 }}>
+    <div className="tv-tile" style={{ background: TV.card, borderRadius: tvW(16), padding: `${tvH(18)} ${tvW(26)}`, display: "flex", flexDirection: "column", justifyContent: "center", gap: tvH(10), minHeight: 0 }}>
+      <Eyebrow className="tv-tile-label" size={tvF(18)} color={TV.t1} style={{ whiteSpace: "nowrap", lineHeight: 1.2 }}>
         {kpi.label}
       </Eyebrow>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 12, minWidth: 0 }}>
-        <div style={{ ...NUM, fontWeight: 800, fontSize: 64, color: TV.t1, lineHeight: 0.95, letterSpacing: "-0.02em" }}>{animatedValue}</div>
+      <div style={{ display: "flex", alignItems: "baseline", gap: tvW(12), minWidth: 0 }}>
+        <div className="tv-tile-valor" style={{ ...NUM, fontWeight: 800, fontSize: tvF(64), color: TV.t1, lineHeight: 0.95, letterSpacing: "-0.02em" }}>{animatedValue}</div>
         {kpi.delta && <KpiDelta delta={kpi.delta} />}
       </div>
-      <div style={{ fontSize: 19, color: c, fontWeight: 600, whiteSpace: "nowrap", lineHeight: 1.2 }}>
+      <div className="tv-tile-sub" style={{ fontSize: tvF(19), color: c, fontWeight: 600, whiteSpace: "nowrap", lineHeight: 1.2 }}>
         {kpi.baseline ? [kpi.baseline.label, kpi.baseline.value].filter(Boolean).join(" ") : kpi.sub}
       </div>
     </div>
@@ -488,8 +492,8 @@ export function Ticker() {
   if (!item) return <div style={{ height: "100%", background: TV.bg0, borderTop: `1px solid ${TV.line}` }} />;
 
   return (
-    <div style={{ height: "100%", background: TV.bg0, borderTop: `1px solid ${TV.line}`, display: "flex", alignItems: "center", gap: 32, position: "relative", padding: "0 80px", overflow: "hidden" }}>
-      <div style={{ flexShrink: 0, display: "flex", alignItems: "center", padding: "9px 24px", borderRadius: 999, border: `1px solid rgba(212,175,90,0.35)`, color: TV.goldText, fontWeight: 700, fontSize: 19, letterSpacing: "0.16em", textTransform: "uppercase" }}>
+    <div style={{ height: "100%", background: TV.bg0, borderTop: `1px solid ${TV.line}`, display: "flex", alignItems: "center", gap: tvW(32), position: "relative", padding: `0 ${tvW(80)}`, overflow: "hidden" }}>
+      <div style={{ flexShrink: 0, display: "flex", alignItems: "center", padding: `${tvH(9)} ${tvW(24)}`, borderRadius: 999, border: `1px solid rgba(212,175,90,0.35)`, color: TV.goldText, fontWeight: 700, fontSize: tvF(19), letterSpacing: "0.16em", textTransform: "uppercase" }}>
         Destaques do dia
       </div>
 
@@ -497,16 +501,16 @@ export function Ticker() {
       {/* a key inclui o conteúdo: refetch que troca o item mantendo o tamanho da
           lista precisa reiniciar entrada e barra, senão a frase nova aparece com o
           contador do item antigo prestes a virar */}
-      <div key={`${idx}-${item.chip}-${item.frase}`} className="tv-ticker-in" style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "baseline", gap: 18, overflow: "hidden" }}>
-        <span style={{ flexShrink: 0, fontSize: 19, fontWeight: 700, letterSpacing: "0.14em", color: TV.goldText, textTransform: "uppercase" }}>{item.chip}</span>
-        <span style={{ fontSize: 30, color: TV.t1, textTransform: "none", whiteSpace: "nowrap" }}>{item.frase}</span>
+      <div key={`${idx}-${item.chip}-${item.frase}`} className="tv-ticker-in" style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "baseline", gap: tvW(18), overflow: "hidden" }}>
+        <span style={{ flexShrink: 0, fontSize: tvF(19), fontWeight: 700, letterSpacing: "0.14em", color: TV.goldText, textTransform: "uppercase" }}>{item.chip}</span>
+        <span style={{ fontSize: tvF(30), color: TV.t1, textTransform: "none", whiteSpace: "nowrap" }}>{item.frase}</span>
         {item.valor && (
-          <span style={{ ...NUM, flexShrink: 0, fontSize: 34, fontWeight: 800, color: TICKER_COR[item.kind] ?? TV.t1 }}>{item.valor}</span>
+          <span style={{ ...NUM, flexShrink: 0, fontSize: tvF(34), fontWeight: 800, color: TICKER_COR[item.kind] ?? TV.t1 }}>{item.valor}</span>
         )}
       </div>
 
       {total > 1 && (
-        <span style={{ ...NUM, flexShrink: 0, fontFamily: TV_MONO, fontSize: 18, color: TV.t3 }}>
+        <span style={{ ...NUM, flexShrink: 0, fontFamily: TV_MONO, fontSize: tvF(18), color: TV.t3 }}>
           {idx + 1}/{total}
         </span>
       )}
@@ -523,7 +527,7 @@ export function Ticker() {
 
 export function TvCard({ children, style, pad = 28 }: { children: ReactNode; style?: CSSProperties; pad?: number }) {
   return (
-    <div style={{ background: TV.card, borderRadius: 18, padding: pad, ...style }}>
+    <div style={{ background: TV.card, borderRadius: tvW(18), padding: tvH(pad), ...style }}>
       {children}
     </div>
   );

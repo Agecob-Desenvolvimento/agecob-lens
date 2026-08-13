@@ -35,39 +35,49 @@ const TV_KEYFRAMES = `
 }
 `;
 
+/**
+ * Tipografia elástica — a fonte segue a CAIXA (não o viewport direto): a linha e
+ * o tile já são proporcionais ao viewport, então o texto herda essa fluidez e
+ * ainda responde ao que muda só a caixa — menos agentes dividindo a coluna deixa
+ * a linha mais alta e a fonte cresce junto. `cqh` acompanha a altura; `cqw` é o
+ * teto que impede o número de estourar a célula quando só a altura cresceu.
+ * Os coeficientes são % do CONTENT BOX (a caixa a que `cqh`/`cqw` se referem):
+ * linha 843,5×58,9 sem padding; tile 276×117, já descontado o padding 18/26.
+ *
+ * Nas linhas o teto de largura é a própria proporção do projeto — a célula cresce
+ * junto com a linha, então libera até ~2×. Nos tiles ele é afrouxado de propósito
+ * (1,35× no valor, 1,25× em rótulo e sub): a largura do tile NÃO cresce numa
+ * janela alta e a string ("R$ 488", "Ticket médio") já ocupa metade da caixa.
+ *
+ * `!important` é intencional: o valor de projeto está em `style` inline e nada
+ * menos o sobrepõe. Browser sem container queries descarta a declaração inválida
+ * e fica no px inline — degradação limpa, sem precisar de @supports.
+ */
+const TV_TIPOGRAFIA = `
+.tv-op-row { container-type: size; }
+.tv-op-rank { width: min(50.9cqh, 3.56cqw) !important; font-size: clamp(11px, min(33.9cqh, 2.37cqw), 50px) !important; }
+/* termo extra só no nome: é a única string longa da linha e, acompanhando os
+   números até 2×, "ANNA LUZIA SANTOS DE FREITAS" passava a ser cortada com
+   reticências em toda linha (6/6 medidos a 45,9px; 0/6 a 28px). O 2,78vh são os
+   30px do projeto em unidade relativa — acompanha o viewport, não trava num px. */
+.tv-op-nome { font-size: clamp(12.1px, min(37.3cqh, 2.61cqw, 2.78vh), 55px) !important; }
+.tv-op-login { font-size: clamp(7.7px, min(23.8cqh, 1.66cqw), 35px) !important; }
+.tv-op-cel-brl { font-size: clamp(10.45px, min(32.3cqh, 2.25cqw), 47.5px) !important; }
+.tv-op-cel-pct { font-size: clamp(12.1px, min(37.3cqh, 2.61cqw), 55px) !important; }
+.tv-op-cel-num { font-size: clamp(13.2px, min(40.8cqh, 2.85cqw), 60px) !important; }
+.tv-tile { container-type: size; }
+.tv-tile-label { font-size: clamp(9.9px, min(15.4cqh, 8.15cqw), 45px) !important; }
+.tv-tile-valor { font-size: clamp(35.2px, min(54.7cqh, 31.3cqw), 160px) !important; }
+.tv-tile-sub { font-size: clamp(10.45px, min(16.2cqh, 8.6cqw), 47.5px) !important; }
+`;
+
 export default function TvMode({ vm, onClose }: { vm: TvModeViewModel; onClose: () => void }) {
-  // Escala uniforme: esticar por eixo distorce o texto em janela fora de 16:9
-  // (21% numa 2.16:1). Numa TV 16:9 — o alvo real — o canvas é exatamente
-  // 1920×1080 e nada muda. Fora de 16:9, em vez de sobrar tarja, o canvas CRESCE
-  // em px lógicos (nunca encolhe abaixo do projeto) até cobrir o viewport: o eixo
-  // folgado vira altura/largura real de layout, que os `flex: 1`/`1fr` distribuem.
-  const [fit, setFit] = useState({ scale: 1, w: 1920, h: 1080 });
+  // Sem `transform: scale()`: o canvas É o viewport e cada medida do design é
+  // proporção dele (`tvW`/`tvH`/`tvF`). Layout de verdade, não bitmap ampliado —
+  // por consequência o zoom do navegador passa a funcionar sozinho, porque zoom
+  // muda o tamanho do viewport em px CSS e as unidades relativas acompanham.
   const [mode, setMode] = useState<"ritmo" | "operacional">("ritmo");
   const ura = useAcordoAnnouncer(vm.valor.metaDia, vm.ritmoAgg, vm.topAgentes);
-
-  useEffect(() => {
-    // Sem o fator de zoom o canvas ignora Ctrl+ / Ctrl−: o zoom encolhe o viewport
-    // em px CSS, o ajuste-à-janela reexpande na mesma proporção e o resultado
-    // físico não muda. Zoom não tem API própria — devicePixelRatio é o proxy: a
-    // referência é o dpr de quando o Modo TV abriu, então 100% do momento da
-    // entrada é o estado neutro e o resto é relativo a ele.
-    const dprBase = window.devicePixelRatio || 1;
-    const medir = () => {
-      const zoom = (window.devicePixelRatio || 1) / dprBase;
-      const scale = Math.min(window.innerWidth / 1920, window.innerHeight / 1080) * zoom;
-      setFit({ scale, w: Math.max(1920, window.innerWidth / scale), h: Math.max(1080, window.innerHeight / scale) });
-    };
-    medir();
-    // `resize` cobre o zoom nos navegadores atuais; o listener de dppx é o seguro
-    // para quem só troca a densidade (mudança de monitor, Ctrl+ sem reflow).
-    const dppx = window.matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`);
-    window.addEventListener("resize", medir);
-    dppx.addEventListener("change", medir);
-    return () => {
-      window.removeEventListener("resize", medir);
-      dppx.removeEventListener("change", medir);
-    };
-  }, []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -80,8 +90,9 @@ export default function TvMode({ vm, onClose }: { vm: TvModeViewModel; onClose: 
   return (
     <TvDataContext.Provider value={vm}>
       <style>{TV_KEYFRAMES}</style>
-      <div style={{ position: "fixed", inset: 0, zIndex: 9999, background: TV_BG, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-        <div style={{ width: fit.w, height: fit.h, flexShrink: 0, transform: `scale(${fit.scale})`, transformOrigin: "center center" }}>
+      <style>{TV_TIPOGRAFIA}</style>
+      <div style={{ position: "fixed", inset: 0, zIndex: 9999, background: TV_BG, display: "flex", overflow: "hidden" }}>
+        <div style={{ flex: 1, minWidth: 0, minHeight: 0 }}>
           {mode === "ritmo" ? <VariantScoreboard /> : <TvOperacional />}
         </div>
         {/* abas com sublinhado reto, não pill arredondada: o pill iOS é o mesmo

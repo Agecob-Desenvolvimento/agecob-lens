@@ -6,7 +6,7 @@
  * vivo) e rodapé/ticker do modo original.
  */
 import { useMemo, useState } from "react";
-import { NUM, TV, TV_BG, TV_SANS, tvBRL, tvNum, tvPct, useTvData, type TvAgenteRow } from "./tvShared";
+import { NUM, TV, TV_BG, TV_SANS, tvBRL, tvF, tvH, tvNum, tvPct, tvW, useTvData, type TvAgenteRow } from "./tvShared";
 import { OVERSCAN_BOTTOM, TopBar } from "./TvVariants";
 import { Ticker } from "./TvAtoms";
 import { buildPercentileMap, classifyCell } from "@/components/detalhamento/PerformanceHeatmap";
@@ -69,7 +69,7 @@ const HEAD_BTN = {
   textTransform: "uppercase",
   display: "inline-flex",
   alignItems: "center",
-  gap: 6,
+  gap: tvW(6),
   whiteSpace: "nowrap",
 } as const;
 
@@ -81,12 +81,12 @@ function ColHeader({ sortCol, sortDir, onSort }: { sortCol: SortKey | null; sort
     </button>
   );
   return (
-    <div style={{ display: "flex", gap: 6, paddingBottom: 10 }}>
-      <div style={{ flex: "18 1 0", display: "flex", alignItems: "center", padding: "0 16px", fontSize: 16, color: sortCol === "nome" ? TV.t1 : TV.t2, letterSpacing: "0.14em", fontWeight: 700 }}>
+    <div style={{ display: "flex", gap: tvW(6), paddingBottom: tvH(10) }}>
+      <div style={{ flex: "18 1 0", display: "flex", alignItems: "center", padding: `0 ${tvW(16)}`, fontSize: tvF(16), color: sortCol === "nome" ? TV.t1 : TV.t2, letterSpacing: "0.14em", fontWeight: 700 }}>
         {head("nome", "Agente", sortCol === "nome")}
       </div>
       {COLS.map((c) => (
-        <div key={c.key} style={{ flex: `${c.w} 1 0`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, color: sortCol === c.key ? TV.t1 : TV.t2, letterSpacing: "0.08em", fontWeight: 700, textAlign: "center", whiteSpace: "nowrap" }}>
+        <div key={c.key} style={{ flex: `${c.w} 1 0`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: tvF(16), color: sortCol === c.key ? TV.t1 : TV.t2, letterSpacing: "0.08em", fontWeight: 700, textAlign: "center", whiteSpace: "nowrap" }}>
           {head(c.key, c.label, sortCol === c.key)}
         </div>
       ))}
@@ -99,14 +99,14 @@ function AgentRowView({ a, rank, pctMaps, podio }: { a: TvAgenteRow; rank: numbe
   // não colocação — dourar o topo de um "CPC crescente" premiaria os piores.
   const rankColor = podio && rank <= 3 ? TV.goldText : TV.t3small;
   return (
-    <div style={{ display: "flex", gap: 6, minHeight: 0 }}>
-      <div style={{ flex: "18 1 0", display: "flex", alignItems: "center", gap: 14, padding: "0 16px", background: "rgba(255,255,255,0.04)", borderRadius: 6, minWidth: 0 }}>
-        <div style={{ ...NUM, fontSize: 20, fontWeight: 700, color: rankColor, width: 30, flexShrink: 0 }}>
+    <div className="tv-op-row" style={{ display: "flex", gap: tvW(6), minHeight: 0 }}>
+      <div style={{ flex: "18 1 0", display: "flex", alignItems: "center", gap: tvW(14), padding: `0 ${tvW(16)}`, background: "rgba(255,255,255,0.04)", borderRadius: tvW(6), minWidth: 0 }}>
+        <div className="tv-op-rank" style={{ ...NUM, fontSize: tvF(20), fontWeight: 700, color: rankColor, width: tvW(30), flexShrink: 0 }}>
           {String(rank).padStart(2, "0")}
         </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
-          <div style={{ fontSize: 22, fontWeight: 700, color: TV.t1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{a.nome}</div>
-          <div style={{ fontSize: 14, color: TV.t3small, letterSpacing: "0.04em" }}>{a.login}</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: tvH(2), minWidth: 0 }}>
+          <div className="tv-op-nome" style={{ fontSize: tvF(22), fontWeight: 700, color: TV.t1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{a.nome}</div>
+          <div className="tv-op-login" style={{ fontSize: tvF(14), color: TV.t3small, letterSpacing: "0.04em" }}>{a.login}</div>
         </div>
       </div>
       {COLS.map((c) => {
@@ -114,7 +114,7 @@ function AgentRowView({ a, rank, pctMaps, podio }: { a: TvAgenteRow; rank: numbe
         const pct = pctMaps[c.key].get(raw) ?? 0;
         const band = classifyCell(pct);
         return (
-          <div key={c.key} style={{ ...NUM, flex: `${c.w} 1 0`, display: "flex", alignItems: "center", justifyContent: "center", background: BAND_BG[band], color: BAND_FG[band], borderRadius: 6, fontWeight: 700, fontSize: c.kind === "brl" ? 19 : c.kind === "pct" ? 22 : 24, whiteSpace: "nowrap", minWidth: 0 }}>
+          <div key={c.key} className={`tv-op-cel-${c.kind}`} style={{ ...NUM, flex: `${c.w} 1 0`, display: "flex", alignItems: "center", justifyContent: "center", background: BAND_BG[band], color: BAND_FG[band], borderRadius: tvW(6), fontWeight: 700, fontSize: tvF(c.kind === "brl" ? 19 : c.kind === "pct" ? 22 : 24), whiteSpace: "nowrap", minWidth: 0 }}>
             {fmtCell(raw, c.kind)}
           </div>
         );
@@ -125,12 +125,12 @@ function AgentRowView({ a, rank, pctMaps, podio }: { a: TvAgenteRow; rank: numbe
 
 function Panel({ rows, tracks, startRank, pctMaps, divider = false, sortCol, sortDir, onSort }: { rows: TvAgenteRow[]; tracks: number; startRank: number; pctMaps: Record<string, Map<number, number>>; divider?: boolean; sortCol: SortKey | null; sortDir: SortDir; onSort: (k: SortKey) => void }) {
   return (
-    <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, ...(divider ? { borderLeft: `1px solid ${TV.line}`, paddingLeft: 32 } : {}) }}>
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, ...(divider ? { borderLeft: `1px solid ${TV.line}`, paddingLeft: tvW(32) } : {}) }}>
       <ColHeader sortCol={sortCol} sortDir={sortDir} onSort={onSort} />
       {/* `tracks` × `1fr`: a altura de cada linha sai da altura disponível, nunca
           de px — a lista preenche a coluna inteira em qualquer resolução.
-          `minmax(0,1fr)` impede que a trilha cresça além da fatia e vaze o canvas. */}
-      <div style={{ flex: 1, display: "grid", gridTemplateRows: `repeat(${tracks}, minmax(0, 1fr))`, gap: 6, minHeight: 0 }}>
+          `minmax(0,1fr)` impede que a trilha cresça além da fatia e vaze a tela. */}
+      <div style={{ flex: 1, display: "grid", gridTemplateRows: `repeat(${tracks}, minmax(0, 1fr))`, gap: tvH(6), minHeight: 0 }}>
         {rows.map((a, i) => (
           <AgentRowView key={a.id} a={a} rank={startRank + i} pctMaps={pctMaps} podio={sortCol == null} />
         ))}
@@ -147,11 +147,11 @@ const LEGEND = [
 
 function Legend() {
   return (
-    <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 28, marginBottom: 16 }}>
+    <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: tvW(28), marginBottom: tvH(16) }}>
       {LEGEND.map((it) => (
-        <div key={it.label} style={{ display: "flex", alignItems: "center", gap: 9 }}>
-          <div style={{ width: 14, height: 14, borderRadius: 3, background: it.c }} />
-          <div style={{ fontSize: 15, color: TV.t2, letterSpacing: "0.14em", fontWeight: 600, textTransform: "uppercase" }}>{it.label}</div>
+        <div key={it.label} style={{ display: "flex", alignItems: "center", gap: tvW(9) }}>
+          <div style={{ width: tvF(14), height: tvF(14), borderRadius: 3, background: it.c, flexShrink: 0 }} />
+          <div style={{ fontSize: tvF(15), color: TV.t2, letterSpacing: "0.14em", fontWeight: 600, textTransform: "uppercase" }}>{it.label}</div>
         </div>
       ))}
     </div>
@@ -217,16 +217,16 @@ export default function TvOperacional() {
   return (
     <div style={{ width: "100%", height: "100%", background: TV_BG, color: TV.t1, fontFamily: TV_SANS, display: "flex", flexDirection: "column", overflow: "hidden" }}>
       <TopBar sub="Operacional · Modo TV" />
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", padding: "28px 80px 22px", minHeight: 0 }}>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", padding: `${tvH(28)} ${tvW(80)} ${tvH(22)}`, minHeight: 0 }}>
         <Legend />
-        <div style={{ flex: 1, display: "flex", gap: 40, minHeight: 0 }}>
+        <div style={{ flex: 1, display: "flex", gap: tvW(40), minHeight: 0 }}>
           <Panel rows={rowsA} tracks={tracks} startRank={1} pctMaps={pctMaps} sortCol={sortCol} sortDir={sortDir} onSort={onSort} />
           {rowsB.length > 0 && (
             <Panel rows={rowsB} tracks={tracks} startRank={ROWS_PER_COL + 1} pctMaps={pctMaps} divider sortCol={sortCol} sortDir={sortDir} onSort={onSort} />
           )}
         </div>
       </div>
-      <div style={{ flexShrink: 0, height: 96, marginBottom: OVERSCAN_BOTTOM }}>
+      <div style={{ flexShrink: 0, height: tvH(96), marginBottom: OVERSCAN_BOTTOM }}>
         <Ticker />
       </div>
     </div>
