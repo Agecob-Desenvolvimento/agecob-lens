@@ -69,6 +69,7 @@ export interface ProdutividadeRow {
   valor_primeira_parcela_excecoes: number;
   qtd_rejeitados: number;
   valor_rejeitados: number;
+  valor_primeira_parcela_rejeitados: number;
   idade_media_acordos: number;
   horas_trabalhadas: number;
 }

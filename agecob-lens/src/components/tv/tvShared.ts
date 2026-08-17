@@ -142,6 +142,10 @@ export interface TvHeroValor {
   excecoesQtdDia: number | null;
   /** 1ª parcela dos acordos em exceção gerados HOJE (fatia da entrada) */
   excecoesPrimeiraParcelaDia: number | null;
+  /** 1ª parcela dos acordos rejeitados (ID_REC_STATUS=7) emitidos HOJE */
+  rejeitadosPrimeiraParcelaDia: number | null;
+  /** qtd de acordos rejeitados HOJE */
+  rejeitadosQtdDia: number | null;
   /** 1ª parcela do dia útil anterior (fechado) */
   ontemDia: number | null;
   /** delta fracionário do dia vs dia útil anterior */

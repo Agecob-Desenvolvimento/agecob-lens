@@ -83,6 +83,7 @@ export function VariantScoreboard() {
   const valorAcordosDiaTxt = useAnimatedFormattedValue(tvBRLc(v.valorAcordosDia));
   const realizadoDiaTxt = useAnimatedFormattedValue(tvBRLc(v.realizadoDia));
   const excecoesP1DiaTxt = useAnimatedFormattedValue(tvBRLc(v.excecoesPrimeiraParcelaDia));
+  const rejeitadosP1DiaTxt = useAnimatedFormattedValue(tvBRLc(v.rejeitadosPrimeiraParcelaDia));
 
   return (
     <TvScreen>
@@ -92,7 +93,7 @@ export function VariantScoreboard() {
             min-content do hero — qualquer texto `nowrap` mais largo que a fatia
             estoura a trilha e empurra os cards de BU para fora do canvas (ficavam
             cortados pelo `overflow: hidden`). */}
-        <div style={{ display: "grid", gridTemplateColumns: bu.length ? `minmax(0, 1fr) ${tvW(660)}` : "minmax(0, 1fr)", gap: tvW(40), alignItems: "stretch", flexShrink: 0, height: tvH(262) }}>
+        <div style={{ display: "grid", gridTemplateColumns: bu.length ? `minmax(0, 1fr) ${tvW(500)}` : "minmax(0, 1fr)", gap: tvW(40), alignItems: "stretch", flexShrink: 0, height: tvH(262) }}>
           <div style={{ display: "flex", flexDirection: "column", justifyContent: "center" }}>
             <Eyebrow color={TV.goldText}>Hoje</Eyebrow>
             {/* grid de 3 colunas × 3 linhas (rótulo · número · nota). `alignItems:
@@ -105,11 +106,13 @@ export function VariantScoreboard() {
                 display: "grid",
                 // 1fr por coluna + space-between: as 3 medidas ocupam a largura toda
                 // do hero em vez de se amontoarem à esquerda deixando vão até os BU
-                gridTemplateColumns: "repeat(3, auto)",
+                gridTemplateColumns: "repeat(4, auto)",
                 justifyContent: "space-between",
                 justifyItems: "center",
                 alignItems: "baseline",
-                columnGap: tvW(52),
+                // 22, não 52: medido no pior caso (as 4 medidas em "R$ 1,61 mi"),
+                // a faixa só fecha os 4 corpos + 3 vãos com ~20px de vão máximo
+                columnGap: tvW(22),
                 rowGap: tvH(10),
                 marginTop: tvH(14),
               }}
@@ -117,15 +120,22 @@ export function VariantScoreboard() {
               <Eyebrow size={tvF(17)} color={TV.t3} style={{ letterSpacing: "0.16em" }}>Valor de acordos</Eyebrow>
               <Eyebrow size={tvF(17)} color={TV.t3} style={{ letterSpacing: "0.16em" }}>1ª parcela</Eyebrow>
               <Eyebrow size={tvF(17)} color={TV.t3} style={{ letterSpacing: "0.16em" }}>Exceção · 1ª parcela</Eyebrow>
+              <Eyebrow size={tvF(17)} color={TV.t3} style={{ letterSpacing: "0.16em" }}>Rejeitado · 1ª parcela</Eyebrow>
 
               {/* `nowrap` obrigatório: as trilhas são `auto` e, sem ele, um valor
                   longo ("R$ 1,61 mi") quebra em duas linhas e estoura a faixa por
-                  cima da barra de meta. Corpos somam ~1050px em 1100 disponíveis. */}
-              <div style={{ ...NUM, fontWeight: 800, fontSize: tvF(76), lineHeight: 0.92, color: TV.t1, letterSpacing: "-0.03em", whiteSpace: "nowrap" }}>{valorAcordosDiaTxt}</div>
-              <div style={{ ...NUM, fontWeight: 800, fontSize: tvF(76), lineHeight: 0.92, color: TV.gold, letterSpacing: "-0.03em", whiteSpace: "nowrap" }}>{realizadoDiaTxt}</div>
+                  cima da barra de meta. Corpo caiu de 76 para 62 quando entrou a
+                  4ª medida: a faixa perdeu 160px para os cards de BU e 4×76 não
+                  cabe mais em uma linha. */}
+              <div style={{ ...NUM, fontWeight: 800, fontSize: tvF(62), lineHeight: 0.92, color: TV.t1, letterSpacing: "-0.03em", whiteSpace: "nowrap" }}>{valorAcordosDiaTxt}</div>
+              <div style={{ ...NUM, fontWeight: 800, fontSize: tvF(62), lineHeight: 0.92, color: TV.gold, letterSpacing: "-0.03em", whiteSpace: "nowrap" }}>{realizadoDiaTxt}</div>
               {/* goldText, não warn: única cor "amarela" auditada p/ texto < 28px (§ paleta APCA); aqui em corpo grande fica gold cheio */}
-              <div style={{ ...NUM, fontWeight: 800, fontSize: tvF(76), lineHeight: 0.92, color: TV.goldText, letterSpacing: "-0.03em", whiteSpace: "nowrap" }}>
+              <div style={{ ...NUM, fontWeight: 800, fontSize: tvF(62), lineHeight: 0.92, color: TV.goldText, letterSpacing: "-0.03em", whiteSpace: "nowrap" }}>
                 {excecoesP1DiaTxt}
+              </div>
+              {/* `bad` (não badText): liberado a partir de 48px/700 pela régua APCA */}
+              <div style={{ ...NUM, fontWeight: 800, fontSize: tvF(62), lineHeight: 0.92, color: TV.bad, letterSpacing: "-0.03em", whiteSpace: "nowrap" }}>
+                {rejeitadosP1DiaTxt}
               </div>
 
               <div style={{ display: "flex", flexDirection: "column", gap: tvH(4) }}>
@@ -141,6 +151,7 @@ export function VariantScoreboard() {
               </div>
               {/* total geral em exceção — legenda sob a 1ª parcela */}
               <div style={{ ...NUM, fontSize: tvF(17), color: TV.t3, whiteSpace: "nowrap" }}>{tvBRLk(v.excecoesValorDia)} total · {tvNum(v.excecoesQtdDia)} acordos</div>
+              <div style={{ ...NUM, fontSize: tvF(17), color: TV.t3, whiteSpace: "nowrap" }}>{tvNum(v.rejeitadosQtdDia)} acordos</div>
             </div>
           </div>
           {bu.length > 0 && (

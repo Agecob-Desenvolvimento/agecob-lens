@@ -112,6 +112,13 @@ export function useTvModeViewModel(): TvModeViewModel {
     const excecoesPrimeiraParcelaDia = agentesHoje.length
       ? agentesHoje.reduce((s, r) => s + (Number(r.valor_primeira_parcela_excecoes) || 0), 0)
       : null;
+    // Rejeitado (ID_REC_STATUS=7) — mesma fonte/dia; entrada que o supervisor/banco negou.
+    const rejeitadosPrimeiraParcelaDia = agentesHoje.length
+      ? agentesHoje.reduce((s, r) => s + (Number(r.valor_primeira_parcela_rejeitados) || 0), 0)
+      : null;
+    const rejeitadosQtdDia = agentesHoje.length
+      ? agentesHoje.reduce((s, r) => s + (Number(r.qtd_rejeitados) || 0), 0)
+      : null;
     const valor = {
       metaDia,
       realizadoDia: ppHoje,
@@ -120,6 +127,8 @@ export function useTvModeViewModel(): TvModeViewModel {
       excecoesValorDia,
       excecoesQtdDia,
       excecoesPrimeiraParcelaDia,
+      rejeitadosPrimeiraParcelaDia,
+      rejeitadosQtdDia,
       ontemDia: ppOntem,
       // hoje é parcial; comparar com o dia anterior FECHADO daria ▼80% às 10h por
       // construção. A base é reduzida à mesma fração da janela já decorrida.
@@ -131,7 +140,17 @@ export function useTvModeViewModel(): TvModeViewModel {
       pctEsperado,
     };
 
-    // KPIs (real, totais do período) — CPC = contatos (count, dicionário oficial)
+    // KPIs do rodapé do placar (Acordos/CPC/Conversão/Ticket) são do DIA, como o
+    // hero — o Modo TV é o painel do dia e uma tile do período ao lado de um hero
+    // do dia lia como se fossem a mesma janela. Período segue alimentando só o
+    // ticker, que diz "no período" na própria frase.
+    const totaisHoje = aggregateTotals(agentesHoje);
+    const acordosHoje = agentesHoje.length ? totaisHoje.qtd_acordos_por_contrato : null;
+    const cpcHoje = agentesHoje.length ? totaisHoje.qtd_contatos : null;
+    const convHoje = agentesHoje.length ? calcConversao(totaisHoje) : null;
+    const ticketHoje = totaisHoje.qtd_acordos > 0 ? calcTicketMedio(totaisHoje) : null;
+
+    // Totais do período — CPC = contatos (count, dicionário oficial)
     const qtdAcordos = kpiVal("Qtd Acordos");
     const cpcCount = kpiVal("CPC");
     const conv = kpiVal("Conversão %");
@@ -154,11 +173,14 @@ export function useTvModeViewModel(): TvModeViewModel {
         delta: { pct: b.value, betterWhen: b.betterWhen },
       };
     };
+    // Baseline só entra onde a referência continua comparável com um valor do dia:
+    // "média do escritório" (benchmark de 3m) sim; "período anterior" não — comparar
+    // o dia com o total do período anterior daria ▼ por construção.
     const kpis: TvKpi[] = [
-      { id: "acordos", label: "Acordos", value: tvNum(qtdAcordos), sub: "no período", tone: "neutral", ...refDe("Qtd Acordos", tvNum) },
-      { id: "cpc", label: "CPC", value: tvNum(cpcCount), sub: "contatos (RPC)", tone: "neutral", ...refDe("CPC", tvNum) },
-      { id: "conversao", label: "Conversão", value: tvPct(conv), sub: "acordos / CPC", tone: "neutral", ...refDe("Conversão %", tvPct) },
-      { id: "ticket", label: "Ticket médio", value: tvBRLk(ticket), sub: "por acordo", tone: "neutral" },
+      { id: "acordos", label: "Acordos", value: tvNum(acordosHoje), sub: "hoje", tone: "neutral" },
+      { id: "cpc", label: "CPC", value: tvNum(cpcHoje), sub: "contatos (RPC) hoje", tone: "neutral" },
+      { id: "conversao", label: "Conversão", value: tvPct(convHoje), sub: "acordos / CPC hoje", tone: "neutral", ...refDe("Conversão %", tvPct) },
+      { id: "ticket", label: "Ticket médio", value: tvBRLk(ticketHoje), sub: "por acordo hoje", tone: "neutral" },
     ];
 
     // BU — 1ª parcela (real) + qtd acordos do funil (real); metas sem fonte

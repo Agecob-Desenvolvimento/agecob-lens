@@ -110,6 +110,7 @@ CTE_Financeiro_Agente AS (
         SUM(CASE WHEN A.ID_REC_STATUS IN {settings.STATUS_EXCECAO_SQL} THEN A.VALOR_P1 ELSE 0 END)                       AS valor_primeira_parcela_excecoes,
         COUNT(CASE WHEN A.ID_REC_STATUS IN {settings.STATUS_REJEITADO_SQL} THEN 1 END)                                   AS qtd_rejeitados,
         SUM(CASE WHEN A.ID_REC_STATUS IN {settings.STATUS_REJEITADO_SQL} THEN A.VALOR_TOTAL_ACORDO ELSE 0 END)           AS valor_rejeitados,
+        SUM(CASE WHEN A.ID_REC_STATUS IN {settings.STATUS_REJEITADO_SQL} THEN A.VALOR_P1 ELSE 0 END)                     AS valor_primeira_parcela_rejeitados,
         AVG(CASE WHEN A.ID_REC_STATUS IN {settings.STATUS_GERADOS_SQL}
             THEN DATEDIFF(DAY, S.DT_VENC_DIV, @Hoje) END)                                                       AS idade_media_acordos
     FROM CTE_Acordos A
@@ -215,6 +216,7 @@ SELECT
     CAST(ISNULL(F.valor_primeira_parcela_excecoes, 0) AS DECIMAL(18,2)) AS valor_primeira_parcela_excecoes,
     ISNULL(F.qtd_rejeitados, 0) AS qtd_rejeitados,
     CAST(ISNULL(F.valor_rejeitados, 0) AS DECIMAL(18,2)) AS valor_rejeitados,
+    CAST(ISNULL(F.valor_primeira_parcela_rejeitados, 0) AS DECIMAL(18,2)) AS valor_primeira_parcela_rejeitados,
     CAST(ISNULL(F.idade_media_acordos, 0) AS DECIMAL(10,1)) AS idade_media_acordos,
     CAST(ISNULL(H.horas_trabalhadas, 0) AS DECIMAL(10,2)) AS horas_trabalhadas
 FROM USU_MASTER U (NOLOCK)
