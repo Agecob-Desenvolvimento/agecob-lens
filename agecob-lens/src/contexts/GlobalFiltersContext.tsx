@@ -1,23 +1,8 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
 import { firstOfMonthStr, todayStr } from "@/lib/dates";
 import type { DatabaseOption } from "@/services/api";
 
 export type CategoryOption = "Todas" | "AUTOS" | "CONSUMER";
-
-/**
- * Janela de estabilização do filtro de data.
- *
- * `dateFrom`/`dateTo` alimentam o queryKey de ~10 hooks, então cada edição de campo
- * disparava uma onda de requests completa — editar "De" e depois "Até" media 24
- * requests e ~5,7s, com a onda intermediária (par de datas que o usuário nem chegou a
- * ver) competindo por socket HTTP/1.1 e CPU do SQL Server com a onda final.
- *
- * Não é proteção contra resultado velho sobrescrever novo: o queryKey do TanStack já
- * isola cada par de datas em sua própria entrada de cache. É controle de contenção.
- *
- * 400ms fica na ordem de grandeza do debounce que já existe no useRefreshGuard (300ms).
- */
-const DATE_COMMIT_DELAY_MS = 400;
 
 function deriveDatabase(category: CategoryOption): DatabaseOption {
   if (category === "AUTOS") return "COBwebRCBAUTOS";
@@ -29,14 +14,22 @@ interface GlobalFilters {
   category: CategoryOption;
   setCategory: (v: CategoryOption) => void;
   selectedDatabase: DatabaseOption;
-  /** Data já estabilizada — é o que vai para queryKey/fetch. */
+  /** Período comprometido — é o que vai para queryKey/fetch. Só muda via applyDateRange(). */
   dateFrom: string;
-  setDateFrom: (v: string) => void;
   dateTo: string;
-  setDateTo: (v: string) => void;
-  /** Valor cru do input, sem debounce. Só a barra de filtros usa. */
+  /** Valor cru dos inputs "De"/"Até" — o que a barra de filtros exibe enquanto o
+   *  usuário edita, ainda não comprometido para as queries. */
   dateFromInput: string;
+  setDateFrom: (v: string) => void;
   dateToInput: string;
+  setDateTo: (v: string) => void;
+  /** true quando o par pendente difere do período comprometido — liga o botão OK. */
+  dateRangeDirty: boolean;
+  /** true quando o par pendente é um intervalo válido (ambos presentes, De <= Até). */
+  dateRangeValid: boolean;
+  /** Comprometido o par pendente como novo período, disparando as queries.
+   *  No-op (retorna false) se o par não passar em dateRangeValid. */
+  applyDateRange: () => boolean;
   assessoria: string;
   setAssessoria: (v: string) => void;
   minAcionamentos: number;
@@ -53,20 +46,21 @@ export function GlobalFiltersProvider({ children }: { children: ReactNode }) {
   const [assessoria, setAssessoria] = useState("Todas");
   const [minAcionamentos, setMinAcionamentos] = useState(10);
 
-  // Um timer só para os dois campos: reeditar qualquer um reinicia a janela, então
-  // "De" + "Até" em sequência rápida vira um commit único em vez de dois.
-  useEffect(() => {
-    // Par incompleto (input de data zera o value enquanto o usuário digita) não vira
-    // fetch: omitir só um dos lados faz o backend responder 400 (_parse_period exige
-    // os dois juntos) ou cair no default de hoje. Mantém o último par válido.
-    if (!dateFromInput || !dateToInput) return;
-    if (dateFromInput === committed.from && dateToInput === committed.to) return;
-    const timer = window.setTimeout(
-      () => setCommitted({ from: dateFromInput, to: dateToInput }),
-      DATE_COMMIT_DELAY_MS,
-    );
-    return () => window.clearTimeout(timer);
-  }, [dateFromInput, dateToInput, committed.from, committed.to]);
+  // Comparação lexicográfica funciona direto em "YYYY-MM-DD" (ISO), sem parsear Date.
+  const dateRangeValid = Boolean(dateFromInput) && Boolean(dateToInput) && dateFromInput <= dateToInput;
+  const dateRangeDirty = dateFromInput !== committed.from || dateToInput !== committed.to;
+
+  // Fluxo: usuário edita "De"/"Até" -> estado pendente (dateFromInput/dateToInput) ->
+  // validação (dateRangeValid) -> usuário confirma (OK / Enter) -> applyDateRange
+  // comprometa os dois valores JUNTOS, atomicamente -> queries usam dateFrom/dateTo.
+  // Substitui o commit automático por timer: aqui nada muda para as queries até o
+  // usuário confirmar explicitamente, então não há ambiguidade sobre qual par de
+  // datas está em vigor.
+  function applyDateRange(): boolean {
+    if (!dateRangeValid) return false;
+    setCommitted({ from: dateFromInput, to: dateToInput });
+    return true;
+  }
 
   const selectedDatabase = useMemo(() => deriveDatabase(category), [category]);
 
@@ -77,11 +71,14 @@ export function GlobalFiltersProvider({ children }: { children: ReactNode }) {
         setCategory,
         selectedDatabase,
         dateFrom: committed.from,
-        setDateFrom: setDateFromInput,
         dateTo: committed.to,
-        setDateTo: setDateToInput,
         dateFromInput,
+        setDateFrom: setDateFromInput,
         dateToInput,
+        setDateTo: setDateToInput,
+        dateRangeDirty,
+        dateRangeValid,
+        applyDateRange,
         assessoria,
         setAssessoria,
         minAcionamentos,
