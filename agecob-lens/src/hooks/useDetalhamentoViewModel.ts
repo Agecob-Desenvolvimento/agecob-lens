@@ -377,10 +377,15 @@ export function useDetalhamentoViewModel(): DetalhamentoViewModel {
     selectedDatabase, { dateFrom, dateTo },
   );
 
-  // Previous period data (Change 4 — KPI deltas)
+  // Previous period data (Change 4 — KPI deltas).
+  // Escalonado atrás de !currLoading, mesmo motivo do Home: com "Todas" são 2 bancos ×
+  // (atual + anterior) = 4 produtividade-hoje simultâneas, e essa query roda MAXDOP 0 —
+  // medido em produção, 4 concorrentes levam ~4,2s cada contra ~1,1s com 2. O período
+  // anterior só alimenta delta de KPI, então espera a tabela primária chegar.
   const prevData = useProdutividadeData(
     selectedDatabase,
     prev.from && prev.to ? { dateFrom: prev.from, dateTo: prev.to } : undefined,
+    !currLoading,
   );
   const prevRows = prevData.rows;
   const prevLoading = prevData.loading;
@@ -410,9 +415,14 @@ export function useDetalhamentoViewModel(): DetalhamentoViewModel {
     () => ({ dateFrom, dateTo, portfolio: portfolioActive ? selectedPortfolio : undefined }),
     [portfolioActive, dateFrom, dateTo, selectedPortfolio],
   );
+  // Sem portfólio selecionado, portfolioFilters é idêntico ao filtro primário — mesmo
+  // queryKey, então o TanStack já deduplica e isto nunca foi request extra. O gate
+  // explicita a dependência real (só serve funil/radar/metas quando há portfólio) e
+  // evita que selecionar uma carteira dispare a query junto com a recarga da primária.
   const portfolioData = useProdutividadeData(
     selectedDatabase,
     portfolioFilters,
+    portfolioActive && !currLoading,
   );
   const portfolioRows = portfolioActive ? portfolioData.rows : [];
 

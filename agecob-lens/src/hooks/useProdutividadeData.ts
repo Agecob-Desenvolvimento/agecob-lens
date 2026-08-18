@@ -28,6 +28,8 @@ function dbTargets(db: DatabaseOption): Exclude<DatabaseOption, "todos">[] {
 export function useProdutividadeData(
   db: DatabaseOption,
   filters?: ProdutividadeFilters,
+  /** false segura o fetch — usado para escalonar janelas secundárias (baseline). */
+  enabled = true,
 ): UseProdutividadeDataResult {
   const dateFrom = filters?.dateFrom ?? "";
   const dateTo = filters?.dateTo ?? "";
@@ -44,6 +46,7 @@ export function useProdutividadeData(
         if (portfolio) f.portfolio = portfolio;
         return fetchProdutividade(target, Object.keys(f).length ? f : undefined);
       },
+      enabled,
     })),
   });
 
@@ -52,6 +55,7 @@ export function useProdutividadeData(
       queryKey: ["health", target] as const,
       queryFn: () => fetchHealth(target),
       staleTime: 30_000,
+      enabled,
     })),
   });
 

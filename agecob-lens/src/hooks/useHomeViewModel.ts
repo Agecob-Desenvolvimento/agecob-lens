@@ -11,12 +11,15 @@ import {
   fetchBenchmarks,
   fetchPrimeiraParcelaDia,
   fetchPrimeiraParcelaPorAgente,
-  fetchPrimeiraParcelaPorPortfolio,
-  fetchAcordosPorPortfolio,
-  fetchExcecoesPorPortfolio,
-  fetchRejeitadosPorPortfolio,
-  fetchQuebradosPorPortfolio,
+  fetchPortfolioRollup,
 } from "@/services/api";
+import {
+  deriveAcordosPorPortfolio,
+  deriveExcecoesPorPortfolio,
+  derivePrimeiraParcelaPorPortfolio,
+  deriveQuebradosPorPortfolio,
+  deriveRejeitadosPorPortfolio,
+} from "@/lib/portfolioRollup";
 import type { BenchmarkData } from "@/services/api";
 import {
   aggregateTotals,
@@ -50,12 +53,18 @@ export function useHomeViewModel(): HomeViewModel {
     { dateFrom, dateTo },
   );
 
-  // previous equal-length window for period-over-period baselines
+  // previous equal-length window for period-over-period baselines.
+  // Escalonado atrás de !loading (mesmo padrão dos benchmarks abaixo): produtividade-hoje
+  // é a query mais cara da página e roda com MAXDOP 0. Disparar as 4 (2 bancos × período
+  // atual/anterior) juntas fazia cada uma passar de ~1,1s para ~4,3s brigando pelo mesmo
+  // SQL Server, e prendia 4 dos 6 sockets HTTP/1.1 do browser, serializando o resto da
+  // página. O período anterior só alimenta os badges de baseline — chega depois.
   const prev = useMemo(() => previousPeriod(dateFrom, dateTo), [dateFrom, dateTo]);
-  const { rows: prevRows } = useProdutividadeData(selectedDatabase, {
-    dateFrom: prev.from,
-    dateTo: prev.to,
-  });
+  const { rows: prevRows } = useProdutividadeData(
+    selectedDatabase,
+    { dateFrom: prev.from, dateTo: prev.to },
+    !loading,
+  );
 
   // primeiraParcela queries (ex-useState)
   const { data: ppDiaEnv } = useQuery({
@@ -71,6 +80,7 @@ export function useHomeViewModel(): HomeViewModel {
   const { data: ppDiaPrevEnv } = useQuery({
     queryKey: ["home", "primeira-parcela-dia", selectedDatabase, prev.from, prev.to] as const,
     queryFn: () => fetchPrimeiraParcelaDia(selectedDatabase, undefined, prev.from, prev.to),
+    enabled: !loading,
   });
   const primeiraParcelaDiaPrev = useMemo(() => {
     const row = ppDiaPrevEnv?.data?.[0];
@@ -91,16 +101,23 @@ export function useHomeViewModel(): HomeViewModel {
   // (lookback de 3 meses) e só alimentam baselines secundários. Adiar libera slots
   // de conexão (browser HTTP/1.1 ~6 por origem + pool DB) para os endpoints de KPI
   // chegarem antes; benchmarks carregam depois, com folga.
+  // refetchInterval: false anula o poll global de 120s do QueryClient — ele ignora
+  // staleTime, então re-rodava estas duas queries (p50 9,5s e 5,0s em produção, pico
+  // 27s) a cada 2 min por aba aberta. Cada poll segurava 2 dos 6 sockets HTTP/1.1 do
+  // browser durante toda a execução, e a troca de data que caía nessa janela ficava
+  // presa atrás deles. Lookback de 3 meses muda 1x/dia: staleTime de 1h é a cadência.
   const { data: benchAutosEnv } = useQuery({
     queryKey: ["benchmarks", "COBwebRCBAUTOS"] as const,
     queryFn: () => fetchBenchmarks("COBwebRCBAUTOS"),
     staleTime: 3_600_000,
+    refetchInterval: false,
     enabled: !loading,
   });
   const { data: benchConsumerEnv } = useQuery({
     queryKey: ["benchmarks", "COBwebRCBCONSUMER"] as const,
     queryFn: () => fetchBenchmarks("COBwebRCBCONSUMER"),
     staleTime: 3_600_000,
+    refetchInterval: false,
     enabled: !loading,
   });
   const bench = useMemo(() => {
@@ -264,31 +281,38 @@ export function useHomeViewModel(): HomeViewModel {
   const convAvg = useMemo(() => calcConversao(totals), [totals]);
   const funnelData = useMemo(() => selectFunnelData(rows), [rows]);
 
-  // Portfolio / ranking sub-queries
-  const [qPpAgente, qAcdPort, qExcPort, qRejPort, qQbrPort] = useQueries({
+  // Portfolio / ranking sub-queries.
+  // Os 5 endpoints por-portfólio (acordos, 1ª parcela, exceções, rejeitados, quebrados)
+  // viraram 1 chamada a /dashboard/portfolio-rollup — mesmo scan de REC_MASTER, agora
+  // agrupado também por ID_REC_STATUS, fatiado no cliente por lib/portfolioRollup.ts.
+  // Paridade 100% verificada contra os 5 builders legados em 3 bancos × 4 janelas
+  // (scripts/parity_portfolio_rollup.py). Motivo é contenção, não o custo isolado de
+  // cada query: 5 requests ocupavam 5 dos 6 sockets HTTP/1.1 e 5 conexões do pool na
+  // mesma janela em que produtividade-hoje (a query mais cara) precisa rodar.
+  const [qPpAgente, qRollup] = useQueries({
     queries: [
       { queryKey: ["home", "primeira-parcela-por-agente", selectedDatabase, dateFrom, dateTo] as const, queryFn: () => fetchPrimeiraParcelaPorAgente(selectedDatabase, undefined, dateFrom, dateTo) },
-      { queryKey: ["home", "acordos-por-portfolio", selectedDatabase, dateFrom, dateTo] as const, queryFn: () => fetchAcordosPorPortfolio(selectedDatabase, dateFrom, dateTo) },
-      { queryKey: ["home", "excecoes-por-portfolio", selectedDatabase, dateFrom, dateTo] as const, queryFn: () => fetchExcecoesPorPortfolio(selectedDatabase, dateFrom, dateTo) },
-      { queryKey: ["home", "rejeitados-por-portfolio", selectedDatabase, dateFrom, dateTo] as const, queryFn: () => fetchRejeitadosPorPortfolio(selectedDatabase, dateFrom, dateTo) },
-      { queryKey: ["home", "quebrados-por-portfolio", selectedDatabase, dateFrom, dateTo] as const, queryFn: () => fetchQuebradosPorPortfolio(selectedDatabase, dateFrom, dateTo) },
+      { queryKey: ["home", "portfolio-rollup", selectedDatabase, dateFrom, dateTo] as const, queryFn: () => fetchPortfolioRollup(selectedDatabase, dateFrom, dateTo) },
     ],
   });
 
-  const top10PrimeiraParcela = useMemo(() => selectTopAgentesPorPrimeiraParcela(qPpAgente.data?.data ?? []), [qPpAgente.data]);
-  const portfolio1aParcela = useMemo(() => selectTopPortfolioPorValor(qAcdPort.data?.data ?? []), [qAcdPort.data]);
-  const excecoesPorPortfolio = useMemo(() => selectTopPortfolioPorExcecoes(qExcPort.data?.data ?? []), [qExcPort.data]);
-  const rejeitadosPorPortfolio = useMemo(() => selectTopPortfolioPorRejeitados(qRejPort.data?.data ?? []), [qRejPort.data]);
-  const quebradosPorPortfolio = useMemo(() => selectTopPortfolioPorQuebrados(qQbrPort.data?.data ?? []), [qQbrPort.data]);
-  const excecoesPorPortfolioValor = useMemo(() => selectTopPortfolioPorExcecoesValor(qExcPort.data?.data ?? []), [qExcPort.data]);
-  const rejeitadosPorPortfolioValor = useMemo(() => selectTopPortfolioPorRejeitadosValor(qRejPort.data?.data ?? []), [qRejPort.data]);
+  const rollupRows = useMemo(() => qRollup.data?.data ?? [], [qRollup.data]);
+  const acordosPortRows = useMemo(() => deriveAcordosPorPortfolio(rollupRows), [rollupRows]);
+  const excecoesPortRows = useMemo(() => deriveExcecoesPorPortfolio(rollupRows), [rollupRows]);
+  const rejeitadosPortRows = useMemo(() => deriveRejeitadosPorPortfolio(rollupRows), [rollupRows]);
+  const quebradosPortRows = useMemo(() => deriveQuebradosPorPortfolio(rollupRows), [rollupRows]);
 
-  // Portfolio 1ª parcela (rentabilidade + risco)
-  const { data: ppPortfolioEnv, isLoading: loadingPpPortfolio } = useQuery({
-    queryKey: ["home", "primeira-parcela-por-portfolio", selectedDatabase, dateFrom, dateTo] as const,
-    queryFn: () => fetchPrimeiraParcelaPorPortfolio(selectedDatabase, dateFrom, dateTo),
-  });
-  const ppPortfolioRows = ppPortfolioEnv?.data ?? [];
+  const top10PrimeiraParcela = useMemo(() => selectTopAgentesPorPrimeiraParcela(qPpAgente.data?.data ?? []), [qPpAgente.data]);
+  const portfolio1aParcela = useMemo(() => selectTopPortfolioPorValor(acordosPortRows), [acordosPortRows]);
+  const excecoesPorPortfolio = useMemo(() => selectTopPortfolioPorExcecoes(excecoesPortRows), [excecoesPortRows]);
+  const rejeitadosPorPortfolio = useMemo(() => selectTopPortfolioPorRejeitados(rejeitadosPortRows), [rejeitadosPortRows]);
+  const quebradosPorPortfolio = useMemo(() => selectTopPortfolioPorQuebrados(quebradosPortRows), [quebradosPortRows]);
+  const excecoesPorPortfolioValor = useMemo(() => selectTopPortfolioPorExcecoesValor(excecoesPortRows), [excecoesPortRows]);
+  const rejeitadosPorPortfolioValor = useMemo(() => selectTopPortfolioPorRejeitadosValor(rejeitadosPortRows), [rejeitadosPortRows]);
+
+  // Portfolio 1ª parcela (rentabilidade + risco) — mesmo rollup, slice de gerados.
+  const loadingPpPortfolio = qRollup.isLoading;
+  const ppPortfolioRows = useMemo(() => derivePrimeiraParcelaPorPortfolio(rollupRows), [rollupRows]);
 
   // Per-BU benchmark map for diagnostic cards
   const benchByBu = useMemo(() => {
@@ -309,9 +333,9 @@ export function useHomeViewModel(): HomeViewModel {
   // Risk map: portfolio_name → { excecoes, quebrados, rejeitados }
   const portfolioRiskMap = useMemo(() => {
     const map = new Map<string, PortfolioRiskEntry>();
-    const rawExcecoes = qExcPort.data?.data ?? [];
-    const rawQuebrados = qQbrPort.data?.data ?? [];
-    const rawRejeitados = qRejPort.data?.data ?? [];
+    const rawExcecoes = excecoesPortRows;
+    const rawQuebrados = quebradosPortRows;
+    const rawRejeitados = rejeitadosPortRows;
     for (const row of rawExcecoes) {
       const entry = map.get(row.portfolio_name) ?? { excecoes: 0, quebrados: 0, rejeitados: 0 };
       entry.excecoes = Number(row.valor_excecoes || 0);
@@ -328,7 +352,7 @@ export function useHomeViewModel(): HomeViewModel {
       map.set(row.portfolio_name, entry);
     }
     return map;
-  }, [qExcPort.data, qQbrPort.data, qRejPort.data]);
+  }, [excecoesPortRows, quebradosPortRows, rejeitadosPortRows]);
 
   return {
     loading,
@@ -353,10 +377,10 @@ export function useHomeViewModel(): HomeViewModel {
     rejeitadosPorPortfolioValor,
     quebradosPorPortfolio,
     loadingPpAgente: qPpAgente.isLoading,
-    loadingAcdPort: qAcdPort.isLoading,
-    loadingExcPort: qExcPort.isLoading,
-    loadingRejPort: qRejPort.isLoading,
-    loadingQbrPort: qQbrPort.isLoading,
+    loadingAcdPort: qRollup.isLoading,
+    loadingExcPort: qRollup.isLoading,
+    loadingRejPort: qRollup.isLoading,
+    loadingQbrPort: qRollup.isLoading,
     ppPortfolioRows,
     portfolioRiskMap,
     loadingPpPortfolio,

@@ -54,11 +54,14 @@ PERIODS = ["today", "7d", "30d", "90d"]
 LEGACY = {
     "acordos-por-portfolio": dict(
         builder=build_acordos_por_portfolio_query,
-        qtd="qtd_acordos", valor="valor_acordos", statuses=set(settings.STATUS_APROVADOS),
+        # STATUS_GERADOS, não STATUS_APROVADOS: o builder legado usa
+        # STATUS_GERADOS_SQL (1,2,3,10,12). O harness apontava para (1,3,12) e
+        # acusava FAIL por excluir QUEBRA(2)/QUEBRA AUTOMÁTICA(10) do lado derivado.
+        qtd="qtd_acordos", valor="valor_acordos", statuses=set(settings.STATUS_GERADOS),
     ),
     "primeira-parcela-por-portfolio": dict(
         builder=build_primeira_parcela_por_portfolio_query,
-        qtd="qtd_acordos", valor="valor_primeira_parcela", statuses=set(settings.STATUS_APROVADOS),
+        qtd="qtd_acordos", valor="valor_primeira_parcela", statuses=set(settings.STATUS_GERADOS),
     ),
     "excecoes-por-portfolio": dict(
         builder=build_excecoes_por_portfolio_query,

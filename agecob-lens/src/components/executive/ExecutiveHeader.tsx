@@ -20,7 +20,9 @@ export function ExecutiveHeader({
   refreshing,
   refreshHint,
 }: ExecutiveHeaderProps) {
-  const { category, setCategory, dateFrom, setDateFrom, dateTo, setDateTo } = useGlobalFilters();
+  // dateFromInput/dateToInput = valor cru (o input precisa refletir a digitação na hora);
+  // o fetch usa dateFrom/dateTo, que o contexto estabiliza com debounce.
+  const { category, setCategory, dateFromInput, setDateFrom, dateToInput, setDateTo } = useGlobalFilters();
 
   return (
     <header className="sticky top-0 z-20 border-b border-border bg-card px-4 py-3 flex flex-wrap items-center gap-4">
@@ -57,7 +59,7 @@ export function ExecutiveHeader({
           <Input
             id="hdr-date-from"
             type="date"
-            value={dateFrom}
+            value={dateFromInput}
             onChange={(e) => setDateFrom(e.target.value)}
             className="h-7 w-[140px] text-xs"
           />
@@ -65,7 +67,7 @@ export function ExecutiveHeader({
           <Input
             id="hdr-date-to"
             type="date"
-            value={dateTo}
+            value={dateToInput}
             onChange={(e) => setDateTo(e.target.value)}
             className="h-7 w-[140px] text-xs"
           />

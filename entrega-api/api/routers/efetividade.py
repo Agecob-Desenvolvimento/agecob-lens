@@ -1,0 +1,195 @@
+from datetime import date, datetime, timezone
+from typing import Any, Dict, Optional
+
+from fastapi import APIRouter, HTTPException, Query
+
+import config.settings as settings
+from core.database.query_executor import run_query
+from core.utils.response_envelope import build_response_envelope
+from dominios.efetividade.queries import (
+    EF_DETALHE_KINDS,
+    EF_DETALHE_TOP,
+    _build_ef_curva_quebra_query,
+    _build_ef_detalhe_sql,
+    _build_ef_resumo_params,
+    _build_ef_resumo_sql,
+    _ef_date_params,
+)
+from dominios.efetividade.servico import get_efetividade, resolve_ef_db
+
+router = APIRouter(prefix="/efetividade")
+
+
+@router.get("/diaria-primeira")
+def get_ef_diaria_primeira(db: Optional[str] = Query(default=None)) -> Dict[str, Any]:
+    return get_efetividade("diaria-primeira", db)
+
+
+@router.get("/mensal-primeira")
+def get_ef_mensal_primeira(db: Optional[str] = Query(default=None)) -> Dict[str, Any]:
+    return get_efetividade("mensal-primeira", db)
+
+
+@router.get("/diaria-colchao")
+def get_ef_diaria_colchao(db: Optional[str] = Query(default=None)) -> Dict[str, Any]:
+    return get_efetividade("diaria-colchao", db)
+
+
+@router.get("/mensal-colchao")
+def get_ef_mensal_colchao(db: Optional[str] = Query(default=None)) -> Dict[str, Any]:
+    return get_efetividade("mensal-colchao", db)
+
+
+@router.get("/mensal-agente-primeira")
+def get_ef_mensal_agente_primeira(db: Optional[str] = Query(default=None)) -> Dict[str, Any]:
+    return get_efetividade("mensal-agente-primeira", db)
+
+
+@router.get("/mensal-agente-colchao")
+def get_ef_mensal_agente_colchao(db: Optional[str] = Query(default=None)) -> Dict[str, Any]:
+    return get_efetividade("mensal-agente-colchao", db)
+
+
+@router.get("/mensal-agente-colchao-vencimento")
+def get_ef_mensal_agente_colchao_vencimento(db: Optional[str] = Query(default=None)) -> Dict[str, Any]:
+    return get_efetividade("mensal-agente-colchao-vencimento", db)
+
+
+@router.get("/diaria-colchao-vencimento")
+def get_ef_diaria_colchao_vencimento(db: Optional[str] = Query(default=None)) -> Dict[str, Any]:
+    return get_efetividade("diaria-colchao-vencimento", db)
+
+
+@router.get("/mensal-colchao-vencimento")
+def get_ef_mensal_colchao_vencimento(db: Optional[str] = Query(default=None)) -> Dict[str, Any]:
+    return get_efetividade("mensal-colchao-vencimento", db)
+
+
+@router.get("/resumo")
+def get_ef_resumo(
+    date_from: str = Query(..., description="Start date YYYY-MM-DD (DT_VENCIMENTO >=)"),
+    date_to: str = Query(..., description="End date YYYY-MM-DD (DT_VENCIMENTO <=)"),
+    db: Optional[str] = Query(default=None),
+    parcela_tipo: str = Query(default="primeira"),
+    id_portfolio: Optional[int] = Query(default=None),
+) -> Dict[str, Any]:
+    if parcela_tipo not in ("primeira", "colchao"):
+        raise HTTPException(status_code=422, detail="parcela_tipo must be 'primeira' or 'colchao'")
+    try:
+        date_from_obj = date.fromisoformat(date_from)
+        date_to_obj = date.fromisoformat(date_to)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="date_from and date_to must be YYYY-MM-DD")
+    # datas YYYYMMDD viajam como params (?) — CONVERT(DATE, ?, 112) no SQL
+    date_from_lit = date_from_obj.strftime("%Y%m%d")
+    date_to_lit = date_to_obj.strftime("%Y%m%d")
+    db_variant = resolve_ef_db(db)
+    kpi_sql, daily_sql = _build_ef_resumo_sql(db_variant, parcela_tipo, id_portfolio)
+    params = _build_ef_resumo_params(db_variant, date_from_lit, date_to_lit, id_portfolio)
+    conn_db = settings.ALLOWED_DATABASES[0]
+
+    kpi_rows = run_query(kpi_sql, conn_db, params=params, context="ef-resumo/kpi")
+    daily_rows = run_query(daily_sql, conn_db, params=params, context="ef-resumo/daily")
+
+    # Serialize date objects to ISO strings for JSON transport
+    for row in daily_rows:
+        if hasattr(row.get("dia"), "isoformat"):
+            row["dia"] = row["dia"].isoformat()
+
+    kpi: Dict[str, Any] = kpi_rows[0] if kpi_rows else {
+        "generated": 0, "to_mature": 0, "overdue_unpaid": 0, "paid_on_time": 0, "broken": 0, "conversion_pct": 0.0,
+        "amount_maturing": 0.0, "amount_received": 0.0, "effectiveness_pct": 0.0,
+    }
+
+    valid_days = [d for d in daily_rows if d.get("generated", 0) > 0]
+    best_day = max(valid_days, key=lambda d: d["effectiveness_pct"], default=None) if valid_days else None
+    worst_day = min(valid_days, key=lambda d: d["effectiveness_pct"], default=None) if valid_days else None
+
+    sources = settings.ALLOWED_DATABASES if db_variant == "todos" else [db_variant]
+    return {
+        "meta": {
+            "generated_at": datetime.now(tz=timezone.utc).isoformat(),
+            "sources": sources,
+            "filters": {
+                "date_from": date_from,
+                "date_to": date_to,
+                "parcela_tipo": parcela_tipo,
+                "db": db_variant,
+                "id_portfolio": id_portfolio,
+            },
+        },
+        "data": {
+            "kpis": kpi,
+            "daily": daily_rows,
+            "best_day": best_day,
+            "worst_day": worst_day,
+        },
+        "errors": [],
+    }
+
+
+@router.get("/boletos-detalhe")
+def get_ef_boletos_detalhe(
+    kind: str = Query(..., description="a_vencer | em_carencia | vencidos_nao_pagos | quebrados | pagos_prazo"),
+    date_from: str = Query(..., description="Start date YYYY-MM-DD (DT_VENCIMENTO >=)"),
+    date_to: str = Query(..., description="End date YYYY-MM-DD (DT_VENCIMENTO <=)"),
+    db: Optional[str] = Query(default=None),
+    parcela_tipo: str = Query(default="primeira"),
+) -> Dict[str, Any]:
+    if kind not in EF_DETALHE_KINDS:
+        raise HTTPException(status_code=422, detail=f"kind must be one of {EF_DETALHE_KINDS}")
+    if parcela_tipo not in ("primeira", "colchao"):
+        raise HTTPException(status_code=422, detail="parcela_tipo must be 'primeira' or 'colchao'")
+    try:
+        date_from_lit = date.fromisoformat(date_from).strftime("%Y%m%d")
+        date_to_lit = date.fromisoformat(date_to).strftime("%Y%m%d")
+    except ValueError:
+        raise HTTPException(status_code=422, detail="date_from and date_to must be YYYY-MM-DD")
+    db_variant = resolve_ef_db(db)
+    sql = _build_ef_detalhe_sql(db_variant, parcela_tipo, kind)
+    params = _ef_date_params(db_variant, date_from_lit, date_to_lit)
+    conn_db = settings.ALLOWED_DATABASES[0]
+    rows = run_query(sql, conn_db, params=params, context=f"ef-boletos-detalhe/{kind}")
+    sources = settings.ALLOWED_DATABASES if db_variant == "todos" else [db_variant]
+    # A query corta em TOP EF_DETALHE_TOP. Sem sinalizar, quem concilia o KPI
+    # (calculado sem corte) contra esta lista vê 500 onde o card diz 3.100.
+    truncado = len(rows) >= EF_DETALHE_TOP
+    return build_response_envelope(
+        rows,
+        sources,
+        filters={
+            "kind": kind,
+            "date_from": date_from,
+            "date_to": date_to,
+            "parcela_tipo": parcela_tipo,
+            "db": db_variant,
+        },
+        pagination={"limit": EF_DETALHE_TOP, "truncated": truncado},
+        quality={"truncated": truncado},
+    )
+
+
+@router.get("/curva-quebra")
+def get_ef_curva_quebra(
+    date_from: str = Query(..., description="Start date YYYY-MM-DD (DT_VENCIMENTO >=)"),
+    date_to: str = Query(..., description="End date YYYY-MM-DD (DT_VENCIMENTO <=)"),
+    db: Optional[str] = Query(default=None),
+) -> Dict[str, Any]:
+    try:
+        date_from_obj = date.fromisoformat(date_from)
+        date_to_obj = date.fromisoformat(date_to)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="date_from and date_to must be YYYY-MM-DD")
+    date_from_lit = date_from_obj.strftime("%Y%m%d")
+    date_to_lit = date_to_obj.strftime("%Y%m%d")
+    db_variant = resolve_ef_db(db)
+    query = _build_ef_curva_quebra_query(db_variant)
+    params = _ef_date_params(db_variant, date_from_lit, date_to_lit)
+    conn_db = settings.ALLOWED_DATABASES[0]
+    rows = run_query(query, conn_db, params=params, context="ef-curva-quebra")
+    sources = settings.ALLOWED_DATABASES if db_variant == "todos" else [db_variant]
+    return build_response_envelope(
+        rows,
+        sources,
+        filters={"db": db_variant, "date_from": date_from, "date_to": date_to},
+    )
