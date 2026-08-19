@@ -18,7 +18,7 @@ Fonte de verdade para todas as regras de negócio que governam o agecob-lens. Qu
 | `STATUS_APROVADOS` | `(1, 3, 12)` | ATIVO + BAIXA POR PAGAMENTO + BAIXA POR PAGAMENTO AVULSO |
 | `STATUS_EXCECAO` | `(5)` | Negócio chama "Exceção"; enum REC_MASTER nomeia como PENDENTE (aguardando validação interna) |
 | `STATUS_REJEITADO` | `(7)` | REJEITADO (supervisor/banco negou) |
-| `STATUS_UNIVERSO_ACORDOS` | `(1, 3, 5, 12)` | Universo total de acordos considerados |
+| `STATUS_UNIVERSO_ACORDOS` | `(1, 2, 3, 5, 10, 12)` | Universo total (gerados + exceção): aprovados (1,3,12) + QUEBRA(2) + QUEBRA AUTOMÁTICA(10) + exceção(5) |
 
 ## Contato com Pessoa Certa (CPC)
 
@@ -40,7 +40,7 @@ JOIN CTO_COMPLEMENTO CC ON CM.ID_COMPLEMENTO = CC.ID_COMPLEMENTO
 | **Acionamento** | Qualquer tentativa de contato | Todo `ID_CTO_MASTER` (sem filtro de complemento) |
 | **Contato (CPC)** | Contato efetivado com a pessoa certa | `CTO_COMPLEMENTO.ALO = 1 AND CTO_COMPLEMENTO.CONTATO = 1` (via JOIN por `ID_COMPLEMENTO`) |
 | **Acordo aprovado** | Acordo em status ativo ou baixado | `ID_REC_STATUS IN (1, 3, 12)` |
-| **Exceção** | Acordo pendente de aprovação bancária | `ID_REC_STATUS = 11` |
+| **Exceção** | Acordo pendente de aprovação bancária | `ID_REC_STATUS = 5` (enum REC_MASTER nomeia PENDENTE) |
 | **Primeira parcela** | Parcela de entrada do acordo | `PARCELA = 0` (não 1 — convenção COBweb) |
 
 ## Parcelas
