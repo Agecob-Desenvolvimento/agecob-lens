@@ -25,7 +25,7 @@ Cada agente (cobrador) é um `AgentEntry` com esta forma:
 - `agent_name` / `login`: nome e chave do agente.
 - `qtd_acionamentos`: tentativas de contato (dedup por cliente/dia).
 - `qtd_alo`: **Contato** — alguém atendeu (alô).
-- `qtd_contatos`: **CPC** — falou com a pessoa certa. CPC é CONTAGEM, nunca %.
+- `qtd_contatos`: **CPC** — falou com a pessoa certa (`CTO_COMPLEMENTO.ALO=1 AND CONTATO=1`, regra desde 2026-08-19). CPC é CONTAGEM, nunca %.
 - `taxa_contato_pct` = alô / acionamentos; `taxa_cpc_pct` = CPC / alô.
 - `qtd_acordos`, `valor_acordos`, `ticket_medio` (= valor / qtd), `valor_primeira_parcela`.
 - `qtd_boletos_emitidos`, `qtd_boletos_pagos`, `conversao_pct` = pagos no prazo / CPC

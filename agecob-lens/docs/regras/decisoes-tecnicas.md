@@ -73,7 +73,7 @@ Registro de decisões técnicas significativas no formato leve (ADR simplificado
 
 ## ADR-006: CPC IDs hardcoded
 
-**Data:** 2026-04 · **Status:** SUPERSEDED por [[#ADR-012]] (2026-05-29) — CPC virou JOIN `CTO_COMPLEMENTO.CONTATO=1`; constante só sobrevive no monolito legado
+**Data:** 2026-04 · **Status:** SUPERSEDED por [[#ADR-012]] (2026-05-29), depois por [[#ADR-013]] (2026-08-19) — CPC hoje é `ALO=1 AND CONTATO=1`; constante só sobrevive no monolito legado
 
 **Contexto:** Os IDs de complemento que definem CPC poderiam ser configuráveis ou lidos de tabela.
 
@@ -162,6 +162,18 @@ Registro de decisões técnicas significativas no formato leve (ADR simplificado
 4. **Calibração de prompts:** prompts de perf futuros devem mirar a arquitetura modular real, referenciar `pool_manager`/`query_executor`, e validar shape de resposta por endpoint antes de propor `response_model`.
 
 **Consequência:** Os prompts Wave C/D na forma original são parcialmente inválidos contra o backend atual. **Nenhum item de C/D ficou** — C1 foi revertido (FastAPI 0.136 já serializa rápido nativamente; orjson quebrou prod). Premissas sobre monolito, constantes, envelope uniforme e endpoints async ficam registradas como **falsas** para não se repetirem. ADR-006 deve ser revisado (CPC não é mais hardcoded). **Lição:** validar versão da lib (deprecações) e paridade de dependências entre `.venv` local e interpretador do servidor antes de adicionar dep de runtime.
+
+---
+
+## ADR-013: CPC vira `ALO=1 AND CONTATO=1`, abandona lista curada de `COD_COMPLEMENTO`
+
+**Data:** 2026-08-19 · **Status:** ativo
+
+**Contexto:** ADR-006 (2026-04) foi substituído em 2026-07 por uma lista curada de `COD_COMPLEMENTO` (`CPC_COMPLEMENTO_CODS`, 6 códigos de voz) porque `CTO_COMPLEMENTO.CONTATO=1` sozinho é largo demais — pega disparo automático de WhatsApp, envio de boleto, ligação interrompida/ruim. Auditoria ao vivo em 2026-08-19 (30 dias de `CTO_MASTER` real, ambos os bancos) confirmou esse achado ainda vale para `CONTATO=1` **sem** `ALO=1`: mesmo tipo de evento (ex.: ligação interrompida) aparece com `CONTATO` `True` e `False` em códigos diferentes do catálogo — incoerência de configuração, não sinal confiável isolado.
+
+**Decisão:** Negócio decidiu adotar `CTO_COMPLEMENTO.ALO = 1 AND CTO_COMPLEMENTO.CONTATO = 1` como nova regra de CPC, substituindo a lista curada. O `AND ALO=1` é obrigatório — sem ele, alguns códigos legados (`CONTATO=1` com `ALO=0`, ex. `UNALLOCATED_NUMBER`) quebrariam o funil monotônico `acionamentos ≥ alô ≥ CPC`.
+
+**Consequência:** `CPC_COMPLEMENTO_CODS` e `CPC_CODS_SQL` removidos de `config/settings.py`. Todo `CC.COD_COMPLEMENTO IN {...}` nas queries (`dominios/produtividade/queries.py`, `dominios/acordos/queries.py`) virou `CC.CONTATO = 1` (mantendo o `CC.ALO = 1 AND` já existente). CPC deve subir em relação à lista curada anterior — `CONTATO=1` captura mais códigos de voz do que os 6 curados (ex.: `574 Reclamação`, `563 Retorno do Receptivo`), mesmo com o guard de `ALO=1`. Números de CPC/Taxa de CPC no histórico antes de 2026-08-19 não são diretamente comparáveis aos de depois.
 
 ---
 

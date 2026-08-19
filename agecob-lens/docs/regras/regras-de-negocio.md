@@ -22,22 +22,23 @@ Fonte de verdade para todas as regras de negócio que governam o agecob-lens. Qu
 
 ## Contato com Pessoa Certa (CPC)
 
-Um acionamento qualifica como contato (CPC) quando o complemento está marcado
-como contato no cadastro:
+Um acionamento qualifica como contato (CPC) quando alguém atendeu E o
+complemento está marcado como contato no cadastro (regra vigente desde
+2026-08-19):
 
 ```
 JOIN CTO_COMPLEMENTO CC ON CM.ID_COMPLEMENTO = CC.ID_COMPLEMENTO
-... CC.CONTATO = 1
+... CC.ALO = 1 AND CC.CONTATO = 1
 ```
 
-**Gestão:** dirigido por dado (`CTO_COMPLEMENTO.CONTATO`), mantido no cadastro do sistema. Substituiu a antiga lista hardcoded `CPC_COMPLEMENTO_IDS`.
+**Gestão:** dirigido por dado (`CTO_COMPLEMENTO.ALO` + `CTO_COMPLEMENTO.CONTATO`), mantido no cadastro do sistema. O `AND ALO=1` evita que codigos com `CONTATO=1` mas sem atendimento real (ex.: `UNALLOCATED_NUMBER`) quebrem o funil `acionamentos ≥ alô ≥ CPC`. Entre 2026-07 e 2026-08-19 a regra foi uma lista curada de `COD_COMPLEMENTO` (`CPC_COMPLEMENTO_CODS`); ver `data-layer.md` para o histórico.
 
 ## Terminologia Operacional
 
 | Termo | Definição | Filtro técnico |
 |---|---|---|
 | **Acionamento** | Qualquer tentativa de contato | Todo `ID_CTO_MASTER` (sem filtro de complemento) |
-| **Contato (CPC)** | Contato efetivado com a pessoa certa | `CTO_COMPLEMENTO.CONTATO = 1` (via JOIN por `ID_COMPLEMENTO`) |
+| **Contato (CPC)** | Contato efetivado com a pessoa certa | `CTO_COMPLEMENTO.ALO = 1 AND CTO_COMPLEMENTO.CONTATO = 1` (via JOIN por `ID_COMPLEMENTO`) |
 | **Acordo aprovado** | Acordo em status ativo ou baixado | `ID_REC_STATUS IN (1, 3, 12)` |
 | **Exceção** | Acordo pendente de aprovação bancária | `ID_REC_STATUS = 11` |
 | **Primeira parcela** | Parcela de entrada do acordo | `PARCELA = 0` (não 1 — convenção COBweb) |

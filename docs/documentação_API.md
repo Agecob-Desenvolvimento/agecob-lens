@@ -325,20 +325,21 @@ first-installment value, `qtd_acordos`, ticket, and boleto conversion/effectiven
 An agreement generated today counts even if it later breaks (2) or auto-breaks
 (10) — breaking is a downstream outcome, not an undo of generation.
 
-### CPC / contact funnel (current — supersedes older ADRs, see §7)
+### CPC / contact funnel (current as of 2026-08-19 — supersedes older ADRs, see §7)
 
 Two distinct layers, not one:
 
 | UI label | Question | SQL | Field |
 |---|---|---|---|
 | **Contato** | "Did anyone pick up?" (Alô) | `CTO_COMPLEMENTO.ALO = 1` | `qtd_alo` |
-| **CPC** | "Did I reach the right person?" (RPC) | `CTO_COMPLEMENTO.COD_COMPLEMENTO IN CPC_COMPLEMENTO_CODS` | `qtd_contatos` |
+| **CPC** | "Did I reach the right person?" (RPC) | `CTO_COMPLEMENTO.ALO = 1 AND CTO_COMPLEMENTO.CONTATO = 1` | `qtd_contatos` |
 
-`CPC_COMPLEMENTO_CODS = ("449", "452", "453", "454", "455", "459")` —
-`config/settings.py:82`, keyed by `COD_COMPLEMENTO` (stable business code), not
-`ID_COMPLEMENTO` (surrogate key, was reseeded 2026-07-10 and would have silently
-zeroed CPC under the old ID-keyed list — see `project_cpc_catalog_reseed_incident`
-memory). Funnel is monotonic: `acionamentos ≥ qtd_alo ≥ qtd_contatos ≥ acordos`.
+Changed 2026-08-19: replaced the curated `COD_COMPLEMENTO` allowlist
+(`449,452,453,454,455,459`) with the `CONTATO` bit — business decision, not a
+revert of the earlier "too broad" finding for `CONTATO=1` used *without*
+`ALO=1` (still fires on WhatsApp auto-dispatch, boleto send, dropped calls).
+The `AND ALO=1` guard keeps the funnel monotonic:
+`acionamentos ≥ qtd_alo ≥ qtd_contatos ≥ acordos`.
 
 ### Other canonical rules
 
@@ -362,7 +363,7 @@ memory). Funnel is monotonic: `acionamentos ≥ qtd_alo ≥ qtd_contatos ≥ aco
 | 003 | Fact table without agent dimension in phase 1 | Active. Per-agent cuts deferred to a future `fato_produtividade_agente` |
 | 004 | `CROSS APPLY TOP 1` for portfolio resolution | Permanent. Plain `JOIN` against `DIV_AUX` multiplies rows |
 | 005 | Agent exclusion filtered in SQL only | Permanent. Python-side filtering was redundant and removed |
-| 006 | CPC IDs hardcoded | **Stale on both counts** — neither the original hardcoded-ID-list decision nor its ADR-012 replacement ("CPC = `CTO_COMPLEMENTO.CONTATO=1`") match current code. Current truth is §5 above (curated `COD_COMPLEMENTO` list, `CONTATO=1` is a *different* metric — Alô, `qtd_alo`) |
+| 006 | CPC IDs hardcoded | **Superseded 2026-08-19** — the curated `COD_COMPLEMENTO` allowlist (§5's prior truth) was replaced by `ALO=1 AND CONTATO=1`. ADR-012's "CPC = `CTO_COMPLEMENTO.CONTATO=1`" is now directionally right but incomplete (missing the `ALO=1` guard) |
 | 007 | Cross-database agents kept separate by default | Active |
 | 008 | Implementation prompts written in English | Active (internal decision docs stay Portuguese) |
 | 009 | ADD-ONLY discipline — refactors are separate prompts from additions | Active |
@@ -402,10 +403,12 @@ dead API helper.
 ### 7.2 — Stale docs (do not use as source of truth)
 
 - `agecob-lens/docs/regras/regras-de-negocio.md` (2026-04-27, never updated) —
-  still states `STATUS_UNIVERSO_ACORDOS = (1, 3, 5, 12)` and CPC via
-  `CTO_COMPLEMENTO.CONTATO=1`. Both contradict current code and `data-layer.md`
-  (§5 above). `agecob-lens/docs/regras/id-rec-status.md` is the current,
-  code-matching sibling — use that one instead.
+  still states `STATUS_UNIVERSO_ACORDOS = (1, 3, 5, 12)`, which contradicts
+  current code. Its CPC via `CTO_COMPLEMENTO.CONTATO=1` claim is now
+  directionally correct again as of 2026-08-19 but still stale — missing the
+  `ALO=1` guard current code requires. `agecob-lens/docs/regras/id-rec-status.md`
+  is the current, code-matching sibling for the status question — use that one
+  instead.
 - `decisoes-tecnicas.md` ADR-006/012's CPC claim — see §6.
 
 ### 7.3 — Backlog gaps (already tracked in `api-contract.md`)

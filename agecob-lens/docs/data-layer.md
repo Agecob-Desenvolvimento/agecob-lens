@@ -126,24 +126,28 @@ ID_REC_STATUS IN (1, 3, 5, 12)
 
 ## Funil de contato — Alô vs Contato (RPC) — ADR-006
 
-`CTO_COMPLEMENTO.CONTATO` (bit) é **largo demais** para RPC: marca disparo de WhatsApp, envio de boleto, ligação interrompida como "contato". Catálogo auditado no banco (2026-06). Por isso funil tem **duas camadas distintas**:
+**Updated 2026-08-19**: CPC = `CTO_COMPLEMENTO.ALO = 1 AND CTO_COMPLEMENTO.CONTATO = 1`. Replaced the curated `COD_COMPLEMENTO` allowlist below — business decision, not a revert of the ADR-006 "too broad" finding, which still holds for `CONTATO=1` used *alone* (without `ALO=1`): live audit that day showed `CONTATO=1` firing on WhatsApp auto-dispatch, boleto send, dropped/bad calls, and SMS/e-mail/voicemail bounces. The `AND ALO=1` guard keeps the funnel monotonic (`acionamentos ≥ qtd_alo ≥ qtd_contatos`) — a handful of catalog rows have `CONTATO=1` with `ALO=0` (e.g. legacy code `1` `UNALLOCATED_NUMBER`), which pure `CONTATO=1` would let through.
 
 Vocabulário da UI (importante — não inverter):
 
 | Rótulo UI | Pergunta | Definição SQL | Coluna |
 |---|---|---|---|
 | **Contato** | "Alguém atende?" (Alô) | `CTO_COMPLEMENTO.ALO = 1` | `qtd_alo` |
-| **CPC** | "Falei com a pessoa certa?" (RPC) | `CTO_COMPLEMENTO.COD_COMPLEMENTO IN CPC_COMPLEMENTO_CODS` | `qtd_contatos` |
+| **CPC** | "Falei com a pessoa certa?" (RPC) | `CTO_COMPLEMENTO.ALO = 1 AND CTO_COMPLEMENTO.CONTATO = 1` | `qtd_contatos` |
 
-`CPC_COMPLEMENTO_CODS` (curado, `config/settings.py`) = `("449", "452", "453",
-"454", "455", "459")` — apenas desfechos de voz com o titular ("572" removido
-2026-07-27). Chave por
-`COD_COMPLEMENTO` (varchar, código de negócio), não por `ID_COMPLEMENTO`
-(surrogate key): o catálogo `CTO_COMPLEMENTO` foi resseedado em 2026-07-10
-(ver `BKP_CTO_COMPLEMENTO_20260710`), renumerando os IDs e zerando
-`qtd_contatos` em produção com a lista antiga baseada em ID. `COD_COMPLEMENTO`
-é estável entre reloads do catálogo; `ID_COMPLEMENTO` não é. JOIN:
-`CTO_MASTER.ID_COMPLEMENTO = CTO_COMPLEMENTO.ID_COMPLEMENTO`.
+JOIN: `CTO_MASTER.ID_COMPLEMENTO = CTO_COMPLEMENTO.ID_COMPLEMENTO`.
+
+<details>
+<summary>Superseded 2026-08-19 — curated <code>COD_COMPLEMENTO</code> allowlist (history)</summary>
+
+`CPC_COMPLEMENTO_CODS` (`config/settings.py`) = `("449", "452", "453", "454",
+"455", "459")` — apenas desfechos de voz com o titular ("572" removido
+2026-07-27). Chave por `COD_COMPLEMENTO` (varchar, código de negócio), não por
+`ID_COMPLEMENTO` (surrogate key): o catálogo `CTO_COMPLEMENTO` foi resseedado
+em 2026-07-10 (ver `BKP_CTO_COMPLEMENTO_20260710`), renumerando os IDs e
+zerando `qtd_contatos` em produção com a lista antiga baseada em ID.
+
+</details>
 
 Funil canônico: **Acionamento → Contato (atende) → CPC (pessoa certa) → Acordo →
 1ª Parcela**. Monotônico: `acionamentos ≥ qtd_alo ≥ qtd_contatos ≥ acordos`.

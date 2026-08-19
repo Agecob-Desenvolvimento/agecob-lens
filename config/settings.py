@@ -68,18 +68,9 @@ STATUS_PORTFOLIO_ROLLUP: Tuple[int, ...] = tuple(sorted(set(
 PRIMEIRA_PARCELA: int = 0
 PORTFOLIO_COLUMN: str = "CAMPO010"
 
-# Códigos de complemento (COD_COMPLEMENTO) que contam como CPC / RPC (Contato
-# com a Pessoa Certa). ADR-006: gerenciado manualmente pelo cientista de dados.
-# Curado a partir do catálogo CTO_COMPLEMENTO: apenas desfechos de voz onde o
-# agente efetivamente falou com o titular (ALO=1, CONTATO=1). Exclui
-# automáticos (disparo whatsapp, envio boleto), ligação interrompida/ruim,
-# recado com terceiro, transferência e status de workflow/jurídico.
-# Chave por COD_COMPLEMENTO (varchar, código de negócio), não por ID_COMPLEMENTO
-# (surrogate key): o catálogo CTO_COMPLEMENTO foi resseedado em 2026-07-10,
-# renumerando os IDs e órfãos a lista antiga (95,105,108,109,110,111,229,230,
-# 231,233) — zerava qtd_contatos em produção. COD_COMPLEMENTO é estável entre
-# reloads do catálogo; ID_COMPLEMENTO não é.
-CPC_COMPLEMENTO_CODS: Tuple[str, ...] = ("449", "452", "453", "454", "455", "459")
+# CPC / RPC (Contato com a Pessoa Certa): CTO_COMPLEMENTO.ALO = 1 AND
+# CTO_COMPLEMENTO.CONTATO = 1. Substituiu a lista curada de COD_COMPLEMENTO
+# em 2026-08-19 (decisão de negócio) — ver docs/data-layer.md.
 
 RECOMMENDED_INDEXES: List[Dict[str, Any]] = [
     {
@@ -187,10 +178,6 @@ def _sql_in(values: Tuple[int, ...]) -> str:
     return "(" + ", ".join(str(v) for v in values) + ")"
 
 
-def _sql_in_str(values: Tuple[str, ...]) -> str:
-    return "(" + ", ".join(f"'{v}'" for v in values) + ")"
-
-
 STATUS_APROVADOS_SQL: str = _sql_in(STATUS_APROVADOS)
 STATUS_EXCECAO_SQL: str = _sql_in(STATUS_EXCECAO)
 STATUS_REJEITADO_SQL: str = _sql_in(STATUS_REJEITADO)
@@ -198,7 +185,6 @@ STATUS_QUEBRADO_SQL: str = _sql_in(STATUS_QUEBRADO)
 STATUS_GERADOS_SQL: str = _sql_in(STATUS_GERADOS)
 STATUS_UNIVERSO_SQL: str = _sql_in(STATUS_UNIVERSO_ACORDOS)
 STATUS_PORTFOLIO_ROLLUP_SQL: str = _sql_in(STATUS_PORTFOLIO_ROLLUP)
-CPC_CODS_SQL: str = _sql_in_str(CPC_COMPLEMENTO_CODS)
 
 # Boleto pago no prazo (5 dias após vencimento) — base da Conversão (pagos/emitidos)
 BOLETO_PAGO_PRAZO_SQL: str = (

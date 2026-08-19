@@ -68,7 +68,7 @@ Portfolio	DIV_AUX.CAMPO010
 Default date filter	DT_EMISSAO >= @Today AND DT_EMISSAO < @Tomorrow
 NOLOCK	Mandatory on all read tables
 Excluded agents	COBDESANTOS, ANTLIA%, INTERNA%, suporte%, SISTEMA% — apply in SQL (ADR-005), never post-processing
-Contact (CPC)	CTO_COMPLEMENTO.CONTATO = 1 — JOIN CTO_MASTER.ID_COMPLEMENTO = CTO_COMPLEMENTO.ID_COMPLEMENTO (replaced hardcoded ID list)
+Contact (CPC)	CTO_COMPLEMENTO.ALO = 1 AND CTO_COMPLEMENTO.CONTATO = 1 — JOIN CTO_MASTER.ID_COMPLEMENTO = CTO_COMPLEMENTO.ID_COMPLEMENTO (replaced curated COD_COMPLEMENTO allowlist 2026-08-19)
 Databases	COBwebRCBAUTOS | COBwebRCBCONSUMER | todos
 Official metric dictionary (CPC, Conversion, Average ticket, Exceptions) in agecob-lens/docs/CLAUDE.md. No variations.
 
