@@ -210,8 +210,12 @@ AGENT_TOOLS: List[Dict[str, Any]] = [
             "aviso para efetividade/ritmo_dia, que são sempre agregados da base. "
             "db é por chamada — pode consultar um banco diferente do filtro da sessão. "
             "Use para tendência, evolução, histórico, degradação, 'vs semana passada'. "
-            "NÃO cobre taxa de contato/CPC/conversão nem acionamentos por dia — essas "
-            "métricas só existem como total do período (sem endpoint diário hoje)."
+            "'efetividade' NÃO é conversão (fórmulas e tools diferentes) — nunca rotule "
+            "o resultado deste kpi como 'conversão'. Conversão (qtd_acordos/qtd_contatos) "
+            "não tem série diária nem agregado por banco/carteira — só existe no grão "
+            "agente via get_agent_performance/list_agents_performance/comparar_agentes "
+            "(campo conversao_pct). Use essas tools para conversão, ou avise que não "
+            "está disponível nesse grão — nunca substitua em silêncio."
         ),
         "input_schema": QueryKpiInput.model_json_schema(),
     },
