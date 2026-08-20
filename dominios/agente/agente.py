@@ -26,6 +26,108 @@ from dominios.agente.kpi_historico import build_kpi_historico
 from dominios.agente.risco import build_portfolio_entries, build_status_breakdown
 from dominios.agente.tools import AGENT_TOOLS, dispatch_tool
 
+# Langfuse (tracing/observabilidade, opcional) - import feito depois de
+# `config.settings` (acima) para os env vars ja estarem carregados no
+# processo quando o client for inicializado (ver skill langfuse, "common
+# mistakes"). Ausencia do pacote ou erro do SDK nunca derruba o agente -
+# vira no-op silencioso, mesma filosofia de _sentry_log/_agent_ndjson.
+try:
+    os.environ.setdefault("LANGFUSE_TRACING_ENVIRONMENT", settings.APP_ENV)
+    from langfuse import get_client as _langfuse_get_client
+    from langfuse import propagate_attributes as _langfuse_propagate_attributes
+    _LANGFUSE_SDK_AVAILABLE = True
+except ImportError:
+    _LANGFUSE_SDK_AVAILABLE = False
+
+
+class _NoOpObservation:
+    def __enter__(self) -> "_NoOpObservation":
+        return self
+
+    def __exit__(self, *exc: Any) -> bool:
+        return False
+
+    def update(self, **kwargs: Any) -> None:
+        pass
+
+
+class _NoOpContext:
+    def __enter__(self) -> "_NoOpContext":
+        return self
+
+    def __exit__(self, *exc: Any) -> bool:
+        return False
+
+
+def _langfuse_enabled() -> bool:
+    # PYTEST_CURRENT_TEST e setado pelo proprio pytest durante cada teste -
+    # sem esse guard, testes com client fake/canned mandam trace de verdade
+    # pro projeto Langfuse real (confirmado ao vivo: 4 traces com fixture
+    # "BANCO BETA"/date_to=2026-06-10 apareceram no projeto real).
+    return (
+        _LANGFUSE_SDK_AVAILABLE
+        and settings.ENABLE_LANGFUSE
+        and bool(settings.LANGFUSE_PUBLIC_KEY)
+        and bool(settings.LANGFUSE_SECRET_KEY)
+        and "PYTEST_CURRENT_TEST" not in os.environ
+    )
+
+
+def _traced_span(as_type: str, name: str, **kwargs: Any) -> Any:
+    """Observação Langfuse (generation/span/tool) ou no-op se desligado/indisponível."""
+    if not _langfuse_enabled():
+        return _NoOpObservation()
+    try:
+        return _langfuse_get_client().start_as_current_observation(as_type=as_type, name=name, **kwargs)
+    except Exception:
+        return _NoOpObservation()
+
+
+def _traced_attributes(**kwargs: Any) -> Any:
+    """user_id/tags no nível do trace inteiro, propagados para toda observação filha."""
+    if not _langfuse_enabled():
+        return _NoOpContext()
+    try:
+        return _langfuse_propagate_attributes(**kwargs)
+    except Exception:
+        return _NoOpContext()
+
+
+def _lf_safe_messages(convo: List[Any], limit: int = 6) -> List[Dict[str, str]]:
+    """Últimas N mensagens da conversa, formato role/content legível para o
+    trace - convo mistura dict (mensagens nossas) com objetos do SDK
+    (mensagem do assistant anexada crua) conforme o provedor, então nunca
+    acessa `.content` direto sem normalizar."""
+    out: List[Dict[str, str]] = []
+    for m in convo[-limit:]:
+        if isinstance(m, dict):
+            role, content = m.get("role", "?"), m.get("content", "")
+        else:
+            role, content = getattr(m, "role", "?"), getattr(m, "content", "")
+        out.append({"role": str(role), "content": str(content)[:2000]})
+    return out
+
+
+def _safe_update(observation: Any, **kwargs: Any) -> None:
+    """`.update()` nunca pode derrubar o loop do agente por erro do SDK/rede do Langfuse."""
+    try:
+        clean = {k: v for k, v in kwargs.items() if v is not None}
+        observation.update(**clean)
+    except Exception:
+        pass
+
+
+def _lf_usage(response: Any) -> Optional[Dict[str, int]]:
+    usage = getattr(response, "usage", None)
+    if usage is None:
+        return None
+    input_tokens = getattr(usage, "input_tokens", None) or getattr(usage, "prompt_tokens", None)
+    output_tokens = getattr(usage, "output_tokens", None) or getattr(usage, "completion_tokens", None)
+    if input_tokens is None and output_tokens is None:
+        return None
+    return {"input": input_tokens or 0, "output": output_tokens or 0}
+
+
 # Injetada quando o RunGuard força o encerramento do loop (teto de steps,
 # wall clock ou chamada repetida/espiral declarada como loop) — pede a
 # síntese final sem oferecer mais tools (mecanismo portável entre providers;
@@ -229,12 +331,22 @@ def _tool_result_json(
     call_date_from = str(args.get("date_from") or date_from)
     call_date_to = str(args.get("date_to") or date_to)
     t0 = time.monotonic()
-    output = state.dispatch(
-        name, args, lambda: dispatch_tool(name, args, entries, get_agents, providers=providers),
-        db=call_db, date_from=call_date_from, date_to=call_date_to,
-    )
-    latency_ms = round((time.monotonic() - t0) * 1000, 1)
-    meta = state.last_call_meta
+    # Span de tool no Langfuse leva os MESMOS campos seguros do ndjson abaixo,
+    # nunca args nem dado bruto (mesma regra LGPD/PII citada no docstring).
+    with _traced_span("tool", f"tool-{name}", input={"tool_name": name, "db": call_db, "date_from": call_date_from, "date_to": call_date_to}) as tspan:
+        output = state.dispatch(
+            name, args, lambda: dispatch_tool(name, args, entries, get_agents, providers=providers),
+            db=call_db, date_from=call_date_from, date_to=call_date_to,
+        )
+        latency_ms = round((time.monotonic() - t0) * 1000, 1)
+        meta = state.last_call_meta
+        _safe_update(tspan, output={
+            "cache_hit": meta.get("cache_hit", False),
+            "truncated": meta.get("truncated", False),
+            "row_count": meta.get("row_count"),
+            "error_type": meta.get("error_type"),
+            "latency_ms": latency_ms,
+        })
     _agent_ndjson(
         "OBS",
         "dominios/agente/agente.py:_tool_result_json",
@@ -399,20 +511,24 @@ def _loop_anthropic(
         for i in range(settings.AGENT_MAX_TOOL_ITERS + 1):
             if state.force_final() or i == settings.AGENT_MAX_TOOL_ITERS:
                 _append_user_text(convo, _FORCE_FINAL_NUDGE)
+                with _traced_span("generation", "anthropic-generate-final", model=settings.AGENT_MODEL, input=_lf_safe_messages(convo)) as gen:
+                    response = client.messages.create(
+                        model=settings.AGENT_MODEL,
+                        max_tokens=2048,
+                        system=system_prompt,
+                        messages=convo,
+                    )
+                    _safe_update(gen, output=_lf_safe_messages([{"role": "assistant", "content": response.content}])[0], usage_details=_lf_usage(response))
+                break
+            with _traced_span("generation", "anthropic-generate", model=settings.AGENT_MODEL, input=_lf_safe_messages(convo)) as gen:
                 response = client.messages.create(
                     model=settings.AGENT_MODEL,
                     max_tokens=2048,
                     system=system_prompt,
+                    tools=AGENT_TOOLS,
                     messages=convo,
                 )
-                break
-            response = client.messages.create(
-                model=settings.AGENT_MODEL,
-                max_tokens=2048,
-                system=system_prompt,
-                tools=AGENT_TOOLS,
-                messages=convo,
-            )
+                _safe_update(gen, output=_lf_safe_messages([{"role": "assistant", "content": response.content}])[0], usage_details=_lf_usage(response))
             if response.stop_reason != "tool_use":
                 break
             convo.append({"role": "assistant", "content": response.content})
@@ -497,20 +613,25 @@ def _loop_deepseek(
                 # "tool" seguidas de "user" são normais) — sem o bug do #3, que é
                 # específico da API da Anthropic. Ver _loop_anthropic acima.
                 convo.append({"role": "user", "content": _FORCE_FINAL_NUDGE})
+                with _traced_span("generation", "deepseek-generate-final", model=settings.AGENT_MODEL, input=_lf_safe_messages(convo)) as gen:
+                    response = client.chat.completions.create(
+                        model=settings.AGENT_MODEL,
+                        max_tokens=2048,
+                        messages=convo,
+                    )
+                    message = response.choices[0].message
+                    _safe_update(gen, output=str(message.content or "")[:2000], usage_details=_lf_usage(response))
+                break
+            with _traced_span("generation", "deepseek-generate", model=settings.AGENT_MODEL, input=_lf_safe_messages(convo)) as gen:
                 response = client.chat.completions.create(
                     model=settings.AGENT_MODEL,
                     max_tokens=2048,
+                    tools=tools,
                     messages=convo,
                 )
                 message = response.choices[0].message
-                break
-            response = client.chat.completions.create(
-                model=settings.AGENT_MODEL,
-                max_tokens=2048,
-                tools=tools,
-                messages=convo,
-            )
-            message = response.choices[0].message
+                tool_call_names = [tc.function.name for tc in (message.tool_calls or [])]
+                _safe_update(gen, output=str(message.content or tool_call_names)[:2000], usage_details=_lf_usage(response))
             if not message.tool_calls:
                 break
             convo.append(message)
@@ -543,7 +664,7 @@ def _loop_deepseek(
     return (message.content or "") if message else ""
 
 
-def run_agent(
+def _run_agent_impl(
     messages: List[Dict[str, str]],
     db: str,
     date_from: str,
@@ -592,3 +713,37 @@ def run_agent(
         agent_response["text"] = clean_text
     agent_response["data_referencia"] = date_to
     return agent_response
+
+
+def run_agent(
+    messages: List[Dict[str, str]],
+    db: str,
+    date_from: str,
+    date_to: str,
+    run_id: Optional[str] = None,
+    client_ip: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Wrapper de tracing (Langfuse, opcional) em volta de _run_agent_impl.
+    Trace = 1 turno de chat (definição da própria doc de best-practices do
+    Langfuse) - input/output no nível do trace são a pergunta e a resposta
+    em texto simples, não o JSON inteiro do contrato AgentResponse."""
+    if not _langfuse_enabled():
+        return _run_agent_impl(messages, db, date_from, date_to, run_id)
+
+    last_user_text = next(
+        (m.get("content", "") for m in reversed(messages) if m.get("role") == "user"), ""
+    )
+    tags = [f"db:{db}", f"provider:{settings.AGENT_PROVIDER}"]
+    with _traced_attributes(user_id=client_ip or None, tags=tags):
+        with _traced_span(
+            "span", "agent-chat-turn",
+            input=last_user_text,
+            metadata={"run_id": run_id, "date_from": date_from, "date_to": date_to},
+        ) as root:
+            agent_response = _run_agent_impl(messages, db, date_from, date_to, run_id)
+            _safe_update(
+                root,
+                output=agent_response.get("text", ""),
+                metadata={"confidence": agent_response.get("confidence"), "data_sources": agent_response.get("data_sources")},
+            )
+            return agent_response

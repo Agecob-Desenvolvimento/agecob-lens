@@ -84,7 +84,8 @@ def post_agente_chat(body: AgentChatRequest, request: Request = None) -> Dict[st
     ]
 
     run_id = getattr(request.state, "run_id", f"srv-{uuid4().hex[:12]}") if request else f"srv-{uuid4().hex[:12]}"
-    agent_response = run_agent(trimmed, validated_db, date_from, date_to, run_id=run_id)
+    client_ip = request.client.host if request and request.client else None
+    agent_response = run_agent(trimmed, validated_db, date_from, date_to, run_id=run_id, client_ip=client_ip)
 
     sources = settings.ALLOWED_DATABASES if validated_db == "todos" else [validated_db]
     return build_response_envelope(

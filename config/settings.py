@@ -290,6 +290,13 @@ _AGENT_DEFAULT_MODELS: Dict[str, str] = {"anthropic": "claude-sonnet-4-6", "deep
 AGENT_MODEL: str = (os.getenv("AGENT_MODEL") or _AGENT_DEFAULT_MODELS.get(AGENT_PROVIDER, "claude-sonnet-4-6")).strip()
 AGENT_MAX_TOOL_ITERS: int = max(1, int(os.getenv("AGENT_MAX_TOOL_ITERS", "4")))
 
+# Langfuse (observabilidade/tracing do agente) — opcional, off por padrao. Vazio
+# = sem chaves = tracing desligado mesmo com ENABLE_LANGFUSE=true (ver agente.py).
+ENABLE_LANGFUSE: bool = (os.getenv("ENABLE_LANGFUSE") or "false").strip().lower() == "true"
+LANGFUSE_PUBLIC_KEY: str = (os.getenv("LANGFUSE_PUBLIC_KEY") or "").strip()
+LANGFUSE_SECRET_KEY: str = (os.getenv("LANGFUSE_SECRET_KEY") or "").strip()
+LANGFUSE_BASE_URL: str = (os.getenv("LANGFUSE_BASE_URL") or "https://cloud.langfuse.com").strip()
+
 # Limiares do risco composto da visão de carteiras (% sobre 1ª parcela dos
 # gerados) — espelham os thresholds do frontend (PortfolioSection/Handoff).
 RISK_LEVEL_LOW_MAX: float = 25.0   # <= 25 → baixo
