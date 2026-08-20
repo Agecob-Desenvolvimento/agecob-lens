@@ -177,8 +177,11 @@ def _build_providers(
     # dispatch_tool (tools.py) — fn(db=..., date_from=..., date_to=..., ...).
     # Sombreiam db/date_from/date_to da sessão (linha 137) de propósito: estas
     # 3 tools recebem `db`/datas POR CHAMADA, não fechados sobre a sessão.
-    def get_kpi_historico_call(db: str, kpi: str, date_from: str, date_to: str, granularidade: str, page: int) -> Dict[str, Any]:
-        return build_kpi_historico(db, kpi, date_from, date_to, granularidade, page, run_id=run_id)
+    def get_kpi_historico_call(
+        db: str, kpi: str, date_from: str, date_to: str, granularidade: str, page: int,
+        portfolio: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        return build_kpi_historico(db, kpi, date_from, date_to, granularidade, page, run_id=run_id, portfolio=portfolio)
 
     def get_comparacao_agentes(db: str, date_from: str, date_to: str) -> List[Dict[str, Any]]:
         return build_agent_entries(db, date_from, date_to, run_id=run_id)

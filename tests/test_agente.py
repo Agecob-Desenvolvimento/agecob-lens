@@ -444,7 +444,7 @@ def test_tool_query_kpi_historico_valida_e_despacha():
     assert seen == {
         "db": "COBwebRCBAUTOS", "kpi": "qtd_acordos",
         "date_from": "2026-08-01", "date_to": "2026-08-10",
-        "granularidade": "dia", "page": 1,
+        "granularidade": "dia", "page": 1, "portfolio": None,
     }
 
     bad_kpi = dispatch_tool(
@@ -460,8 +460,17 @@ def test_tool_query_kpi_historico_valida_e_despacha():
     )
     assert janela_grande["ok"] is False
 
-    extra_forbidden = dispatch_tool(
+    # portfolio (achado da sessão de teste ao vivo) é campo real agora — passa
+    # direto pro provider, não é mais rejeitado como extra="forbid".
+    com_portfolio = dispatch_tool(
         "query_kpi_historico", {**_KPI_ARGS, "portfolio": "gama"},
+        SAMPLE_ENTRIES, _NO_AGENTS, providers=providers,
+    )
+    assert com_portfolio == {"kpi": "qtd_acordos"}
+    assert seen["portfolio"] == "gama"
+
+    extra_forbidden = dispatch_tool(
+        "query_kpi_historico", {**_KPI_ARGS, "banco_extra": "x"},
         SAMPLE_ENTRIES, _NO_AGENTS, providers=providers,
     )
     assert extra_forbidden["ok"] is False
@@ -708,6 +717,15 @@ def test_tool_detalhar_portfolio_valida_e_despacha():
         SAMPLE_ENTRIES, _NO_AGENTS, providers=providers,
     )
     assert tipo_ruim["ok"] is False
+
+    # vencimentos (achado da sessão de teste ao vivo, Q2/Q3): drilldown novo,
+    # sem parâmetro extra no schema — só precisa validar como Literal aceito.
+    vencimentos = dispatch_tool(
+        "detalhar_portfolio", {**_DETALHAR_ARGS, "drilldown": "vencimentos"},
+        SAMPLE_ENTRIES, _NO_AGENTS, providers=providers,
+    )
+    assert vencimentos == {"ok": 1}
+    assert seen["drilldown"] == "vencimentos"
     assert tipo_ruim["error_type"] == "validation"
 
     page_size_ruim = dispatch_tool(

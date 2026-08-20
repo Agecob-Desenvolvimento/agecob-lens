@@ -29,6 +29,10 @@ import config.settings as settings
 from core.database.query_executor import run_query
 from core.utils.validation import validate_database_or_todos
 from dominios.agente.risco import build_portfolio_entries
+from dominios.efetividade.queries import (
+    _build_ef_resumo_por_portfolio_params,
+    _build_ef_resumo_por_portfolio_sql,
+)
 from dominios.graficos.queries import (
     build_acordos_detalhe_query,
     build_excecoes_detalhe_query,
@@ -87,6 +91,29 @@ def build_detalhe_portfolio(
                 return entry
 
     conn_db = settings.ALLOWED_DATABASES[0] if validated_db == "todos" else validated_db
+
+    if drilldown == "vencimentos":
+        query = _build_ef_resumo_por_portfolio_sql(validated_db, "primeira")
+        params = _build_ef_resumo_por_portfolio_params(
+            validated_db, date_from.replace("-", ""), date_to.replace("-", ""), resolved_name,
+        )
+        rows = run_query(
+            query, conn_db, params=params, run_id=run_id,
+            context="agente/detalhe-portfolio/vencimentos",
+        )
+        row = rows[0] if rows else {}
+        return {
+            "portfolio": resolved_name,
+            "drilldown": "vencimentos",
+            "date_from": date_from,
+            "date_to": date_to,
+            "boletos_gerados": int(row.get("generated") or 0),
+            "boletos_pagos_no_prazo": int(row.get("paid_on_time") or 0),
+            "valor_vencendo": float(row.get("amount_maturing") or 0),
+            "valor_recebido": float(row.get("amount_received") or 0),
+            "efetividade_pct": float(row.get("effectiveness_pct") or 0),
+        }
+
     date_to_exclusive = (date.fromisoformat(date_to) + timedelta(days=1)).isoformat()
     query_builder = _DETALHE_QUERY_BUILDERS[drilldown]
     query = query_builder(validated_db, date_from, date_to_exclusive)

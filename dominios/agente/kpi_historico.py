@@ -34,6 +34,8 @@ from core.database.query_executor import run_query
 from core.telemetry.agent_logger import _sentry_log
 from core.utils.validation import validate_database_or_todos
 from dominios.agente.conversao import build_conversao_view
+from dominios.agente.detalhe_portfolio import _find_portfolio_name
+from dominios.agente.risco import build_portfolio_entries
 from dominios.agente.series import _series_from_rows, _tendencia, build_daily_rollup_query
 
 _ROLLUP_KPIS: Dict[str, str] = {
@@ -88,29 +90,48 @@ def _paginate(points: List[Dict[str, Any]], page: int) -> Dict[str, Any]:
 
 def _rollup_series(
     db: str, kpi: str, date_from: str, date_to: str, granularidade: str, page: int, run_id: Optional[str],
+    portfolio: Optional[str] = None,
 ) -> Dict[str, Any]:
     metric = _ROLLUP_KPIS[kpi]
     validated_db = validate_database_or_todos(db)
     conn_db = settings.ALLOWED_DATABASES[0] if validated_db == "todos" else validated_db
     date_to_exclusive = (date.fromisoformat(date_to) + timedelta(days=1)).isoformat()
 
-    def _compute() -> List[Dict[str, Any]]:
-        query = build_daily_rollup_query(validated_db, date_from, date_to_exclusive)
-        return run_query(query, conn_db, run_id=run_id, context="agente/kpi-historico")
+    resolved_portfolio = None
+    if portfolio:
+        entries = build_portfolio_entries(validated_db, date_from, date_to, run_id=run_id)
+        resolved_portfolio = _find_portfolio_name(portfolio, entries)
+        if resolved_portfolio is None:
+            return {
+                "error": "Carteira não encontrada no período.",
+                "available_portfolios": [e["portfolio_name"] for e in entries],
+            }
 
-    cache_key = f"agente|kpi-historico|{validated_db}|{date_from}|{date_to}"
+    def _compute() -> List[Dict[str, Any]]:
+        query = build_daily_rollup_query(
+            validated_db, date_from, date_to_exclusive, with_portfolio_filter=resolved_portfolio is not None,
+        )
+        params = None
+        if resolved_portfolio is not None:
+            params = (resolved_portfolio, resolved_portfolio) if validated_db == "todos" else (resolved_portfolio,)
+        return run_query(query, conn_db, params=params, run_id=run_id, context="agente/kpi-historico")
+
+    cache_key = f"agente|kpi-historico|{validated_db}|{date_from}|{date_to}|{resolved_portfolio or '*'}"
     rows = cache_manager.get_or_compute(cache_key, _compute)
     points = _series_from_rows(rows, metric, date_from, date_to)
     points = _rebucket(points, kpi, granularidade)
     tendencia, variacao = _tendencia(points) if points else ("estavel", None)
     paged = _paginate(points, page)
-    return {
+    result: Dict[str, Any] = {
         "kpi": kpi,
         "granularidade": granularidade,
         **paged,
         "tendencia": tendencia,
         "variacao_percentual": variacao,
     }
+    if resolved_portfolio is not None:
+        result["portfolio"] = resolved_portfolio
+    return result
 
 
 def _efetividade_series(db: str, date_from: str, date_to: str, page: int) -> Dict[str, Any]:
@@ -157,11 +178,17 @@ def build_kpi_historico(
     granularidade: str,
     page: int,
     run_id: Optional[str] = None,
+    portfolio: Optional[str] = None,
 ) -> Dict[str, Any]:
     if kpi in _ROLLUP_KPIS:
-        return _rollup_series(db, kpi, date_from, date_to, granularidade, page, run_id)
-    if kpi == "efetividade":
-        return _efetividade_series(db, date_from, date_to, page)
-    if kpi == "ritmo_dia":
-        return _ritmo_series(db, run_id)
-    raise ValueError(f"kpi sem fonte de dados: {kpi!r} — deveria ter sido barrado por QueryKpiInput.")
+        return _rollup_series(db, kpi, date_from, date_to, granularidade, page, run_id, portfolio=portfolio)
+    out = _efetividade_series(db, date_from, date_to, page) if kpi == "efetividade" else (
+        _ritmo_series(db, run_id) if kpi == "ritmo_dia" else None
+    )
+    if out is None:
+        raise ValueError(f"kpi sem fonte de dados: {kpi!r} — deveria ter sido barrado por QueryKpiInput.")
+    if portfolio and "error" not in out:
+        out.setdefault("meta", {}).setdefault("warnings", []).append(
+            f"portfolio={portfolio!r} ignorado — kpi={kpi!r} não tem quebra por carteira, é sempre agregado da base."
+        )
+    return out

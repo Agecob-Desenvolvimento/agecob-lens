@@ -12,7 +12,7 @@ desconto_medio_percentual só existem como snapshot agregado do período, não
 como série por dia/semana/mês — nenhum endpoint os serve assim hoje).
 """
 from datetime import date
-from typing import List, Literal
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -51,6 +51,11 @@ class QueryKpiInput(_DateRangeValidatorMixin, BaseModel):
     date_to: date
     granularidade: Literal["dia", "semana", "mes"] = "dia"
     page: int = Field(1, ge=1, le=20)
+    # Só se aplica a valor_acordos_gerados/qtd_acordos/risco_composto_pct
+    # (build_daily_rollup_query já suportava with_portfolio_filter — nunca
+    # foi retirado do SQL, só nunca foi exposto no schema desta tool até
+    # agora). efetividade/ritmo_dia ignoram e avisam via meta.warnings.
+    portfolio: Optional[str] = Field(None, max_length=80)
 
 
 class CompararAgentesInput(_DateRangeValidatorMixin, BaseModel):
@@ -72,7 +77,7 @@ class DetalharPortfolioInput(_DateRangeValidatorMixin, BaseModel):
     portfolio: str = Field(max_length=80)
     date_from: date
     date_to: date
-    drilldown: Literal["aprovados", "excecao", "rejeitado", "quebrado", "resumo"] = "resumo"
+    drilldown: Literal["aprovados", "excecao", "rejeitado", "quebrado", "resumo", "vencimentos"] = "resumo"
     page: int = Field(1, ge=1, le=10)
     page_size: Literal[10, 25, 50] = 25
 

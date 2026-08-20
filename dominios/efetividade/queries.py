@@ -236,6 +236,73 @@ ORDER BY dia
     return kpi_sql, daily_sql
 
 
+def _build_ef_resumo_por_portfolio_sql(db: str, parcela_tipo: str) -> str:
+    """Resumo de efetividade (vencendo x recebido) para UM portfólio, resolvido
+    por NOME (DIV_AUX.PORTFOLIO_COLUMN via OUTER APPLY) — não por id_portfolio
+    (ID_CARTEIRA) como _build_ef_resumo_sql, que usa uma chave diferente da
+    que o resto do agente resolve (dominios/agente/detalhe_portfolio.py).
+    Mesma resolução de nome que _build_ef_detalhe_sql; pago_expr/recv_expr
+    idênticos a _build_ef_resumo_sql (agente-tools-handoff-pt2.md achado #6:
+    dedupar por nome, nunca inventar filtro novo)."""
+    parcela_cond = "= 0" if parcela_tipo == "primeira" else "> 0"
+
+    pago_expr = (
+        "CASE WHEN DT_PAGAMENTO IS NOT NULL AND VR_PAGO > 0 "
+        "AND DT_PAGAMENTO <= DATEADD(DAY, 5, DT_VENCIMENTO) "
+        "THEN 1 ELSE 0 END"
+    )
+    recv_expr = (
+        "CASE WHEN DT_PAGAMENTO IS NOT NULL AND VR_PAGO > 0 "
+        "THEN VR_PAGO ELSE 0 END"
+    )
+
+    def _one(database: str) -> str:
+        return f"""
+    SELECT R.NR_RECEBIMENTO, R.VALOR, R.VR_PAGO, R.DT_PAGAMENTO, R.DT_VENCIMENTO, R.ID_REC_STATUS
+    FROM {database}.dbo.REC_MASTER R (NOLOCK)
+    INNER JOIN {database}.dbo.USU_MASTER U (NOLOCK) ON R.ID_USUARIO = U.ID_USUARIO
+    OUTER APPLY (
+        SELECT TOP 1 DA2.{settings.PORTFOLIO_COLUMN} AS portfolio_name
+        FROM {database}.dbo.REC_DIVIDAS RD2 (NOLOCK)
+        JOIN {database}.dbo.DIV_AUX DA2 (NOLOCK) ON RD2.ID_DIVIDA = DA2.ID_DIVIDA
+        WHERE RD2.NR_RECEBIMENTO = R.NR_RECEBIMENTO
+          AND RD2.ID_CARTEIRA = R.ID_CARTEIRA
+          AND DA2.{settings.PORTFOLIO_COLUMN} IS NOT NULL
+    ) DA
+    WHERE R.DT_VENCIMENTO >= CONVERT(DATE, ?, 112)
+      AND R.DT_VENCIMENTO <= CONVERT(DATE, ?, 112)
+      AND R.ID_REC_STATUS IN {settings.STATUS_GERADOS_SQL}
+      AND R.PARCELA {parcela_cond}
+      AND DA.portfolio_name = ?
+      {_EF_AGENT_FILTER}
+"""
+
+    inner = (
+        f"{_one(_EF_DB_A)}\n    UNION ALL\n{_one(_EF_DB_C)}"
+        if db == "todos"
+        else _one(db)
+    )
+
+    return f"""
+SELECT
+    COUNT(*) AS generated,
+    SUM({pago_expr}) AS paid_on_time,
+    COALESCE(SUM(VALOR), 0) AS amount_maturing,
+    COALESCE(SUM({recv_expr}), 0) AS amount_received,
+    CAST(100.0 * SUM({recv_expr}) / NULLIF(SUM(VALOR), 0) AS DECIMAL(8, 2)) AS effectiveness_pct
+FROM (
+{inner}
+) AS T
+"""
+
+
+def _build_ef_resumo_por_portfolio_params(
+    db: str, date_from_lit: str, date_to_lit: str, portfolio_name: str,
+) -> Tuple[Any, ...]:
+    per_db: Tuple[Any, ...] = (date_from_lit, date_to_lit, portfolio_name)
+    return per_db + per_db if db == "todos" else per_db
+
+
 def _ef_date_params(db: str, date_from_lit: str, date_to_lit: str) -> Tuple[Any, ...]:
     """Params (?, ?) de data por bloco inner — duplicados no UNION ALL de `todos`."""
     per_db: Tuple[Any, ...] = (date_from_lit, date_to_lit)

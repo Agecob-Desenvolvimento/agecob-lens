@@ -205,6 +205,9 @@ AGENT_TOOLS: List[Dict[str, Any]] = [
             "'risco_composto_pct' (pior eixo de risco do dia), 'efetividade' (boletos "
             "pagos no prazo / emitidos — reflete a janela fixa do próprio ETL, não "
             "date_from/date_to) ou 'ritmo_dia' (sempre HOJE, ignora datas). "
+            "portfolio (opcional): restringe valor_acordos_gerados/qtd_acordos/"
+            "risco_composto_pct a UMA carteira (nome ou trecho) — ignorado com "
+            "aviso para efetividade/ritmo_dia, que são sempre agregados da base. "
             "db é por chamada — pode consultar um banco diferente do filtro da sessão. "
             "Use para tendência, evolução, histórico, degradação, 'vs semana passada'. "
             "NÃO cobre taxa de contato/CPC/conversão nem acionamentos por dia — essas "
@@ -228,9 +231,13 @@ AGENT_TOOLS: List[Dict[str, Any]] = [
             "Detalha UM portfólio com drill-down por status de acordo. drilldown: "
             "'resumo' (métricas agregadas, como get_portfolio_metrics), 'aprovados' "
             "(status gerados: ativo/quebra/baixa pagamento/quebra automática/baixa "
-            "avulso — 1,2,3,10,12), 'excecao' (5), 'rejeitado' (7) ou 'quebrado' (2, "
-            "estrito). Nos 4 últimos, retorna linhas paginadas (CPF mascarado, sem "
-            "nome do devedor). db é por chamada — pode diferir do filtro da sessão."
+            "avulso — 1,2,3,10,12), 'excecao' (5), 'rejeitado' (7), 'quebrado' (2, "
+            "estrito) ou 'vencimentos' (boletos com vencimento na janela: quantos "
+            "geraram, quanto está vencendo, quanto já foi recebido — use para "
+            "'quanto projetamos/recebemos de vencimentos de hoje/ontem na carteira "
+            "X'; devolve um resumo agregado, não linhas). Nos 4 de status, retorna "
+            "linhas paginadas (CPF mascarado, sem nome do devedor). db é por "
+            "chamada — pode diferir do filtro da sessão."
         ),
         "input_schema": DetalharPortfolioInput.model_json_schema(),
     },
@@ -499,6 +506,7 @@ def dispatch_tool(
             db=validated.db, kpi=validated.kpi,
             date_from=validated.date_from.isoformat(), date_to=validated.date_to.isoformat(),
             granularidade=validated.granularidade, page=validated.page,
+            portfolio=validated.portfolio,
         )
 
     if name == "comparar_agentes":
