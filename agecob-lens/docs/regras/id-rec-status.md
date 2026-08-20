@@ -44,7 +44,7 @@ STATUS_UNIVERSO_ACORDOS = (1, 2, 3, 5, 10, 12)  # gerados + exceção (pré-filt
   quebra entra no denominador de emitidos, nunca no de pagos → corrige inflação).
 - **Exceção** = ID `5` (`PENDENTE` no enum). A operação chama de "Exceção" qualquer acordo aguardando validação interna — distinto do ID `11` (`EXCEÇÃO` no enum literal, que NÃO é o que o negócio considera "exceção" nos KPIs).
 - **Rejeitado** (7) = supervisor/banco negou — usado em `excecoes-por-portfolio` companion chart.
-- **Universo de acordos** = união aprovados + exceção — base de KPIs envolvendo acordos.
+- **Universo de acordos** = união gerados + exceção — base de KPIs envolvendo acordos.
 
 > ⚠️ Atenção à divergência: o enum literal nomeia `11 = EXCEÇÃO`, mas a regra de negócio do dashboard usa `5 = PENDENTE` como "Exceção". Não confundir.
 
