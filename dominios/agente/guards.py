@@ -273,6 +273,14 @@ class RunState:
         de teste sem eles continuam funcionando (é o mesmo em toda a
         chamada, então não muda o resultado, só o namespace do cache).
         """
+        if self.steps_exceeded():
+            self.last_call_meta = {"step_index": self.steps, "cache_hit": False, "error_type": "step_budget_exceeded", "truncated": False, "row_count": None}
+            return build_tool_error(
+                "step_budget_exceeded",
+                hint=f"Limite de {self.guard.MAX_STEPS} tool calls por request ja atingido. Nao execute mais tools - sintetize a resposta com os dados ja obtidos, e diga ao usuario que a consulta foi limitada.",
+                user_facing="Consultei o numero maximo de fontes de dados permitido para esta pergunta.",
+            )
+
         self.steps += 1
         self._record_spiral(tool_name)
         self.last_call_meta = {"step_index": self.steps, "cache_hit": False, "error_type": None, "truncated": False, "row_count": None}

@@ -18,6 +18,35 @@ def test_steps_exceeded_forca_final():
     assert state.force_final() is True
 
 
+def test_dispatch_recusa_executar_apos_estourar_step_budget():
+    """
+    Achado E1 (pt5-live-testing.md): DeepSeek/OpenAI e Anthropic podem devolver
+    varios tool_calls numa unica resposta (tool calling paralelo). O loop em
+    agente.py so reavalia force_final() ENTRE rodadas, nao entre chamadas de
+    um mesmo lote - live testing bateu 11 tool calls com MAX_STEPS=10 porque
+    um lote de 4 chamadas foi despachado inteiro mesmo cruzando o teto no
+    meio. dispatch() agora se autoprotege: uma vez no limite, recusa executar
+    run_fn (nao so sinaliza via force_final() pro chamador respeitar depois).
+    """
+    state = RunState(RunGuard(MAX_STEPS=2))
+    calls = []
+    run_fn = lambda: calls.append(1) or {"ok": True}
+
+    state.dispatch("tool_a", {}, run_fn)
+    state.dispatch("tool_b", {}, run_fn)
+    assert len(calls) == 2
+
+    # simula 2 chamadas extras no MESMO lote (loop ainda nao rechecou force_final)
+    result_3 = state.dispatch("tool_c", {}, run_fn)
+    result_4 = state.dispatch("tool_d", {}, run_fn)
+
+    assert len(calls) == 2  # run_fn nunca executou pras chamadas 3 e 4
+    assert state.steps == 2  # nao incrementa alem do teto
+    assert result_3["error_type"] == "step_budget_exceeded"
+    assert result_3["ok"] is False
+    assert result_4["error_type"] == "step_budget_exceeded"
+
+
 def test_wall_clock_forca_final(monkeypatch):
     state = RunState(RunGuard(WALL_CLOCK_S=10))
     clock = {"t": 0.0}

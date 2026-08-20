@@ -17,6 +17,7 @@ _ERROR_RETRYABLE_DEFAULT: Dict[str, bool] = {
     "upstream_4xx": False,
     "empty_result": False,
     "tool_disabled": False,
+    "step_budget_exceeded": False,  # RunGuard.MAX_STEPS — ver guards.py RunState.dispatch, achado E1 pt5-live-testing
     "unknown_tool": False,
     "internal_error": False,  # bug de código (não upstream) — ver guards.py RunState.dispatch, achado #9
 }
