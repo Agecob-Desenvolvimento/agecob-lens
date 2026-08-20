@@ -1,0 +1,33 @@
+id: GS-014
+categoria: validacao
+pergunta: Mostre a evolução do valor gerado de janeiro a junho.
+sessao:
+  db: COBwebRCBAUTOS
+  date_from: '2026-08-10'
+  date_to: '2026-08-16'
+fixture: gs014.json
+mock_model:
+  turns:
+  - tool_call:
+      name: query_kpi_historico
+      args:
+        db: COBwebRCBAUTOS
+        kpi: valor_acordos_gerados
+        date_from: '2026-01-01'
+        date_to: '2026-06-30'
+  - final:
+      text: Essa janela (janeiro a junho) tem mais de 92 dias, o máximo por consulta. Quer que eu traga
+        por mês, ou reduzo o período?
+      highlights: []
+      suggested_actions: []
+      data_sources:
+      - query_kpi_historico
+      confidence: low
+esperado:
+  deve_passar: true
+  tools_chamadas_any_of:
+  - query_kpi_historico
+  resposta:
+    numeros_rastreaveis: false
+    contem_texto:
+    - '92'

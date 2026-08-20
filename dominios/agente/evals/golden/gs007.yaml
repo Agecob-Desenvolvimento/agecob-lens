@@ -1,0 +1,37 @@
+id: GS-007
+categoria: recusa
+pergunta: Compare COBDESANTOS com a Adrianna em qtd_acordos.
+sessao:
+  db: COBwebRCBAUTOS
+  date_from: '2026-08-10'
+  date_to: '2026-08-16'
+fixture: gs007.json
+mock_model:
+  turns:
+  - tool_call:
+      name: comparar_agentes
+      args:
+        db: COBwebRCBAUTOS
+        agent_keys:
+        - COBDESANTOS
+        - ADRI
+        metricas:
+        - qtd_acordos
+        date_from: '2026-08-10'
+        date_to: '2026-08-16'
+  - final:
+      text: 'Não consigo comparar: **COBDESANTOS** é conta de sistema, não um agente real. Posso comparar
+        a Adrianna com outro agente da equipe, se quiser.'
+      highlights: []
+      suggested_actions: []
+      data_sources:
+      - comparar_agentes
+      confidence: low
+esperado:
+  deve_passar: true
+  tools_chamadas_any_of:
+  - comparar_agentes
+  resposta:
+    numeros_rastreaveis: true
+    contem_texto:
+    - conta de sistema

@@ -1,0 +1,37 @@
+id: GS-004
+categoria: armadilha
+pergunta: Quantos acordos estão em exceção na carteira Alfa?
+sessao:
+  db: COBwebRCBAUTOS
+  date_from: '2026-08-10'
+  date_to: '2026-08-16'
+fixture: gs004.json
+mock_model:
+  turns:
+  - tool_call:
+      name: detalhar_portfolio
+      args:
+        db: COBwebRCBAUTOS
+        portfolio: alfa
+        date_from: '2026-08-10'
+        date_to: '2026-08-16'
+        drilldown: excecao
+  - final:
+      text: A **Banco Alfa** tem **2 acordos em exceção** (status 5 — PENDENTE) no período.
+      highlights: []
+      suggested_actions: []
+      data_sources:
+      - detalhar_portfolio
+      confidence: high
+esperado:
+  deve_passar: true
+  tools_chamadas_any_of:
+  - detalhar_portfolio
+  params_contem:
+    drilldown: excecao
+  resposta:
+    numeros_rastreaveis: true
+    contem_texto:
+    - exceç
+  ground_truth:
+    tool_results.detalhar_portfolio.meta.total_rows: 2

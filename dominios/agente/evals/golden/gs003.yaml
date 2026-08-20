@@ -1,0 +1,29 @@
+id: GS-003
+categoria: armadilha
+pergunta: Qual o valor da primeira parcela da carteira Alfa?
+sessao:
+  db: COBwebRCBAUTOS
+  date_from: '2026-08-10'
+  date_to: '2026-08-16'
+fixture: gs003.json
+mock_model:
+  turns:
+  - tool_call:
+      name: get_portfolio_metrics
+      args:
+        portfolio_name: alfa
+  - final:
+      text: A **1ª parcela** gerada pela **Banco Alfa** no período soma **R$ 48.300,00**.
+      highlights: []
+      suggested_actions: []
+      data_sources:
+      - get_portfolio_metrics
+      confidence: high
+esperado:
+  deve_passar: true
+  tools_chamadas_any_of:
+  - get_portfolio_metrics
+  resposta:
+    numeros_rastreaveis: true
+  ground_truth:
+    entries.0.valor_primeira_parcela: 48300.0

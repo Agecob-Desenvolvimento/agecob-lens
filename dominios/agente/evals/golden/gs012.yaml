@@ -1,0 +1,29 @@
+id: GS-012
+categoria: resiliencia
+pergunta: Qual o ritmo do dia hoje?
+sessao:
+  db: COBwebRCBAUTOS
+  date_from: '2026-08-10'
+  date_to: '2026-08-16'
+fixture: gs012.json
+mock_model:
+  turns:
+  - tool_call:
+      name: get_ritmo_acordos_dia
+      args: {}
+  - final:
+      text: Não consegui obter o ritmo do dia agora — o serviço está instável. Tente de novo em alguns
+        minutos.
+      highlights: []
+      suggested_actions: []
+      data_sources:
+      - get_ritmo_acordos_dia
+      confidence: low
+esperado:
+  deve_passar: true
+  tools_chamadas_any_of:
+  - get_ritmo_acordos_dia
+  resposta:
+    numeros_rastreaveis: true
+    contem_texto:
+    - não consegui

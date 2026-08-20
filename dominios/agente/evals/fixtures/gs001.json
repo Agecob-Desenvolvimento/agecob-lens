@@ -1,0 +1,44 @@
+{
+  "agents": [
+    {
+      "agent_name": "ADRIANNA SILVA",
+      "login": "ADRI",
+      "qtd_acionamentos": 1840,
+      "qtd_alo": 412,
+      "qtd_contatos": 97,
+      "taxa_contato_pct": 22.39,
+      "taxa_cpc_pct": 23.54,
+      "qtd_acordos": 12,
+      "valor_acordos": 48300.0,
+      "ticket_medio": 4025.0,
+      "valor_primeira_parcela": 9700.0,
+      "qtd_boletos_emitidos": 10,
+      "qtd_boletos_pagos": 6,
+      "conversao_pct": 12.37,
+      "pagos_por_cpc_pct": 6.19,
+      "qtd_excecoes": 2,
+      "valor_excecoes": 3100.0,
+      "data_referencia": "2026-08-16"
+    },
+    {
+      "agent_name": "RONIE VON",
+      "login": "RVON",
+      "qtd_acionamentos": 900,
+      "qtd_alo": 180,
+      "qtd_contatos": 40,
+      "taxa_contato_pct": 20.0,
+      "taxa_cpc_pct": 22.22,
+      "qtd_acordos": 5,
+      "valor_acordos": 18000.0,
+      "ticket_medio": 3600.0,
+      "valor_primeira_parcela": 4200.0,
+      "qtd_boletos_emitidos": 4,
+      "qtd_boletos_pagos": 1,
+      "conversao_pct": 12.5,
+      "pagos_por_cpc_pct": 2.5,
+      "qtd_excecoes": 1,
+      "valor_excecoes": 900.0,
+      "data_referencia": "2026-08-16"
+    }
+  ]
+}

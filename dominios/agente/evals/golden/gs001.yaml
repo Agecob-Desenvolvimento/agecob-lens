@@ -1,0 +1,36 @@
+id: GS-001
+categoria: factual
+pergunta: Quais agentes tiveram a melhor taxa de contato no período?
+sessao:
+  db: COBwebRCBAUTOS
+  date_from: '2026-08-10'
+  date_to: '2026-08-16'
+fixture: gs001.json
+mock_model:
+  turns:
+  - tool_call:
+      name: list_agents_performance
+      args:
+        order_by: taxa_contato_pct
+        limit: 5
+  - final:
+      text: '**Adrianna Silva** lidera com **22,39%** de taxa de contato (412 alôs / 1.840 acionamentos),
+        à frente de **Ronie Von** com 20,00%.'
+      highlights:
+      - type: metric
+        label: Adrianna Silva
+        value: 22,39%
+      suggested_actions: []
+      data_sources:
+      - list_agents_performance
+      confidence: high
+esperado:
+  deve_passar: true
+  tools_chamadas_any_of:
+  - list_agents_performance
+  params_contem:
+    order_by: taxa_contato_pct
+  resposta:
+    numeros_rastreaveis: true
+    proibido:
+    - SELECT

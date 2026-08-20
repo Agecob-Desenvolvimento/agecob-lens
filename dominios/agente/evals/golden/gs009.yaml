@@ -1,0 +1,35 @@
+id: GS-009
+categoria: temporal
+pergunta: Como está a conversão hoje?
+sessao:
+  db: COBwebRCBAUTOS
+  date_from: '2026-07-01'
+  date_to: '2026-07-15'
+fixture: gs009.json
+mock_model:
+  turns:
+  - tool_call:
+      name: query_kpi_historico
+      args:
+        db: COBwebRCBAUTOS
+        kpi: efetividade
+        date_from: '2026-07-01'
+        date_to: '2026-07-15'
+  - final:
+      text: Hoje é **16/08/2026**. O período filtrado (01 a 15/07/2026) fechou com **25,00%** de conversão
+        de boletos — não é a taxa de hoje, é a do período selecionado.
+      highlights: []
+      suggested_actions: []
+      data_sources:
+      - query_kpi_historico
+      confidence: high
+esperado:
+  deve_passar: true
+  tools_chamadas_any_of:
+  - query_kpi_historico
+  params_contem:
+    kpi: efetividade
+  resposta:
+    numeros_rastreaveis: true
+    contem_data_real: 16/08/2026
+frozen_today: '2026-08-16'

@@ -1,0 +1,7 @@
+{
+  "tool_results": {
+    "get_ritmo_acordos_dia": {
+      "__raise__": "timeout na rota KNN (simulado)"
+    }
+  }
+}

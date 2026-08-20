@@ -1,0 +1,30 @@
+id: GS-017
+categoria: armadilha
+pergunta: Qual a taxa de contato da Adrianna?
+sessao:
+  db: COBwebRCBAUTOS
+  date_from: '2026-08-10'
+  date_to: '2026-08-16'
+fixture: gs017.json
+mock_model:
+  turns:
+  - tool_call:
+      name: get_agent_performance
+      args:
+        agent_name: adrianna
+  - final:
+      text: A **taxa de contato** da Adrianna é **22,39%** (412 alôs / 1.840 acionamentos) — diferente
+        da taxa de CPC (23,54%), que é alô com a pessoa certa sobre total de alôs.
+      highlights: []
+      suggested_actions: []
+      data_sources:
+      - get_agent_performance
+      confidence: high
+esperado:
+  deve_passar: true
+  tools_chamadas_any_of:
+  - get_agent_performance
+  resposta:
+    numeros_rastreaveis: true
+  ground_truth:
+    agents.0.taxa_contato_pct: 22.39

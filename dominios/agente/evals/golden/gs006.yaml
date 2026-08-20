@@ -1,0 +1,36 @@
+id: GS-006
+categoria: comparativa
+pergunta: Compare ADRI com RVON em qtd_acordos e valor_primeira_parcela.
+sessao:
+  db: COBwebRCBAUTOS
+  date_from: '2026-08-10'
+  date_to: '2026-08-16'
+fixture: gs006.json
+mock_model:
+  turns:
+  - tool_call:
+      name: comparar_agentes
+      args:
+        db: COBwebRCBAUTOS
+        agent_keys:
+        - ADRI
+        - RVON
+        metricas:
+        - qtd_acordos
+        - valor_primeira_parcela
+        date_from: '2026-08-10'
+        date_to: '2026-08-16'
+  - final:
+      text: '**Adrianna Silva** fechou **12 acordos** (R$ 9.700,00 de 1ª parcela) contra **5 acordos**
+        (R$ 4.200,00) de **Ronie Von** no período.'
+      highlights: []
+      suggested_actions: []
+      data_sources:
+      - comparar_agentes
+      confidence: high
+esperado:
+  deve_passar: true
+  tools_chamadas_any_of:
+  - comparar_agentes
+  resposta:
+    numeros_rastreaveis: true

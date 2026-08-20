@@ -1,0 +1,57 @@
+{
+  "entries": [
+    {
+      "portfolio_name": "BANCO ALFA",
+      "valor_primeira_parcela": 48300.0,
+      "qtd_acordos": 42,
+      "risco_composto": 38.0,
+      "decomposicao": {
+        "excecoes_pct": 38.0,
+        "quebrados_pct": 12.0,
+        "rejeitados_pct": 20.0
+      },
+      "nivel_risco": "medio",
+      "anomalia": false,
+      "data_referencia": "2026-08-16"
+    },
+    {
+      "portfolio_name": "CARTEIRA GAMA",
+      "valor_primeira_parcela": 15420.0,
+      "qtd_acordos": 18,
+      "risco_composto": 61.0,
+      "decomposicao": {
+        "excecoes_pct": 61.0,
+        "quebrados_pct": 15.0,
+        "rejeitados_pct": 9.0
+      },
+      "nivel_risco": "alto",
+      "anomalia": false,
+      "data_referencia": "2026-08-16"
+    }
+  ],
+  "tool_results": {
+    "detalhar_portfolio": {
+      "portfolio": "BANCO ALFA",
+      "drilldown": "excecao",
+      "data": [
+        {
+          "nr_recebimento": 1001,
+          "valor_primeira_parcela": 600.0,
+          "cpf_mask": "123.***.***-99"
+        },
+        {
+          "nr_recebimento": 1002,
+          "valor_primeira_parcela": 900.0,
+          "cpf_mask": "456.***.***-11"
+        }
+      ],
+      "meta": {
+        "page": 1,
+        "page_size": 25,
+        "total_rows": 2,
+        "total_pages": 1,
+        "truncated": false
+      }
+    }
+  }
+}

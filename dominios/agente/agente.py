@@ -8,6 +8,8 @@ API subir mesmo sem os pacotes instalados (rota responde 503 com instrução).
 """
 import json
 import os
+import time
+from datetime import date
 from typing import Any, Callable, Dict, List, Optional
 
 from fastapi import HTTPException
@@ -15,13 +17,25 @@ from fastapi import HTTPException
 import config.settings as settings
 from core.telemetry.agent_logger import _agent_ndjson, _sentry_log
 from dominios.agente.agentes import build_agent_entries
-from dominios.agente.conversao import build_conversao_view
 from dominios.agente.cruzamento import build_cruzamento, build_ranking_agentes
-from dominios.agente.detalhe import build_maiores_acordos
+from dominios.agente.detalhe_portfolio import build_detalhe_portfolio
+from dominios.agente.errors import sanitize_final_text
 from dominios.agente.fases import build_fase_negociacao
+from dominios.agente.guards import RunState, _call_hash
+from dominios.agente.kpi_historico import build_kpi_historico
 from dominios.agente.risco import build_portfolio_entries, build_status_breakdown
-from dominios.agente.series import build_time_series
 from dominios.agente.tools import AGENT_TOOLS, dispatch_tool
+
+# Injetada quando o RunGuard força o encerramento do loop (teto de steps,
+# wall clock ou chamada repetida/espiral declarada como loop) — pede a
+# síntese final sem oferecer mais tools (mecanismo portável entre providers;
+# mais confiável que depender de tool_choice="none", cujo suporte varia).
+_FORCE_FINAL_NUDGE = (
+    "Você atingiu o limite de passos/tempo desta consulta (ou repetiu uma "
+    "chamada de tool). Não chame mais tools — responda agora, no formato "
+    "JSON exigido, com os dados que já apurou. Se algo ficou incompleto, "
+    "diga isso explicitamente no campo text."
+)
 
 _SYSTEM_PROMPT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "system_prompt.md")
 
@@ -143,17 +157,11 @@ def _build_providers(
             return {"error": "Falha ao calcular o ritmo do dia."}
         return {**envelope["data"], "meta": envelope["meta"]}
 
-    def get_series(metric: str, period: str, portfolio: Optional[str]) -> Dict[str, Any]:
-        return build_time_series(db, metric, period, portfolio, date_to, run_id=run_id)
-
     def get_breakdown() -> Dict[str, Any]:
         return build_status_breakdown(db, date_from, date_to, run_id=run_id)
 
     def get_fases(fase: Optional[str]) -> Dict[str, Any]:
         return build_fase_negociacao(db, date_to, fase, run_id=run_id)
-
-    def get_conversao(visao: str, agente: Optional[str]) -> Dict[str, Any]:
-        return build_conversao_view(db, visao, agente)
 
     def get_cruzamento(portfolio: Optional[str], agente: Optional[str]) -> Dict[str, Any]:
         return build_cruzamento(db, date_from, date_to, portfolio, agente, run_id=run_id)
@@ -161,18 +169,34 @@ def _build_providers(
     def get_ranking(dimensao: str, limit: int) -> Dict[str, Any]:
         return build_ranking_agentes(db, date_from, date_to, dimensao, limit, run_id=run_id)
 
-    def get_maiores(tipo: str, portfolio: str, limit: int) -> Dict[str, Any]:
-        return build_maiores_acordos(db, date_from, date_to, tipo, portfolio, limit, run_id=run_id)
+    # P1 (agente-tools-handoff.md §2): as 3 tools novas com date_from/date_to
+    # levam `db` POR CHAMADA (não fechado sobre a sessão como as acima) —
+    # podem consultar um banco diferente do filtro ativo. run_id continua
+    # fechado (metadado da sessão, não do argumento da tool).
+    # Nomes dos parâmetros abaixo têm que bater com as keywords usadas em
+    # dispatch_tool (tools.py) — fn(db=..., date_from=..., date_to=..., ...).
+    # Sombreiam db/date_from/date_to da sessão (linha 137) de propósito: estas
+    # 3 tools recebem `db`/datas POR CHAMADA, não fechados sobre a sessão.
+    def get_kpi_historico_call(db: str, kpi: str, date_from: str, date_to: str, granularidade: str, page: int) -> Dict[str, Any]:
+        return build_kpi_historico(db, kpi, date_from, date_to, granularidade, page, run_id=run_id)
+
+    def get_comparacao_agentes(db: str, date_from: str, date_to: str) -> List[Dict[str, Any]]:
+        return build_agent_entries(db, date_from, date_to, run_id=run_id)
+
+    def get_detalhe_portfolio_call(
+        db: str, portfolio: str, date_from: str, date_to: str, drilldown: str, page: int, page_size: int,
+    ) -> Dict[str, Any]:
+        return build_detalhe_portfolio(db, portfolio, date_from, date_to, drilldown, page, page_size, run_id=run_id)
 
     return {
         "get_ritmo_acordos_dia": get_ritmo,
-        "get_time_series": get_series,
         "get_acordo_status_breakdown": get_breakdown,
         "get_fase_negociacao": get_fases,
-        "get_efetividade_conversao": get_conversao,
         "get_cruzamento_agente_carteira": get_cruzamento,
         "get_ranking_agentes_por_dimensao": get_ranking,
-        "get_maiores_acordos": get_maiores,
+        "query_kpi_historico": get_kpi_historico_call,
+        "comparar_agentes": get_comparacao_agentes,
+        "detalhar_portfolio": get_detalhe_portfolio_call,
     }
 
 
@@ -182,9 +206,160 @@ def _tool_result_json(
     entries: List[Dict[str, Any]],
     get_agents: Callable[[], List[Dict[str, Any]]],
     providers: Dict[str, Callable[..., Any]],
+    state: RunState,
+    db: str,
+    date_from: str,
+    date_to: str,
+    run_id: Optional[str],
 ) -> str:
-    output = dispatch_tool(name, args, entries, get_agents, providers=providers)
+    """
+    `db`/`date_from`/`date_to` para a chave do cache entre requests
+    (guards.ToolCache): as tools novas (P1) já levam esses campos nos args e
+    sobrescrevem o default da sessão; as 11 antigas nunca carregam período
+    nos args (vem do fechamento da sessão em _build_providers) — sem passar
+    a janela aqui, a chave de cache colidia entre sessões com períodos
+    diferentes (achado #2 do review pt4). ndjson por chamada (P3, §5.1):
+    tool_name, args_hash, step_index, latency_ms, cache_hit, truncated,
+    row_count, error_type — nunca args nem dado bruto (LGPD/PII, §5).
+    """
+    call_db = str(args.get("db") or db)
+    call_date_from = str(args.get("date_from") or date_from)
+    call_date_to = str(args.get("date_to") or date_to)
+    t0 = time.monotonic()
+    output = state.dispatch(
+        name, args, lambda: dispatch_tool(name, args, entries, get_agents, providers=providers),
+        db=call_db, date_from=call_date_from, date_to=call_date_to,
+    )
+    latency_ms = round((time.monotonic() - t0) * 1000, 1)
+    meta = state.last_call_meta
+    _agent_ndjson(
+        "OBS",
+        "dominios/agente/agente.py:_tool_result_json",
+        "agent_tool_call",
+        {
+            "tool_name": name,
+            "args_hash": _call_hash(name, args),
+            "step_index": meta.get("step_index"),
+            "latency_ms": latency_ms,
+            "cache_hit": meta.get("cache_hit", False),
+            "truncated": meta.get("truncated", False),
+            "row_count": meta.get("row_count"),
+            "error_type": meta.get("error_type"),
+        },
+        run_id=run_id,
+    )
     return json.dumps(output, ensure_ascii=False, default=str)
+
+
+def _msg_role(msg: Any) -> Optional[str]:
+    return msg.get("role") if isinstance(msg, dict) else getattr(msg, "role", None)
+
+
+def _append_user_text(convo: List[Any], text: str) -> None:
+    """
+    Anexa `text` como turno "user" respeitando a alternância estrita de role
+    exigida pela API da Anthropic. Se `convo` já termina em "user" (ex.: o
+    tool_result da rodada anterior), anexa como bloco de texto adicional NA
+    MESMA mensagem em vez de empilhar uma nova — duas mensagens "user"
+    consecutivas são rejeitadas pela API. Regressão do próprio fix de
+    round-exhaustion desta sessão, achado #3 do review pt4: o nudge de
+    força-final sempre disparava DEPOIS de pelo menos uma rodada de tool já
+    ter anexado {"role": "user", "content": tool_results}.
+    """
+    if convo and _msg_role(convo[-1]) == "user":
+        content = convo[-1]["content"]
+        if isinstance(content, str):
+            convo[-1]["content"] = [{"type": "text", "text": content}, {"type": "text", "text": text}]
+        else:
+            content.append({"type": "text", "text": text})
+    else:
+        convo.append({"role": "user", "content": text})
+
+
+def _msg_tool_calls(msg: Any) -> Optional[List[Any]]:
+    return msg.get("tool_calls") if isinstance(msg, dict) else getattr(msg, "tool_calls", None)
+
+
+def _compact_deepseek_convo(convo: List[Any], keep_recent_groups: int = 1) -> List[Any]:
+    """
+    Compaction de contexto (§3 item 5, P3): quando RunState.budget_near_limit()
+    fica true, resume os grupos assistant(tool_calls)+tool(resultados) mais
+    antigos num bloco "fatos apurados" e remove os JSONs brutos — sempre
+    removendo o par inteiro (nunca um tool_call órfão, que quebraria a API).
+    Preserva a mensagem de sistema, todo o histórico de usuário anterior ao
+    1º grupo, e os `keep_recent_groups` grupos mais recentes intactos.
+    """
+    groups: List[Any] = []
+    i = 0
+    while i < len(convo):
+        if _msg_role(convo[i]) == "assistant" and _msg_tool_calls(convo[i]):
+            j = i + 1
+            while j < len(convo) and _msg_role(convo[j]) == "tool":
+                j += 1
+            groups.append((i, j))
+            i = j
+        else:
+            i += 1
+
+    if len(groups) <= keep_recent_groups:
+        return convo
+
+    to_remove = groups[: len(groups) - keep_recent_groups]
+    fatos: List[str] = []
+    for start, _end in to_remove:
+        for tc in _msg_tool_calls(convo[start]) or []:
+            name = tc.get("function", {}).get("name") if isinstance(tc, dict) else tc.function.name
+            fatos.append(name)
+
+    resumo_msg = {
+        "role": "user",
+        "content": (
+            "[Resumo automático — orçamento de contexto] Chamadas de tool anteriores já "
+            "consultadas nesta conversa (resultados brutos removidos para caber no orçamento): "
+            + ", ".join(fatos) + ". Não repita essas chamadas; use o que já apurou."
+        ),
+    }
+    keep_from = to_remove[-1][1]
+    return convo[: groups[0][0]] + [resumo_msg] + convo[keep_from:]
+
+
+def _compact_anthropic_convo(convo: List[Any], keep_recent_groups: int = 1) -> List[Any]:
+    """Mesma ideia de _compact_deepseek_convo, mas no formato Anthropic (blocos de conteúdo)."""
+    groups: List[Any] = []
+    i = 0
+    while i < len(convo):
+        msg = convo[i]
+        content = msg.get("content") if isinstance(msg, dict) else None
+        is_tool_turn = (
+            isinstance(msg, dict) and msg.get("role") == "assistant" and isinstance(content, list)
+            and any(getattr(b, "type", None) == "tool_use" for b in content)
+        )
+        if is_tool_turn and i + 1 < len(convo) and _msg_role(convo[i + 1]) == "user":
+            groups.append((i, i + 2))
+            i += 2
+        else:
+            i += 1
+
+    if len(groups) <= keep_recent_groups:
+        return convo
+
+    to_remove = groups[: len(groups) - keep_recent_groups]
+    fatos: List[str] = []
+    for start, _end in to_remove:
+        for block in convo[start]["content"]:
+            if getattr(block, "type", None) == "tool_use":
+                fatos.append(getattr(block, "name", "?"))
+
+    resumo_msg = {
+        "role": "user",
+        "content": (
+            "[Resumo automático — orçamento de contexto] Chamadas de tool anteriores já "
+            "consultadas nesta conversa (resultados brutos removidos para caber no orçamento): "
+            + ", ".join(fatos) + ". Não repita essas chamadas; use o que já apurou."
+        ),
+    }
+    keep_from = to_remove[-1][1]
+    return convo[: groups[0][0]] + [resumo_msg] + convo[keep_from:]
 
 
 def _loop_anthropic(
@@ -194,6 +369,10 @@ def _loop_anthropic(
     get_agents: Callable[[], List[Dict[str, Any]]],
     providers: Dict[str, Callable[..., Any]],
     run_id: Optional[str],
+    state: RunState,
+    db: str,
+    date_from: str,
+    date_to: str,
 ) -> str:
     try:
         import anthropic
@@ -214,7 +393,16 @@ def _loop_anthropic(
 
     response = None
     try:
-        for _ in range(settings.AGENT_MAX_TOOL_ITERS + 1):
+        for i in range(settings.AGENT_MAX_TOOL_ITERS + 1):
+            if state.force_final() or i == settings.AGENT_MAX_TOOL_ITERS:
+                _append_user_text(convo, _FORCE_FINAL_NUDGE)
+                response = client.messages.create(
+                    model=settings.AGENT_MODEL,
+                    max_tokens=2048,
+                    system=system_prompt,
+                    messages=convo,
+                )
+                break
             response = client.messages.create(
                 model=settings.AGENT_MODEL,
                 max_tokens=2048,
@@ -232,9 +420,11 @@ def _loop_anthropic(
                 tool_results.append({
                     "type": "tool_result",
                     "tool_use_id": block.id,
-                    "content": _tool_result_json(block.name, dict(block.input or {}), entries, get_agents, providers),
+                    "content": _tool_result_json(block.name, dict(block.input or {}), entries, get_agents, providers, state, db, date_from, date_to, run_id),
                 })
             convo.append({"role": "user", "content": tool_results})
+            if state.budget_near_limit():
+                convo = _compact_anthropic_convo(convo)
     except anthropic.APIError as exc:
         _agent_ndjson(
             "OBS",
@@ -261,6 +451,10 @@ def _loop_deepseek(
     get_agents: Callable[[], List[Dict[str, Any]]],
     providers: Dict[str, Callable[..., Any]],
     run_id: Optional[str],
+    state: RunState,
+    db: str,
+    date_from: str,
+    date_to: str,
 ) -> str:
     """Mesmo loop de tools no formato OpenAI (API do DeepSeek é compatível)."""
     try:
@@ -294,7 +488,19 @@ def _loop_deepseek(
 
     message = None
     try:
-        for _ in range(settings.AGENT_MAX_TOOL_ITERS + 1):
+        for i in range(settings.AGENT_MAX_TOOL_ITERS + 1):
+            if state.force_final() or i == settings.AGENT_MAX_TOOL_ITERS:
+                # DeepSeek/OpenAI não exige alternância estrita de role (mensagens
+                # "tool" seguidas de "user" são normais) — sem o bug do #3, que é
+                # específico da API da Anthropic. Ver _loop_anthropic acima.
+                convo.append({"role": "user", "content": _FORCE_FINAL_NUDGE})
+                response = client.chat.completions.create(
+                    model=settings.AGENT_MODEL,
+                    max_tokens=2048,
+                    messages=convo,
+                )
+                message = response.choices[0].message
+                break
             response = client.chat.completions.create(
                 model=settings.AGENT_MODEL,
                 max_tokens=2048,
@@ -313,8 +519,10 @@ def _loop_deepseek(
                 convo.append({
                     "role": "tool",
                     "tool_call_id": tool_call.id,
-                    "content": _tool_result_json(tool_call.function.name, args, entries, get_agents, providers),
+                    "content": _tool_result_json(tool_call.function.name, args, entries, get_agents, providers, state, db, date_from, date_to, run_id),
                 })
+            if state.budget_near_limit():
+                convo = _compact_deepseek_convo(convo)
     except openai.OpenAIError as exc:
         _agent_ndjson(
             "OBS",
@@ -351,18 +559,33 @@ def run_agent(
     system_prompt = _load_system_prompt(date_to)
     system_prompt += (
         f"\n\n## Contexto desta sessão\n"
+        f"- Data real de hoje (sistema): {date.today().isoformat()} — use sempre que a "
+        f"pergunta mencionar \"hoje\", independente do período filtrado abaixo.\n"
         f"- Base de dados ativa: {db}\n"
-        f"- Período analisado: {date_from} a {date_to}\n"
+        f"- Período analisado (filtro selecionado pelo usuário): {date_from} a {date_to}\n"
         f"- Carteiras carregadas no período: {len(entries)}\n"
     )
 
     providers = _build_providers(db, date_from, date_to, run_id)
+    state = RunState()
 
     if settings.AGENT_PROVIDER == "deepseek":
-        final_text = _loop_deepseek(system_prompt, messages, entries, get_agents, providers, run_id)
+        final_text = _loop_deepseek(system_prompt, messages, entries, get_agents, providers, run_id, state, db, date_from, date_to)
     else:
-        final_text = _loop_anthropic(system_prompt, messages, entries, get_agents, providers, run_id)
+        final_text = _loop_anthropic(system_prompt, messages, entries, get_agents, providers, run_id, state, db, date_from, date_to)
 
     agent_response = _parse_agent_final_text(final_text)
+    clean_text = sanitize_final_text(agent_response["text"])
+    if clean_text is None:
+        agent_response = {
+            "text": "Não posso exibir esta resposta como veio — ela continha conteúdo não permitido "
+                    "(SQL, dado bruto ou erro interno). Reformule a pergunta ou tente novamente.",
+            "highlights": [],
+            "suggested_actions": [],
+            "data_sources": agent_response.get("data_sources", []),
+            "confidence": "low",
+        }
+    else:
+        agent_response["text"] = clean_text
     agent_response["data_referencia"] = date_to
     return agent_response

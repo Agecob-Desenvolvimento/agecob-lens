@@ -11,3 +11,5 @@ openai
 pdfplumber
 python-multipart
 sentry-sdk[fastapi]>=2.44.0
+freezegun
+pyyaml

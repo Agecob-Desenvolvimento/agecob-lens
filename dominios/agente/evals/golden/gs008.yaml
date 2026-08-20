@@ -1,0 +1,32 @@
+id: GS-008
+categoria: fuzzy
+pergunta: Como está a carteira Alpha?
+sessao:
+  db: COBwebRCBAUTOS
+  date_from: '2026-08-10'
+  date_to: '2026-08-16'
+fixture: gs008.json
+mock_model:
+  turns:
+  - tool_call:
+      name: get_portfolio_metrics
+      args:
+        portfolio_name: alpha
+  - final:
+      text: Não encontrei uma carteira chamada "Alpha" no período. As carteiras disponíveis são **Banco
+        Alfa** e **Carteira Gama** — quer que eu detalhe uma delas?
+      highlights: []
+      suggested_actions: []
+      data_sources:
+      - get_portfolio_metrics
+      confidence: low
+esperado:
+  deve_passar: true
+  tools_chamadas_any_of:
+  - get_portfolio_metrics
+  resposta:
+    numeros_rastreaveis: false
+    contem_texto:
+    - banco alfa
+    proibido:
+    - traceback

@@ -1,0 +1,31 @@
+id: GS-002
+categoria: armadilha
+pergunta: Qual o CPC da Adrianna nesse período?
+sessao:
+  db: COBwebRCBAUTOS
+  date_from: '2026-08-10'
+  date_to: '2026-08-16'
+fixture: gs002.json
+mock_model:
+  turns:
+  - tool_call:
+      name: get_agent_performance
+      args:
+        agent_name: adrianna
+  - final:
+      text: '**Adrianna Silva** teve **97 CPCs** (contatos com a pessoa certa) no período — CPC é contagem,
+        não percentual.'
+      highlights: []
+      suggested_actions: []
+      data_sources:
+      - get_agent_performance
+      confidence: high
+esperado:
+  deve_passar: true
+  tools_chamadas_any_of:
+  - get_agent_performance
+  resposta:
+    numeros_rastreaveis: true
+    proibido:
+    - 97%
+    - cpc de 97%

@@ -10,12 +10,13 @@ import types
 
 import config.settings as settings
 from dominios.agente import risco as risco_mod
-from dominios.agente.agente import _parse_agent_final_text, run_agent
+from dominios.agente.agente import _compact_anthropic_convo, _compact_deepseek_convo, _parse_agent_final_text, run_agent
 from dominios.agente.agentes import _agent_entries_from_rows
 from dominios.agente.conversao import _trim_diaria, _trim_mensal, _trim_por_agente
 from dominios.agente.cruzamento import _cruzamento_summary
-from dominios.agente.detalhe import _maiores_por_valor_total
+from dominios.agente.detalhe_portfolio import _find_portfolio_name, _mask_cpf
 from dominios.agente.fases import _fase_summary
+from dominios.agente.kpi_historico import _rebucket
 from dominios.agente.risco import _portfolio_entries_from_rollup, _status_breakdown_from_rows
 from dominios.agente.series import _series_from_rows, _tendencia
 from dominios.agente.tools import AGENT_TOOLS, dispatch_tool
@@ -183,18 +184,35 @@ def test_tool_compare_portfolios():
     assert "error" in empty
 
 
-def test_tool_explain_business_rule():
-    known = dispatch_tool("explain_business_rule", {"rule_name": "risco_composto_formula"}, SAMPLE_ENTRIES, _NO_AGENTS)
-    assert "MAX" in known["explanation"]
+def test_tool_explicar_metrica():
+    known = dispatch_tool("explicar_metrica", {"termo": "risco_composto_formula"}, SAMPLE_ENTRIES, _NO_AGENTS)
+    assert known["tipo"] == "kpi"
+    assert "MAX" in known["formula"]
 
-    unknown = dispatch_tool("explain_business_rule", {"rule_name": "nao-existe"}, SAMPLE_ENTRIES, _NO_AGENTS)
-    assert "error" in unknown
-    assert "denominador" in unknown["available_rules"]
+    aliased = dispatch_tool("explicar_metrica", {"termo": "CPC"}, SAMPLE_ENTRIES, _NO_AGENTS)
+    assert aliased["tipo"] == "kpi"
+
+    status_termo = dispatch_tool("explicar_metrica", {"termo": "excecao"}, SAMPLE_ENTRIES, _NO_AGENTS)
+    assert status_termo["tipo"] == "status"
+    assert status_termo["valores"] == [5]
+    assert "caveat" in status_termo
+
+    unknown = dispatch_tool("explicar_metrica", {"termo": "nao-existe"}, SAMPLE_ENTRIES, _NO_AGENTS)
+    assert unknown["ok"] is False
+    assert unknown["error_type"] == "validation"
+    assert "denominador" in unknown["termos_disponiveis"]
+
+    invalid = dispatch_tool("explicar_metrica", {"termo": ""}, SAMPLE_ENTRIES, _NO_AGENTS)
+    assert invalid["ok"] is False
+    assert invalid["error_type"] == "validation"
 
 
 def test_tool_desconhecida():
     result = dispatch_tool("tool_que_nao_existe", {}, SAMPLE_ENTRIES, _NO_AGENTS)
-    assert "error" in result
+    assert result["ok"] is False
+    assert result["error_type"] == "unknown_tool"
+    assert result["retryable"] is False
+    assert "get_portfolio_metrics" in result["available_tools"]
 
 
 # ─── performance por agente (AgentEntry + tools) ─────────────────
@@ -404,48 +422,50 @@ def test_fase_summary_detalha_carteiras_da_fase():
 
 
 def test_tools_com_provider_ausente_degradam_para_erro():
-    for tool in ("get_ritmo_acordos_dia", "get_time_series", "get_acordo_status_breakdown", "get_fase_negociacao"):
-        args = {"metric": "valor", "period": "7d"} if tool == "get_time_series" else {}
-        result = dispatch_tool(tool, args, SAMPLE_ENTRIES, _NO_AGENTS)
+    for tool in ("get_ritmo_acordos_dia", "get_acordo_status_breakdown", "get_fase_negociacao"):
+        result = dispatch_tool(tool, {}, SAMPLE_ENTRIES, _NO_AGENTS)
         assert "error" in result
 
 
-def test_tool_get_time_series_valida_e_resolve_carteira():
+_KPI_ARGS = {"db": "COBwebRCBAUTOS", "kpi": "qtd_acordos", "date_from": "2026-08-01", "date_to": "2026-08-10"}
+
+
+def test_tool_query_kpi_historico_valida_e_despacha():
     seen = {}
 
-    def fake_series(metric, period, portfolio):
-        seen.update(metric=metric, period=period, portfolio=portfolio)
-        return {"metric": metric}
+    def fake_kpi(**kwargs):
+        seen.update(kwargs)
+        return {"kpi": kwargs["kpi"]}
 
-    providers = {"get_time_series": fake_series}
+    providers = {"query_kpi_historico": fake_kpi}
 
-    ok = dispatch_tool(
-        "get_time_series", {"metric": "risco", "period": "30d", "portfolio": "gama"},
+    ok = dispatch_tool("query_kpi_historico", _KPI_ARGS, SAMPLE_ENTRIES, _NO_AGENTS, providers=providers)
+    assert ok == {"kpi": "qtd_acordos"}
+    assert seen == {
+        "db": "COBwebRCBAUTOS", "kpi": "qtd_acordos",
+        "date_from": "2026-08-01", "date_to": "2026-08-10",
+        "granularidade": "dia", "page": 1,
+    }
+
+    bad_kpi = dispatch_tool(
+        "query_kpi_historico", {**_KPI_ARGS, "kpi": "taxa_contato_pct"},
         SAMPLE_ENTRIES, _NO_AGENTS, providers=providers,
     )
-    assert ok == {"metric": "risco"}
-    # nome parcial resolvido para o nome canônico do dataset da sessão
-    assert seen["portfolio"] == "CARTEIRA GAMA"
+    assert bad_kpi["ok"] is False
+    assert bad_kpi["error_type"] == "validation"
 
-    bad_metric = dispatch_tool(
-        "get_time_series", {"metric": "ticket", "period": "7d"},
+    janela_grande = dispatch_tool(
+        "query_kpi_historico", {**_KPI_ARGS, "date_from": "2026-01-01"},
         SAMPLE_ENTRIES, _NO_AGENTS, providers=providers,
     )
-    assert "error" in bad_metric
-    assert "valor" in bad_metric["available_metrics"]
+    assert janela_grande["ok"] is False
 
-    bad_period = dispatch_tool(
-        "get_time_series", {"metric": "valor", "period": "15d"},
+    extra_forbidden = dispatch_tool(
+        "query_kpi_historico", {**_KPI_ARGS, "portfolio": "gama"},
         SAMPLE_ENTRIES, _NO_AGENTS, providers=providers,
     )
-    assert "error" in bad_period
-
-    missing_portfolio = dispatch_tool(
-        "get_time_series", {"metric": "valor", "period": "7d", "portfolio": "nao-existe"},
-        SAMPLE_ENTRIES, _NO_AGENTS, providers=providers,
-    )
-    assert "error" in missing_portfolio
-    assert "BANCO ALFA" in missing_portfolio["available_portfolios"]
+    assert extra_forbidden["ok"] is False
+    assert extra_forbidden["error_type"] == "validation"
 
 
 def test_tool_get_fase_negociacao_valida_fase():
@@ -560,61 +580,57 @@ def test_cruzamento_summary_agrupa_contraparte_por_dimensao():
     assert rvon["valor_rejeitados"] == 50.0
 
 
-# ─── maiores acordos (detalhe) ───────────────────────────────────
-
-
-def test_maiores_por_valor_total_ordena_e_limita():
-    rows = [
-        {"NR_RECEBIMENTO": 1, "valor_primeira_parcela": 100, "valor_total": 1200, "total_parcelas": 12,
-         "agente": "ADRI", "nome_devedor": "FULANO", "cpf_mask": "123.***.***-99",
-         "data_acordo": "2026-06-10", "data_vencimento": "2026-06-15"},
-        {"NR_RECEBIMENTO": 2, "valor_primeira_parcela": 900, "valor_total": 900, "total_parcelas": 1,
-         "agente": "RVON", "nome_devedor": "BELTRANO", "cpf_mask": "456.***.***-11",
-         "data_acordo": "2026-06-10", "data_vencimento": "2026-06-12"},
-        {"NR_RECEBIMENTO": 3, "valor_primeira_parcela": 50, "valor_total": 5000, "total_parcelas": 10,
-         "agente": "ADRI", "nome_devedor": "CICLANO", "cpf_mask": "789.***.***-22",
-         "data_acordo": "2026-06-10", "data_vencimento": "2026-07-10"},
-    ]
-    top2 = _maiores_por_valor_total(rows, limit=2)
-    assert [a["nr_recebimento"] for a in top2] == [3, 1]  # valor_total desc, não 1ª parcela
-    assert top2[0]["valor_total"] == 5000.0
-    assert top2[0]["cpf_mask"] == "789.***.***-22"
-
-
-def test_maiores_nao_expoe_nome_do_devedor():
-    """Este dict vira prompt e sai da LAN para o provedor de LLM — nome não vai junto."""
-    rows = [
-        {"NR_RECEBIMENTO": 1, "valor_primeira_parcela": 100, "valor_total": 1200, "total_parcelas": 12,
-         "agente": "ADRI", "nome_devedor": "FULANO DE TAL", "cpf_mask": "123.***.***-99",
-         "data_acordo": "2026-06-10", "data_vencimento": "2026-06-15"},
-    ]
-    saida = _maiores_por_valor_total(rows, limit=1)
-
-    assert "nome_devedor" not in saida[0]
-    assert "FULANO DE TAL" not in json.dumps(saida, ensure_ascii=False)
-    assert saida[0]["cpf_mask"] == "123.***.***-99"  # identificador mascarado permanece
-
 
 # ─── dispatch das tools novas (conversão / cruzamento / ranking / maiores) ───
 
 
-def test_tool_conversao_valida_visao_e_resolve_agente():
-    seen = {}
-    providers = {"get_efetividade_conversao": lambda visao, agente: seen.update(visao=visao, agente=agente) or {"ok": 1}}
+_COMPARAR_ARGS = {
+    "db": "COBwebRCBAUTOS", "date_from": "2026-08-01", "date_to": "2026-08-10",
+    "metricas": ["qtd_acordos", "valor_primeira_parcela"],
+}
 
-    ok = dispatch_tool("get_efetividade_conversao", {"visao": "mensal"}, SAMPLE_ENTRIES, _AGENTS, providers=providers)
-    assert ok == {"ok": 1}
-    assert seen == {"visao": "mensal", "agente": None}
 
-    com_agente = dispatch_tool(
-        "get_efetividade_conversao", {"visao": "por_agente", "agent_name": "rvon"},
-        SAMPLE_ENTRIES, _AGENTS, providers=providers,
+def test_tool_comparar_agentes():
+    providers = {"comparar_agentes": lambda **kwargs: SAMPLE_AGENTS}
+
+    ok = dispatch_tool(
+        "comparar_agentes", {**_COMPARAR_ARGS, "agent_keys": ["ADRI", "RVON"]},
+        SAMPLE_ENTRIES, _NO_AGENTS, providers=providers,
     )
-    assert com_agente == {"ok": 1}
-    assert seen["agente"] == "RONIE VON"
+    by_login = {a["login"]: a for a in ok["agentes"]}
+    assert by_login["ADRI"]["qtd_acordos"] == 12
+    assert by_login["RVON"]["valor_primeira_parcela"] == 2000.0
 
-    invalida = dispatch_tool("get_efetividade_conversao", {"visao": "anual"}, SAMPLE_ENTRIES, _AGENTS, providers=providers)
-    assert "error" in invalida
+    # alias de nome de negócio -> campo real do AgentEntry
+    aliased = dispatch_tool(
+        "comparar_agentes",
+        {**_COMPARAR_ARGS, "agent_keys": ["ADRI", "RVON"], "metricas": ["qtd_contatos_cpc", "taxa_conversao_pct"]},
+        SAMPLE_ENTRIES, _NO_AGENTS, providers=providers,
+    )
+    adri = next(a for a in aliased["agentes"] if a["login"] == "ADRI")
+    assert adri["qtd_contatos_cpc"] == 97          # mapeado de qtd_contatos
+    assert adri["taxa_conversao_pct"] == 12.37     # mapeado de conversao_pct
+
+    missing = dispatch_tool(
+        "comparar_agentes", {**_COMPARAR_ARGS, "agent_keys": ["ADRI", "nao-existe"]},
+        SAMPLE_ENTRIES, _NO_AGENTS, providers=providers,
+    )
+    assert missing["ok"] is False
+    assert "não encontrado" in missing["hint"]
+
+    sistema = dispatch_tool(
+        "comparar_agentes", {**_COMPARAR_ARGS, "agent_keys": ["ADRI", "COBDESANTOS"]},
+        SAMPLE_ENTRIES, _NO_AGENTS, providers=providers,
+    )
+    assert sistema["ok"] is False
+    assert "conta de sistema" in sistema["hint"]
+
+    too_few = dispatch_tool(
+        "comparar_agentes", {**_COMPARAR_ARGS, "agent_keys": ["ADRI"]},
+        SAMPLE_ENTRIES, _NO_AGENTS, providers=providers,
+    )
+    assert too_few["ok"] is False
+    assert too_few["error_type"] == "validation"
 
 
 def test_tool_cruzamento_exige_exatamente_um_lado():
@@ -660,28 +676,45 @@ def test_tool_ranking_dimensao_e_limite():
     assert "gerados" in invalida["available_dimensoes"]
 
 
-def test_tool_maiores_acordos_valida_tipo_e_carteira():
+_DETALHAR_ARGS = {"db": "COBwebRCBAUTOS", "portfolio": "beta", "date_from": "2026-08-01", "date_to": "2026-08-10"}
+
+
+def test_tool_detalhar_portfolio_valida_e_despacha():
     seen = {}
-    providers = {"get_maiores_acordos": lambda t, p, l: seen.update(t=t, p=p, l=l) or {"ok": 1}}
+
+    def fake_detalhe(**kwargs):
+        seen.update(kwargs)
+        return {"ok": 1}
+
+    providers = {"detalhar_portfolio": fake_detalhe}
 
     ok = dispatch_tool(
-        "get_maiores_acordos", {"tipo": "excecoes", "portfolio": "beta", "limit": 99},
+        "detalhar_portfolio", {**_DETALHAR_ARGS, "drilldown": "excecao"},
         SAMPLE_ENTRIES, _NO_AGENTS, providers=providers,
     )
     assert ok == {"ok": 1}
-    assert seen == {"t": "excecoes", "p": "BANCO BETA", "l": 20}  # clamp 20
+    assert seen == {
+        "db": "COBwebRCBAUTOS", "portfolio": "beta",
+        "date_from": "2026-08-01", "date_to": "2026-08-10",
+        "drilldown": "excecao", "page": 1, "page_size": 25,
+    }
+
+    default_drilldown = dispatch_tool("detalhar_portfolio", _DETALHAR_ARGS, SAMPLE_ENTRIES, _NO_AGENTS, providers=providers)
+    assert default_drilldown == {"ok": 1}
+    assert seen["drilldown"] == "resumo"
 
     tipo_ruim = dispatch_tool(
-        "get_maiores_acordos", {"tipo": "pagos", "portfolio": "beta"}, SAMPLE_ENTRIES, _NO_AGENTS, providers=providers
-    )
-    assert "error" in tipo_ruim
-
-    carteira_ruim = dispatch_tool(
-        "get_maiores_acordos", {"tipo": "acordos", "portfolio": "nao-existe"},
+        "detalhar_portfolio", {**_DETALHAR_ARGS, "drilldown": "pagos"},
         SAMPLE_ENTRIES, _NO_AGENTS, providers=providers,
     )
-    assert "error" in carteira_ruim
-    assert "BANCO ALFA" in carteira_ruim["available_portfolios"]
+    assert tipo_ruim["ok"] is False
+    assert tipo_ruim["error_type"] == "validation"
+
+    page_size_ruim = dispatch_tool(
+        "detalhar_portfolio", {**_DETALHAR_ARGS, "page_size": 99},
+        SAMPLE_ENTRIES, _NO_AGENTS, providers=providers,
+    )
+    assert page_size_ruim["ok"] is False
 
 
 def test_tool_list_agents_aceita_novas_metricas():
@@ -879,3 +912,262 @@ def test_run_agent_loop_deepseek_offline(monkeypatch):
     assert second[-1]["role"] == "tool"
     assert second[-1]["tool_call_id"] == "call_1"
     assert "BANCO BETA" in second[-1]["content"]
+
+
+def test_run_agent_loop_anthropic_forces_final_when_rounds_exhausted(monkeypatch):
+    """Regressão: modelo que encadeia tool_use em toda rodada não pode devolver
+    resposta vazia quando AGENT_MAX_TOOL_ITERS esgota antes do RunGuard (steps<10,
+    wall_clock<90s) forçar final sozinho — a última rodada permitida precisa
+    sempre virar uma chamada sem `tools` (nudge de final forçado)."""
+    monkeypatch.setattr(settings, "AGENT_MAX_TOOL_ITERS", 2)
+    final_json = '{"text": "Só consegui apurar parte dos dados.", "confidence": "low"}'
+    tool_use_response = _FakeResponse("tool_use", [
+        _Block(type="tool_use", id="tu_x", name="filter_portfolios_by_risk", input={"level": "medio"}),
+    ])
+    final_response = _FakeResponse("end_turn", [_Block(type="text", text=final_json)])
+    seen_requests = []
+
+    class _FakeMessages:
+        def create(self, **kwargs):
+            seen_requests.append(kwargs)
+            return final_response if "tools" not in kwargs else tool_use_response
+
+    class _FakeAnthropic:
+        def __init__(self, api_key, **kwargs):
+            self.messages = _FakeMessages()
+
+    fake_sdk = types.ModuleType("anthropic")
+    fake_sdk.Anthropic = _FakeAnthropic
+    fake_sdk.APIError = type("APIError", (Exception,), {})
+    monkeypatch.setitem(sys.modules, "anthropic", fake_sdk)
+    monkeypatch.setattr(settings, "AGENT_PROVIDER", "anthropic")
+    _stub_dataset(monkeypatch)
+
+    result = run_agent(
+        [{"role": "user", "content": "qual a carteira de maior risco?"}],
+        "todos", "2026-06-10", "2026-06-10",
+    )
+
+    assert result["text"] == "Só consegui apurar parte dos dados."
+    assert len(seen_requests) == 3  # 2 rodadas de tool + 1 forçada
+    assert "tools" not in seen_requests[-1]  # última rodada é a chamada forçada, sem tools
+
+
+def test_run_agent_loop_deepseek_forces_final_when_rounds_exhausted(monkeypatch):
+    """Mesma regressão no formato OpenAI-compatível usado pelo DeepSeek."""
+    monkeypatch.setattr(settings, "AGENT_MAX_TOOL_ITERS", 2)
+
+    class _ToolFn:
+        name = "filter_portfolios_by_risk"
+        arguments = '{"level": "medio"}'
+
+    class _ToolCall:
+        id = "call_x"
+        function = _ToolFn()
+
+    final_json = '{"text": "Só consegui apurar parte dos dados.", "confidence": "low"}'
+    tool_use_response = _Block(choices=[_Block(message=_Block(content=None, tool_calls=[_ToolCall()]))])
+    final_response = _Block(choices=[_Block(message=_Block(content=final_json, tool_calls=None))])
+    seen_requests = []
+
+    class _FakeCompletions:
+        def create(self, **kwargs):
+            seen_requests.append(kwargs)
+            return final_response if "tools" not in kwargs else tool_use_response
+
+    class _FakeOpenAIClient:
+        def __init__(self, api_key, base_url, **kwargs):
+            self.chat = _Block(completions=_FakeCompletions())
+
+    fake_sdk = types.ModuleType("openai")
+    fake_sdk.OpenAI = _FakeOpenAIClient
+    fake_sdk.OpenAIError = type("OpenAIError", (Exception,), {})
+    monkeypatch.setitem(sys.modules, "openai", fake_sdk)
+    monkeypatch.setattr(settings, "AGENT_PROVIDER", "deepseek")
+    monkeypatch.setattr(settings, "AGENT_MODEL", "deepseek-chat")
+    _stub_dataset(monkeypatch)
+
+    result = run_agent(
+        [{"role": "user", "content": "alguma carteira em risco médio?"}],
+        "todos", "2026-06-10", "2026-06-10",
+    )
+
+    assert result["text"] == "Só consegui apurar parte dos dados."
+    assert len(seen_requests) == 3
+    assert "tools" not in seen_requests[-1]
+
+
+def test_run_agent_loop_anthropic_forces_final_nao_duplica_role_user(monkeypatch):
+    """
+    Achado #3 do review pt4 — regressão do próprio fix de round-exhaustion
+    (pt3): force-final sempre dispara depois de pelo menos uma rodada de tool
+    já ter anexado {"role": "user", "content": tool_results} em convo. Anexar
+    OUTRA mensagem "user" pro nudge de força-final cria duas mensagens "user"
+    consecutivas, que a API real da Anthropic rejeita (alternância estrita de
+    role). O fake client aqui não valida isso sozinho — por isso o teste de
+    round-exhaustion do pt3 (que só confere len(seen_requests) e ausência de
+    "tools") não pegou a regressão. A prova é inspecionar a lista de
+    mensagens enviada na última chamada e confirmar que nenhum par
+    consecutivo repete role.
+    """
+    monkeypatch.setattr(settings, "AGENT_MAX_TOOL_ITERS", 2)
+    final_json = '{"text": "Só consegui apurar parte dos dados.", "confidence": "low"}'
+    tool_use_response = _FakeResponse("tool_use", [
+        _Block(type="tool_use", id="tu_x", name="filter_portfolios_by_risk", input={"level": "medio"}),
+    ])
+    final_response = _FakeResponse("end_turn", [_Block(type="text", text=final_json)])
+    seen_requests = []
+
+    class _FakeMessages:
+        def create(self, **kwargs):
+            seen_requests.append(kwargs)
+            return final_response if "tools" not in kwargs else tool_use_response
+
+    class _FakeAnthropic:
+        def __init__(self, api_key, **kwargs):
+            self.messages = _FakeMessages()
+
+    fake_sdk = types.ModuleType("anthropic")
+    fake_sdk.Anthropic = _FakeAnthropic
+    fake_sdk.APIError = type("APIError", (Exception,), {})
+    monkeypatch.setitem(sys.modules, "anthropic", fake_sdk)
+    monkeypatch.setattr(settings, "AGENT_PROVIDER", "anthropic")
+    _stub_dataset(monkeypatch)
+
+    run_agent(
+        [{"role": "user", "content": "qual a carteira de maior risco?"}],
+        "todos", "2026-06-10", "2026-06-10",
+    )
+
+    ultima_convo = seen_requests[-1]["messages"]
+    roles = [m["role"] if isinstance(m, dict) else getattr(m, "role", None) for m in ultima_convo]
+    for anterior, atual in zip(roles, roles[1:]):
+        assert anterior != atual, f"roles consecutivos repetidos: {roles}"
+
+
+# ─── kpi_historico._rebucket (P1: query_kpi_historico) ────────────
+
+
+def test_rebucket_dia_e_identidade():
+    points = [{"data": "2026-08-01", "valor": 10.0}, {"data": "2026-08-02", "valor": 20.0}]
+    assert _rebucket(points, "valor_acordos_gerados", "dia") == points
+
+
+def test_rebucket_semana_soma_valor_e_qtd():
+    # 2026-08-03 é segunda; 01-02/ago (sáb/dom) caem na semana anterior, cuja
+    # segunda-feira é 2026-07-27.
+    points = [
+        {"data": "2026-08-01", "valor": 10.0},
+        {"data": "2026-08-02", "valor": 5.0},
+        {"data": "2026-08-03", "valor": 7.0},
+        {"data": "2026-08-04", "valor": 3.0},
+    ]
+    out = {p["data"]: p["valor"] for p in _rebucket(points, "valor_acordos_gerados", "semana")}
+    assert out["2026-07-27"] == 15.0
+    assert out["2026-08-03"] == 10.0
+
+
+def test_rebucket_risco_usa_maximo_nao_soma():
+    points = [{"data": "2026-08-01", "valor": 30.0}, {"data": "2026-08-02", "valor": 80.0}]
+    out = _rebucket(points, "risco_composto_pct", "mes")
+    assert out == [{"data": "2026-08-01", "valor": 80.0}]
+
+
+def test_rebucket_qtd_acordos_vira_int():
+    points = [{"data": "2026-08-01", "valor": 3}, {"data": "2026-08-02", "valor": 4}]
+    out = _rebucket(points, "qtd_acordos", "mes")
+    assert out == [{"data": "2026-08-01", "valor": 7}]
+    assert isinstance(out[0]["valor"], int)
+
+
+# ─── detalhe_portfolio (P1: detalhar_portfolio) ────────────────────
+
+
+def test_mask_cpf_preserva_esquema_historico():
+    assert _mask_cpf("12345678999") == "123.***.***-99"
+    assert _mask_cpf("123.456.789-99") == "123.***.***-99"
+    assert _mask_cpf("") == "***"
+    assert _mask_cpf(None) == "***"
+
+
+def test_find_portfolio_name_exato_e_substring():
+    entries = [{"portfolio_name": "BANCO ALFA"}, {"portfolio_name": "CARTEIRA GAMA"}]
+    assert _find_portfolio_name("banco alfa", entries) == "BANCO ALFA"
+    assert _find_portfolio_name("gama", entries) == "CARTEIRA GAMA"
+    assert _find_portfolio_name("nao-existe", entries) is None
+
+
+# ─── compaction de contexto (P3: _compact_deepseek_convo / _compact_anthropic_convo) ─
+
+
+def _deepseek_tool_call(call_id, name):
+    return _Block(id=call_id, function=_Block(name=name, arguments="{}"))
+
+
+def _deepseek_assistant_msg(call_id, name):
+    return _Block(role="assistant", content=None, tool_calls=[_deepseek_tool_call(call_id, name)])
+
+
+def test_compact_deepseek_convo_resume_grupos_antigos_mantem_recente():
+    convo = [
+        {"role": "system", "content": "prompt"},
+        {"role": "user", "content": "pergunta"},
+        _deepseek_assistant_msg("call_1", "get_portfolio_metrics"),
+        {"role": "tool", "tool_call_id": "call_1", "content": "resultado 1"},
+        _deepseek_assistant_msg("call_2", "get_agent_performance"),
+        {"role": "tool", "tool_call_id": "call_2", "content": "resultado 2"},
+        _deepseek_assistant_msg("call_3", "query_kpi_historico"),
+        {"role": "tool", "tool_call_id": "call_3", "content": "resultado 3 (mais recente)"},
+    ]
+
+    compactado = _compact_deepseek_convo(convo, keep_recent_groups=1)
+
+    assert compactado[0] == {"role": "system", "content": "prompt"}
+    assert compactado[1] == {"role": "user", "content": "pergunta"}
+    resumo = compactado[2]
+    assert resumo["role"] == "user"
+    assert "get_portfolio_metrics" in resumo["content"]
+    assert "get_agent_performance" in resumo["content"]
+    assert "query_kpi_historico" not in resumo["content"]  # o mais recente não entra no resumo
+    # grupo mais recente intacto, sem tool_call órfão
+    assert compactado[3] is convo[6]
+    assert compactado[4] == {"role": "tool", "tool_call_id": "call_3", "content": "resultado 3 (mais recente)"}
+    assert len(compactado) == 5
+
+
+def test_compact_deepseek_convo_nao_mexe_se_so_tem_1_grupo():
+    convo = [
+        {"role": "system", "content": "prompt"},
+        _deepseek_assistant_msg("call_1", "get_portfolio_metrics"),
+        {"role": "tool", "tool_call_id": "call_1", "content": "resultado"},
+    ]
+    assert _compact_deepseek_convo(convo, keep_recent_groups=1) == convo
+
+
+def _anthropic_tool_use_block(block_id, name):
+    return _Block(type="tool_use", id=block_id, name=name, input={})
+
+
+def test_compact_anthropic_convo_resume_grupos_antigos_mantem_recente():
+    convo = [
+        {"role": "user", "content": "pergunta"},
+        {"role": "assistant", "content": [_anthropic_tool_use_block("tu_1", "get_portfolio_metrics")]},
+        {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "tu_1", "content": "resultado 1"}]},
+        {"role": "assistant", "content": [_anthropic_tool_use_block("tu_2", "get_agent_performance")]},
+        {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "tu_2", "content": "resultado 2"}]},
+        {"role": "assistant", "content": [_anthropic_tool_use_block("tu_3", "detalhar_portfolio")]},
+        {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "tu_3", "content": "resultado 3"}]},
+    ]
+
+    compactado = _compact_anthropic_convo(convo, keep_recent_groups=1)
+
+    assert compactado[0] == {"role": "user", "content": "pergunta"}
+    resumo = compactado[1]
+    assert resumo["role"] == "user"
+    assert isinstance(resumo["content"], str)
+    assert "get_portfolio_metrics" in resumo["content"]
+    assert "get_agent_performance" in resumo["content"]
+    assert "detalhar_portfolio" not in resumo["content"]
+    assert compactado[2] is convo[5]
+    assert compactado[3] is convo[6]
+    assert len(compactado) == 4

@@ -1,0 +1,24 @@
+id: GS-010
+categoria: vaga
+pergunta: Como estamos?
+sessao:
+  db: COBwebRCBAUTOS
+  date_from: '2026-08-10'
+  date_to: '2026-08-16'
+fixture: gs010.json
+mock_model:
+  turns:
+  - final:
+      text: 'Para responder direito, preciso saber: qual banco (COBwebRCBAUTOS, COBwebRCBCONSUMER ou os
+        dois) e qual período? Sem outra informação, uso o dia de hoje em todos os bancos.'
+      highlights: []
+      suggested_actions: []
+      data_sources: []
+      confidence: low
+esperado:
+  deve_passar: true
+  tools_chamadas_any_of: []
+  resposta:
+    numeros_rastreaveis: true
+    contem_texto:
+    - '?'

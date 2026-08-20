@@ -5,9 +5,20 @@ sobre o dataset em memória (dezenas de carteiras — custo desprezível).
 Nomes e parâmetros fazem parte do contrato do prompt (system_prompt.md) —
 alterar lá e aqui juntos.
 """
+import json
+import os
 from typing import Any, Callable, Dict, List, Optional
 
+from pydantic import ValidationError
+
 import config.settings as settings
+from dominios.agente.errors import build_tool_error
+from dominios.agente.schemas import (
+    CompararAgentesInput,
+    DetalharPortfolioInput,
+    ExplicarMetricaInput,
+    QueryKpiInput,
+)
 
 AGENT_TOOLS: List[Dict[str, Any]] = [
     {
@@ -74,20 +85,6 @@ AGENT_TOOLS: List[Dict[str, Any]] = [
         },
     },
     {
-        "name": "explain_business_rule",
-        "description": "Explica uma regra de negócio canônica do cálculo de risco.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "rule_name": {
-                    "type": "string",
-                    "enum": ["risco_composto_formula", "status_5", "denominador", "status_gerados", "thresholds"],
-                },
-            },
-            "required": ["rule_name"],
-        },
-    },
-    {
         "name": "get_agent_performance",
         "description": (
             "Retorna o AgentEntry completo de um agente (cobrador) pelo nome ou login "
@@ -140,25 +137,6 @@ AGENT_TOOLS: List[Dict[str, Any]] = [
         "input_schema": {"type": "object", "properties": {}},
     },
     {
-        "name": "get_time_series",
-        "description": (
-            "Série temporal diária de uma métrica terminando na data de referência. "
-            "metric: 'valor' (R$ de 1ª parcela gerado por dia), 'qtd' (acordos por "
-            "dia) ou 'risco' (risco composto % do dia). period: '7d', '30d' ou "
-            "'90d'. portfolio (opcional) restringe a uma carteira. Use para "
-            "tendência, evolução, histórico, degradação, 'vs semana passada'."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "metric": {"type": "string", "enum": ["valor", "qtd", "risco"]},
-                "period": {"type": "string", "enum": ["7d", "30d", "90d"]},
-                "portfolio": {"type": "string", "description": "Nome (ou trecho do nome) da carteira (opcional)."},
-            },
-            "required": ["metric", "period"],
-        },
-    },
-    {
         "name": "get_acordo_status_breakdown",
         "description": (
             "Distribuição dos acordos do período por status — ATIVO, QUEBRA, BAIXA "
@@ -182,24 +160,6 @@ AGENT_TOOLS: List[Dict[str, Any]] = [
             "properties": {
                 "fase": {"type": "string", "enum": ["inicio", "meio", "final", "quitado"]},
             },
-        },
-    },
-    {
-        "name": "get_efetividade_conversao",
-        "description": (
-            "Conversão oficial de boletos (1ª parcela paga no prazo ≤5d / emitida, "
-            "base 2026+). visao: 'mensal' (últimos 12 meses), 'diaria' (últimos 30 "
-            "dias) ou 'por_agente' (top 15 por volume nos últimos 3 meses; "
-            "agent_name restringe a um agente). Use para 'boletos estão sendo "
-            "pagos?', 'conversão histórica', 'quem converte melhor'."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "visao": {"type": "string", "enum": ["mensal", "diaria", "por_agente"]},
-                "agent_name": {"type": "string", "description": "Nome do agente (só com visao=por_agente, opcional)."},
-            },
-            "required": ["visao"],
         },
     },
     {
@@ -238,57 +198,94 @@ AGENT_TOOLS: List[Dict[str, Any]] = [
         },
     },
     {
-        "name": "get_maiores_acordos",
+        "name": "query_kpi_historico",
         "description": (
-            "Maiores acordos de UMA carteira no período, por valor total, no tipo "
-            "pedido: 'acordos' (aprovados), 'excecoes', 'quebrados' ou 'rejeitados'. "
-            "Retorna até 20 acordos com valores, agente, devedor (CPF mascarado) e "
-            "vencimento. Use após identificar uma carteira em risco, para acionar "
-            "casos concretos."
+            "Série histórica de um KPI por janela de data (dia/semana/mês). kpi: "
+            "'valor_acordos_gerados' (R$ 1ª parcela/dia), 'qtd_acordos' (acordos/dia), "
+            "'risco_composto_pct' (pior eixo de risco do dia), 'efetividade' (boletos "
+            "pagos no prazo / emitidos — reflete a janela fixa do próprio ETL, não "
+            "date_from/date_to) ou 'ritmo_dia' (sempre HOJE, ignora datas). "
+            "db é por chamada — pode consultar um banco diferente do filtro da sessão. "
+            "Use para tendência, evolução, histórico, degradação, 'vs semana passada'. "
+            "NÃO cobre taxa de contato/CPC/conversão nem acionamentos por dia — essas "
+            "métricas só existem como total do período (sem endpoint diário hoje)."
         ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "tipo": {"type": "string", "enum": ["acordos", "excecoes", "quebrados", "rejeitados"]},
-                "portfolio": {"type": "string", "description": "Nome (ou trecho) da carteira."},
-                "limit": {"type": "integer", "description": "Máximo de acordos (padrão 10, máx 20)."},
-            },
-            "required": ["tipo", "portfolio"],
-        },
+        "input_schema": QueryKpiInput.model_json_schema(),
+    },
+    {
+        "name": "comparar_agentes",
+        "description": (
+            "Compara 2 a 5 agentes lado a lado, identificados pela CHAVE de login, "
+            "nas métricas pedidas. Use quando o usuário nomear agentes explicitamente. "
+            "Não use para ranking geral (use list_agents_performance). db é por "
+            "chamada — pode diferir do filtro da sessão."
+        ),
+        "input_schema": CompararAgentesInput.model_json_schema(),
+    },
+    {
+        "name": "detalhar_portfolio",
+        "description": (
+            "Detalha UM portfólio com drill-down por status de acordo. drilldown: "
+            "'resumo' (métricas agregadas, como get_portfolio_metrics), 'aprovados' "
+            "(status gerados: ativo/quebra/baixa pagamento/quebra automática/baixa "
+            "avulso — 1,2,3,10,12), 'excecao' (5), 'rejeitado' (7) ou 'quebrado' (2, "
+            "estrito). Nos 4 últimos, retorna linhas paginadas (CPF mascarado, sem "
+            "nome do devedor). db é por chamada — pode diferir do filtro da sessão."
+        ),
+        "input_schema": DetalharPortfolioInput.model_json_schema(),
+    },
+    {
+        "name": "explicar_metrica",
+        "description": (
+            "Retorna a definição oficial de um KPI, status ou termo operacional "
+            "(fórmula, filtros, convenções) do registry gerado de config/settings.py. "
+            "SEMPRE consulte esta tool antes de explicar qualquer fórmula — nunca "
+            "deduza. Se o termo não existir, devolve a lista de termos válidos."
+        ),
+        "input_schema": ExplicarMetricaInput.model_json_schema(),
     },
 ]
 
-# Texto canônico das regras de negócio (fonte: config/settings.py e
-# docs de regras de negócio). O agente cita isso verbatim ao explicar regras.
-BUSINESS_RULES: Dict[str, str] = {
-    "risco_composto_formula": (
-        "risco_composto = MAX(excecoes_pct, quebrados_pct, rejeitados_pct). "
-        "Usa-se o MÁXIMO, nunca a soma: as dimensões não são aditivas (os quebrados, "
-        "por exemplo, são subconjunto dos boletos gerados) e somá-las dupla-contaria "
-        "valor, exagerando o risco. O risco da carteira é o seu pior eixo."
-    ),
-    "status_5": (
-        "Status 5 = PENDENTE no enum do COBweb (aguardando validação interna). "
-        "Na visão de risco do negócio é tratado como 'Exceção': valor parado que "
-        "ainda não virou boleto firme."
-    ),
-    "denominador": (
-        "Todos os percentuais usam o mesmo denominador: o universo de 1ª parcela "
-        "(PARCELA = 0) do período — valor GERADO (status 1, 2, 3, 10, 12) + exceções "
-        "(status 5) + rejeitados (status 7). Cada dimensão é uma fatia 0–100% desse "
-        "universo, comparável entre si e entre carteiras."
-    ),
-    "status_gerados": (
-        "GERADOS = status (1, 2, 3, 10, 12): ATIVO, QUEBRA, BAIXA POR PAGAMENTO, "
-        "QUEBRA AUTOMÁTICA e BAIXA POR PAGAMENTO AVULSO. É o universo de boletos "
-        "efetivamente emitidos — inclui os que quebraram depois."
-    ),
-    "thresholds": (
-        f"Níveis de risco pelo risco_composto: baixo <= {settings.RISK_LEVEL_LOW_MAX}%, "
-        f"medio <= {settings.RISK_LEVEL_MID_MAX}%, alto > {settings.RISK_LEVEL_MID_MAX}%. "
-        "Qualquer dimensão acima de 100% é anomalia de dados e deve ser alertada."
-    ),
+# explicar_metrica (P1): lê dominios/agente/metric_registry.json, gerado de
+# config/settings.py por scripts/build_metric_registry.py (D2/D9). Substitui o
+# antigo dict BUSINESS_RULES hardcoded — mesma prosa, fonte única agora.
+_METRIC_REGISTRY_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "metric_registry.json")
+_metric_registry_cache: Optional[Dict[str, Any]] = None
+
+_TERMO_ALIASES: Dict[str, str] = {
+    "cpc": "cpc",
+    "contato": "taxa_contato_pct",
+    "exceção": "excecao",
+    "excecoes": "excecao",
+    "exceções": "excecao",
+    "risco composto": "risco_composto_formula",
 }
+
+
+def _load_metric_registry() -> Dict[str, Any]:
+    global _metric_registry_cache
+    if _metric_registry_cache is None:
+        with open(_METRIC_REGISTRY_PATH, "r", encoding="utf-8") as f:
+            _metric_registry_cache = json.load(f)
+    return _metric_registry_cache
+
+
+def _resolve_termo(termo: str, registry: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    key = _TERMO_ALIASES.get(termo.strip().lower(), termo.strip().lower())
+    if key in registry["status"]:
+        entry: Dict[str, Any] = {"tipo": "status", "valores": registry["status"][key]}
+        if key in registry["caveats"]:
+            entry["caveat"] = registry["caveats"][key]
+        return entry
+    if key in registry["caveats"]:
+        return {"tipo": "caveat", "texto": registry["caveats"][key]}
+    if key in registry["kpis"]:
+        return {"tipo": "kpi", **registry["kpis"][key]}
+    return None
+
+
+def _available_termos(registry: Dict[str, Any]) -> List[str]:
+    return sorted(set(registry["status"]) | set(registry["caveats"]) | set(registry["kpis"]))
 
 
 def _find_portfolio(name: str, entries: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
@@ -315,12 +312,16 @@ _AGENT_ORDER_BY_FIELDS = frozenset({
 })
 
 # Espelham os enums dos schemas das tools com provider próprio.
-_SERIES_METRICS = frozenset({"valor", "qtd", "risco"})
-_SERIES_PERIODS = frozenset({"7d", "30d", "90d"})
 _FASES = frozenset({"inicio", "meio", "final", "quitado"})
-_CONVERSAO_VISOES = frozenset({"mensal", "diaria", "por_agente"})
 _RANKING_DIMENSOES = frozenset({"gerados", "excecoes", "quebrados", "rejeitados"})
-_DETALHE_TIPOS = frozenset({"acordos", "excecoes", "quebrados", "rejeitados"})
+
+# comparar_agentes (CompararAgentesInput.metricas, schemas.py) usa nomes de
+# negócio que não batem 1:1 com as chaves reais do AgentEntry (agentes.py) —
+# mapeia pro campo real ao extrair. Identidade quando o nome já bate.
+_COMPARAR_METRICA_ALIASES: Dict[str, str] = {
+    "qtd_contatos_cpc": "qtd_contatos",
+    "taxa_conversao_pct": "conversao_pct",
+}
 
 
 def _find_agent(name: str, agents: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
@@ -399,13 +400,6 @@ def dispatch_tool(
             result["available_portfolios"] = [e["portfolio_name"] for e in entries]
         return result
 
-    if name == "explain_business_rule":
-        rule_name = str(args.get("rule_name") or "").strip()
-        text = BUSINESS_RULES.get(rule_name)
-        if text is None:
-            return {"error": f"Regra desconhecida: {rule_name!r}.", "available_rules": sorted(BUSINESS_RULES)}
-        return {"rule_name": rule_name, "explanation": text}
-
     if name == "get_agent_performance":
         agents = get_agents()
         entry = _find_agent(str(args.get("agent_name") or ""), agents)
@@ -435,27 +429,6 @@ def dispatch_tool(
             return {"error": "Tool indisponível neste contexto."}
         return fn()
 
-    if name == "get_time_series":
-        fn = (providers or {}).get("get_time_series")
-        if fn is None:
-            return {"error": "Tool indisponível neste contexto."}
-        metric = str(args.get("metric") or "").strip().lower()
-        if metric not in _SERIES_METRICS:
-            return {"error": f"Métrica inválida: {args.get('metric')!r}.", "available_metrics": sorted(_SERIES_METRICS)}
-        period = str(args.get("period") or "").strip().lower()
-        if period not in _SERIES_PERIODS:
-            return {"error": f"Período inválido: {args.get('period')!r}.", "available_periods": sorted(_SERIES_PERIODS)}
-        portfolio = None
-        if args.get("portfolio"):
-            entry = _find_portfolio(str(args["portfolio"]), entries)
-            if entry is None:
-                return {
-                    "error": "Carteira não encontrada no período.",
-                    "available_portfolios": [e["portfolio_name"] for e in entries],
-                }
-            portfolio = entry["portfolio_name"]
-        return fn(metric, period, portfolio)
-
     if name == "get_acordo_status_breakdown":
         fn = (providers or {}).get("get_acordo_status_breakdown")
         if fn is None:
@@ -472,24 +445,6 @@ def dispatch_tool(
             if fase not in _FASES:
                 return {"error": f"Fase inválida: {args.get('fase')!r}.", "available_fases": sorted(_FASES)}
         return fn(fase)
-
-    if name == "get_efetividade_conversao":
-        fn = (providers or {}).get("get_efetividade_conversao")
-        if fn is None:
-            return {"error": "Tool indisponível neste contexto."}
-        visao = str(args.get("visao") or "").strip().lower()
-        if visao not in _CONVERSAO_VISOES:
-            return {"error": f"Visão inválida: {args.get('visao')!r}.", "available_visoes": sorted(_CONVERSAO_VISOES)}
-        agente = None
-        if args.get("agent_name"):
-            entry = _find_agent(str(args["agent_name"]), get_agents())
-            if entry is None:
-                return {
-                    "error": "Agente não encontrado no período.",
-                    "available_agents": [a["agent_name"] for a in get_agents()],
-                }
-            agente = entry["agent_name"]
-        return fn(visao, agente)
 
     if name == "get_cruzamento_agente_carteira":
         fn = (providers or {}).get("get_cruzamento_agente_carteira")
@@ -532,24 +487,110 @@ def dispatch_tool(
         limit = max(1, min(limit, 50))
         return fn(dimensao, limit)
 
-    if name == "get_maiores_acordos":
-        fn = (providers or {}).get("get_maiores_acordos")
+    if name == "query_kpi_historico":
+        try:
+            validated = QueryKpiInput(**args)
+        except ValidationError as exc:
+            return build_tool_error("validation", hint=str(exc), user_facing="Parâmetros inválidos para a consulta.")
+        fn = (providers or {}).get("query_kpi_historico")
         if fn is None:
             return {"error": "Tool indisponível neste contexto."}
-        tipo = str(args.get("tipo") or "").strip().lower()
-        if tipo not in _DETALHE_TIPOS:
-            return {"error": f"Tipo inválido: {args.get('tipo')!r}.", "available_tipos": sorted(_DETALHE_TIPOS)}
-        entry = _find_portfolio(str(args.get("portfolio") or ""), entries)
-        if entry is None:
-            return {
-                "error": "Carteira não encontrada no período.",
-                "available_portfolios": [e["portfolio_name"] for e in entries],
-            }
-        try:
-            limit = int(args.get("limit") or 10)
-        except (TypeError, ValueError):
-            limit = 10
-        limit = max(1, min(limit, 20))
-        return fn(tipo, entry["portfolio_name"], limit)
+        return fn(
+            db=validated.db, kpi=validated.kpi,
+            date_from=validated.date_from.isoformat(), date_to=validated.date_to.isoformat(),
+            granularidade=validated.granularidade, page=validated.page,
+        )
 
-    return {"error": f"Tool desconhecida: {name!r}."}
+    if name == "comparar_agentes":
+        try:
+            validated = CompararAgentesInput(**args)
+        except ValidationError as exc:
+            return build_tool_error("validation", hint=str(exc), user_facing="Parâmetros inválidos para a comparação.")
+        fn = (providers or {}).get("comparar_agentes")
+        if fn is None:
+            return {"error": "Tool indisponível neste contexto."}
+        agents = fn(db=validated.db, date_from=validated.date_from.isoformat(), date_to=validated.date_to.isoformat())
+        normalized_keys = [k.strip().lower() for k in validated.agent_keys]
+        if len(set(normalized_keys)) != len(normalized_keys):
+            return build_tool_error(
+                "validation",
+                hint="agent_keys tem chaves duplicadas após normalização.",
+                user_facing="Chaves de agente repetidas no pedido.",
+            )
+        found: List[Dict[str, Any]] = []
+        missing: List[str] = []
+        system_accounts: List[str] = []
+        for raw_key in normalized_keys:
+            entry = _find_agent(raw_key, agents)
+            if entry is not None:
+                found.append(entry)
+                continue
+            # Conta de sistema não aparece em `agents` (já filtrada no SQL de
+            # produtividade) — checagem best-effort contra as constantes Python
+            # canônicas; a lista embutida em FILTRO_AGENTES_EXCLUIDOS_SQL (SQL
+            # cru) tem 2 entradas a mais (FT5SYSTEM, SUPORTE/SISTEMA por chave)
+            # que não têm espelho em tupla Python — não criar uma terceira lista
+            # (regra do caveat agent_filter_divergence).
+            is_system = raw_key.upper() in settings.EXCLUDED_AGENT_EXACT_NAMES or any(
+                raw_key.upper().startswith(p) for p in settings.EXCLUDED_AGENT_PREFIXES
+            )
+            (system_accounts if is_system else missing).append(raw_key)
+        if system_accounts or missing:
+            errors = [f"agente {k!r} é conta de sistema e não é comparável" for k in system_accounts]
+            errors += [f"agente {k!r} não encontrado no período" for k in missing]
+            return build_tool_error(
+                "validation",
+                hint="; ".join(errors),
+                user_facing="Um ou mais agentes não podem ser comparados.",
+                errors=errors,
+                available_agents=[a["agent_name"] for a in agents],
+            )
+        result: Dict[str, Any] = {
+            "agentes": [
+                {"agent_name": e["agent_name"], "login": e["login"], **{m: e.get(_COMPARAR_METRICA_ALIASES.get(m, m)) for m in validated.metricas}}
+                for e in found
+            ],
+        }
+        if validated.consolidar_cross_db:
+            result["meta"] = {"warnings": [
+                "consolidar_cross_db=true pedido, mas cada banco tem entidades de agente "
+                "separadas por padrão (ver caveat cross_db) — valores abaixo NÃO foram somados entre bancos."
+            ]}
+        return result
+
+    if name == "detalhar_portfolio":
+        try:
+            validated = DetalharPortfolioInput(**args)
+        except ValidationError as exc:
+            return build_tool_error("validation", hint=str(exc), user_facing="Parâmetros inválidos para o drill-down.")
+        fn = (providers or {}).get("detalhar_portfolio")
+        if fn is None:
+            return {"error": "Tool indisponível neste contexto."}
+        return fn(
+            db=validated.db, portfolio=validated.portfolio,
+            date_from=validated.date_from.isoformat(), date_to=validated.date_to.isoformat(),
+            drilldown=validated.drilldown, page=validated.page, page_size=validated.page_size,
+        )
+
+    if name == "explicar_metrica":
+        try:
+            validated = ExplicarMetricaInput(**args)
+        except ValidationError as exc:
+            return build_tool_error("validation", hint=str(exc), user_facing="Termo inválido.")
+        registry = _load_metric_registry()
+        resolved = _resolve_termo(validated.termo, registry)
+        if resolved is None:
+            return build_tool_error(
+                "validation",
+                hint=f"Termo desconhecido: {validated.termo!r}.",
+                user_facing="Não conheço esse termo.",
+                termos_disponiveis=_available_termos(registry),
+            )
+        return {"termo": validated.termo, **resolved}
+
+    return build_tool_error(
+        "unknown_tool",
+        hint=f"Tool desconhecida: {name!r}.",
+        user_facing="Pedido não corresponde a nenhuma fonte de dados disponível.",
+        available_tools=sorted(t["name"] for t in AGENT_TOOLS),
+    )

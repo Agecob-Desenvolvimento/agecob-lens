@@ -83,17 +83,17 @@ funil (ADR-006): `qtd_alo` = **Contato** (alguém atende); `qtd_contatos` =
 | `filter_portfolios_by_risk(level)` | "Carteiras podres / saudáveis?" | idem |
 | `filter_portfolios_by_value(min, limit?)` | "Onde está o dinheiro?" | idem |
 | `compare_portfolios(names, metric?)` | "X vs Y?" | idem |
-| `explain_business_rule(rule)` | "Por que MAX e não soma?" | texto canônico em `tools.py` |
 | `get_agent_performance(nome)` | "Como está o agente Y?" | AgentEntry, janela da sessão |
 | `list_agents_performance(order_by?, limit?)` | "Top performers? Maior ticket? Quem gera exceção?" | idem; 12 métricas de ordenação |
 | `get_ritmo_acordos_dia()` | "Vamos bater a meta hoje?" | rota KNN `/ritmo-dia` — **sempre o dia corrente** |
-| `get_time_series(metric, period, portfolio?)` | "Tendência / degradação?" | rollup diário, 7/30/90d até a data de referência |
 | `get_acordo_status_breakdown()` | "Quanto pendente / rejeitado?" | rollup da sessão, rotulado por status |
 | `get_fase_negociacao(fase?)` | "Final de plano? Quitados?" | acordos aprovados últimos ~6 meses |
-| `get_efetividade_conversao(visao, agente?)` | "Boletos estão sendo pagos?" | ETL de efetividade (base 2026+) |
 | `get_cruzamento_agente_carteira(portfolio \| agente)` | "Quem gera as exceções da carteira X?" | SQL agente × carteira × status, janela da sessão |
 | `get_ranking_agentes_por_dimensao(dim, limit?)` | "Quem quebra mais?" | SQL por agente, dimensão de status |
-| `get_maiores_acordos(tipo, portfolio, limit?)` | "Casos concretos da carteira X" | builders de detalhe do dashboard (CPF mascarado) |
+| `query_kpi_historico(db, kpi, date_from, date_to, granularidade?, page?)` | "Como está a conversão/valor gerado num período?" | 5 KPIs com endpoint real (`valor_acordos_gerados`, `qtd_acordos`, `risco_composto_pct`, `efetividade`, `ritmo_dia`); `db`/janela por chamada |
+| `comparar_agentes(db, agent_keys, metricas, date_from, date_to, consolidar_cross_db?)` | "Compare X e Y" (2–5 agentes nomeados) | reusa `build_agent_entries`; `db`/janela por chamada |
+| `detalhar_portfolio(db, portfolio, date_from, date_to, drilldown?, page?, page_size?)` | "Casos concretos da carteira X" | drill-down paginado (aprovados/exceção/rejeitado/quebrado/resumo); `db`/janela por chamada; CPF mascarado |
+| `explicar_metrica(termo)` | "Por que MAX e não soma? Como é calculado X?" | `metric_registry.json`, gerado de `config/settings.py` (`scripts/build_metric_registry.py`) |
 
 Decisões transversais:
 
@@ -115,11 +115,12 @@ Decisões transversais:
 
 | Tool | Janela |
 |---|---|
-| Carteiras, agentes, breakdown, cruzamento, ranking, maiores acordos | `[dateFrom, dateTo]` da sessão |
-| `get_time_series` | últimos N dias **terminando em dateTo** |
+| Carteiras, agentes, breakdown, cruzamento, ranking | `[dateFrom, dateTo]` da sessão |
 | `get_fase_negociacao` | acordos **emitidos nos últimos ~183 dias** até dateTo (base viva, independe da sessão) |
 | `get_ritmo_acordos_dia` | **hoje**, sempre (KNN é intradiário) |
-| `get_efetividade_conversao` | base completa do ETL (2026+), trim 12m/30d/3m |
+| `query_kpi_historico`, `comparar_agentes`, `detalhar_portfolio` | `date_from`/`date_to` **explícitos por chamada** — não herdam a sessão, o LLM pode consultar outro período/banco na mesma conversa |
+| `query_kpi_historico(kpi="efetividade")` | base completa do ETL (2026+) |
+| `query_kpi_historico(kpi="ritmo_dia")` | ignora `date_from`/`date_to` — sempre hoje, delega pro mesmo provider de `get_ritmo_acordos_dia` |
 
 ## 5. Regras de negócio herdadas (invioláveis)
 
@@ -132,7 +133,7 @@ CROSS APPLY TOP 1 para portfólio (ADR-004), janela
 Conversão oficial: boleto de 1ª parcela pago em ≤ 5 dias do vencimento /
 boleto emitido. A `conversao_pct` do AgentEntry no grão de 1 dia tende a 0%
 (boleto de hoje não venceu) — o prompt direciona "boletos estão sendo pagos?"
-para `get_efetividade_conversao`.
+para `query_kpi_historico(kpi="efetividade")`.
 
 Fase de plano (premissa documentada, ajustável): progresso de pagamento por
 acordo (`VR_PAGO > 0` = parcela paga) → `quitado` (tudo pago), `inicio`
@@ -224,9 +225,9 @@ em background). Ritmo usa o cache interno da rota KNN (30 s).
 
 ## 12. Limitações conhecidas
 
-- `get_efetividade_conversao` exige o ETL de efetividade carregado no
-  processo (background, base 2026+); antes disso responde "ETL ainda não
-  concluído".
+- `query_kpi_historico(kpi="efetividade")` exige o ETL de efetividade
+  carregado no processo (background, base 2026+); antes disso responde "ETL
+  ainda não concluído".
 - Sem série temporal **por agente** (custo da query de produtividade × N
   dias não compensa).
 - Sem metas de negócio no banco — o esperado do KNN faz papel de meta

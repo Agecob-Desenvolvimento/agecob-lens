@@ -1,0 +1,40 @@
+id: GS-011
+categoria: multi-hop
+pergunta: Qual portfólio puxou o risco pra cima essa semana?
+sessao:
+  db: COBwebRCBAUTOS
+  date_from: '2026-08-10'
+  date_to: '2026-08-16'
+fixture: gs011.json
+mock_model:
+  turns:
+  - tool_call:
+      name: query_kpi_historico
+      args:
+        db: COBwebRCBAUTOS
+        kpi: risco_composto_pct
+        date_from: '2026-08-10'
+        date_to: '2026-08-16'
+  - tool_call:
+      name: detalhar_portfolio
+      args:
+        db: COBwebRCBAUTOS
+        portfolio: gama
+        date_from: '2026-08-10'
+        date_to: '2026-08-16'
+        drilldown: resumo
+  - final:
+      text: O risco composto subiu de 61% para **65%** nos últimos dias, puxado pela **Carteira Gama**
+        — exceções em 61%, o eixo dominante do risco dela.
+      highlights: []
+      suggested_actions: []
+      data_sources:
+      - query_kpi_historico
+      - detalhar_portfolio
+      confidence: high
+esperado:
+  deve_passar: true
+  tools_chamadas_any_of:
+  - query_kpi_historico
+  resposta:
+    numeros_rastreaveis: true

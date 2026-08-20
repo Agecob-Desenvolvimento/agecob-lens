@@ -1,0 +1,27 @@
+{
+  "tool_results": {
+    "query_kpi_historico": {
+      "kpi": "efetividade",
+      "visao": "diaria",
+      "data": [
+        {
+          "dia": "2026-07-15",
+          "boletos_gerados": 40,
+          "pagos_no_prazo": 10,
+          "conversao_pct": 25.0
+        }
+      ],
+      "total": {
+        "boletos_gerados": 40,
+        "pagos_no_prazo": 10,
+        "conversao_pct": 25.0
+      },
+      "meta": {
+        "page": 1,
+        "total_pages": 1,
+        "truncated": false,
+        "warnings": []
+      }
+    }
+  }
+}

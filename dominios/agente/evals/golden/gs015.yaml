@@ -1,0 +1,30 @@
+id: GS-015
+categoria: explicacao
+pergunta: Como é calculada a conversão?
+sessao:
+  db: COBwebRCBAUTOS
+  date_from: '2026-08-10'
+  date_to: '2026-08-16'
+fixture: gs015.json
+mock_model:
+  turns:
+  - tool_call:
+      name: explicar_metrica
+      args:
+        termo: taxa_conversao_pct
+  - final:
+      text: '**Conversão** = qtd_acordos / qtd_contatos × 100 — acordos gerados sobre o CPC (contatos
+        certos) do período.'
+      highlights: []
+      suggested_actions: []
+      data_sources:
+      - explicar_metrica
+      confidence: high
+esperado:
+  deve_passar: true
+  tools_chamadas_any_of:
+  - explicar_metrica
+  resposta:
+    numeros_rastreaveis: false
+    contem_texto:
+    - qtd_acordos / qtd_contatos

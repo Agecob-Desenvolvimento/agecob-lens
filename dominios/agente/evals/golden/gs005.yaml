@@ -1,0 +1,30 @@
+id: GS-005
+categoria: armadilha
+pergunta: Quais status entram no valor de acordos gerados de uma carteira?
+sessao:
+  db: COBwebRCBAUTOS
+  date_from: '2026-08-10'
+  date_to: '2026-08-16'
+fixture: gs005.json
+mock_model:
+  turns:
+  - tool_call:
+      name: explicar_metrica
+      args:
+        termo: gerados
+  - final:
+      text: O valor **GERADO** soma os status **1 (ativo), 2 (quebra), 3 (baixa por pagamento), 10 (quebra
+        automática) e 12 (baixa por pagamento avulso)** — inclui os que quebraram depois, não só os aprovados.
+      highlights: []
+      suggested_actions: []
+      data_sources:
+      - explicar_metrica
+      confidence: high
+esperado:
+  deve_passar: true
+  tools_chamadas_any_of:
+  - explicar_metrica
+  resposta:
+    numeros_rastreaveis: false
+    contem_texto:
+    - quebra automática
