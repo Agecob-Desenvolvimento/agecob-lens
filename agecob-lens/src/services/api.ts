@@ -9,6 +9,8 @@ export interface ApiMeta {
   filters: {
     date: string;
   };
+  quality?: { truncated?: boolean };
+  pagination?: { limit?: number; truncated?: boolean };
 }
 
 export interface ApiErrorItem {

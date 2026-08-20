@@ -26,7 +26,7 @@ export function BoletosDetalheSheet({
   onClose: () => void;
   tipo: TipoParcela;
 }) {
-  const { rows, loading, error } = useBoletosDetalhe(kind, tipo);
+  const { rows, loading, error, truncated } = useBoletosDetalhe(kind, tipo);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const acordos = mapAcordosQuebrados(rows, "—", new Date(), "valor_primeira_parcela");
   const valorTotal = acordos.reduce((acc, a) => acc + a.valorAcordo, 0);
@@ -46,6 +46,12 @@ export function BoletosDetalheSheet({
             )}
           </SheetTitle>
         </SheetHeader>
+
+        {!loading && !error && truncated && (
+          <p className="px-4 py-1.5 text-[11px] text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200 dark:border-amber-900">
+            Lista limitada aos 500 maiores boletos — total do card pode ser maior que a soma abaixo.
+          </p>
+        )}
 
         <div className="p-1">
           {loading ? (

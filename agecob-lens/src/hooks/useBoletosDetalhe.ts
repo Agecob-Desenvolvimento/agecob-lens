@@ -13,6 +13,7 @@ export interface BoletosDetalheResult {
   rows: QuebradoDetalheRow[];
   loading: boolean;
   error: string | null;
+  truncated: boolean;
 }
 
 export function useBoletosDetalhe(
@@ -33,5 +34,6 @@ export function useBoletosDetalhe(
     rows: query.data?.data ?? [],
     loading: query.isLoading && !!kind,
     error: query.isError ? (query.error as Error)?.message ?? "Erro ao carregar boletos" : null,
+    truncated: query.data?.meta.quality?.truncated ?? false,
   };
 }
