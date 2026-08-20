@@ -17,11 +17,22 @@ WITH CTE_Hoje_Acordos AS (
 ),
 CTE_Total_Acordo AS (
     -- Soma todas as parcelas para achar o valor total do acordo (restrito ao dia).
+    -- Dedup (NR_RECEBIMENTO, ID_CARTEIRA, PARCELA): mesmo acordo pode ser
+    -- regravado por erro do sistema. Mantém só a parcela mais recente
+    -- (DT_EMISSAO mais nova; ID_REC como desempate em timestamp idêntico).
     SELECT
         RM.NR_RECEBIMENTO,
         SUM(RM.VALOR) AS VALOR_TOTAL_ACORDO
-    FROM REC_MASTER RM (NOLOCK)
-    WHERE RM.NR_RECEBIMENTO IN (SELECT NR_RECEBIMENTO FROM CTE_Hoje_Acordos)
+    FROM (
+        SELECT RM.*,
+               ROW_NUMBER() OVER (
+                   PARTITION BY RM.NR_RECEBIMENTO, RM.ID_CARTEIRA, RM.PARCELA
+                   ORDER BY RM.DT_EMISSAO DESC, RM.ID_REC DESC
+               ) AS rn
+        FROM REC_MASTER RM (NOLOCK)
+        WHERE RM.NR_RECEBIMENTO IN (SELECT NR_RECEBIMENTO FROM CTE_Hoje_Acordos)
+    ) RM
+    WHERE RM.rn = 1
     GROUP BY RM.NR_RECEBIMENTO
 ),
 CTE_Saldo_Divida AS (
@@ -65,14 +76,25 @@ SELECT
         ELSE 'EM ABERTO'
     END AS situacao_pagamento
 
-FROM REC_MASTER RM (NOLOCK)
+FROM (
+    -- Dedup (NR_RECEBIMENTO, ID_CARTEIRA, PARCELA): mesmo acordo pode ser
+    -- regravado por erro do sistema. Mantém só a parcela mais recente
+    -- (DT_EMISSAO mais nova; ID_REC como desempate em timestamp idêntico).
+    SELECT RM.*,
+           ROW_NUMBER() OVER (
+               PARTITION BY RM.NR_RECEBIMENTO, RM.ID_CARTEIRA, RM.PARCELA
+               ORDER BY RM.DT_EMISSAO DESC, RM.ID_REC DESC
+           ) AS rn
+    FROM REC_MASTER RM (NOLOCK)
+    WHERE RM.DT_EMISSAO >= @Hoje AND RM.DT_EMISSAO < @Amanha
+      AND RM.ID_REC_STATUS IN (1, 3, 9, 12)
+) RM
 JOIN USU_MASTER U (NOLOCK) ON RM.ID_USUARIO = U.ID_USUARIO
 JOIN DEV_MASTER DEV (NOLOCK) ON RM.ID_DEV = DEV.ID_DEV
 LEFT JOIN REC_STATUS RS (NOLOCK) ON RM.ID_REC_STATUS = RS.ID_REC_STATUS
 LEFT JOIN CTE_Total_Acordo TA ON RM.NR_RECEBIMENTO = TA.NR_RECEBIMENTO
 LEFT JOIN CTE_Saldo_Divida SD ON RM.NR_RECEBIMENTO = SD.NR_RECEBIMENTO
-WHERE RM.DT_EMISSAO >= @Hoje AND RM.DT_EMISSAO < @Amanha
-  AND RM.ID_REC_STATUS IN (1, 3, 9, 12)
+WHERE RM.rn = 1
   {settings.FILTRO_AGENTES_EXCLUIDOS_SQL}
 ORDER BY RM.DT_EMISSAO DESC, RM.NR_RECEBIMENTO, RM.PARCELA
 OFFSET @Offset ROWS FETCH NEXT @Limit ROWS ONLY
@@ -99,12 +121,23 @@ def build_agreements_tabela_query(
                 MAX(RM.PLANO) AS qtd_parcelas,
                 SUM(RM.VALOR) AS valor_total_acordo,
                 MAX(RM.DT_EMISSAO) AS data_emissao
-            FROM {db_name}.dbo.REC_MASTER RM (NOLOCK)
+            FROM (
+                -- Dedup (NR_RECEBIMENTO, ID_CARTEIRA, PARCELA): mesmo acordo pode ser
+                -- regravado por erro do sistema. Mantém só a parcela mais recente
+                -- (DT_EMISSAO mais nova; ID_REC como desempate em timestamp idêntico).
+                SELECT RM.*,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY RM.NR_RECEBIMENTO, RM.ID_CARTEIRA, RM.PARCELA
+                           ORDER BY RM.DT_EMISSAO DESC, RM.ID_REC DESC
+                       ) AS rn
+                FROM {db_name}.dbo.REC_MASTER RM (NOLOCK)
+                WHERE RM.DT_EMISSAO >= @Hoje AND RM.DT_EMISSAO < @Amanha
+                  AND RM.ID_REC_STATUS IN {settings.STATUS_UNIVERSO_SQL}
+            ) RM
             JOIN {db_name}.dbo.USU_MASTER U (NOLOCK) ON RM.ID_USUARIO = U.ID_USUARIO
             JOIN {db_name}.dbo.DEV_MASTER DEV (NOLOCK) ON RM.ID_DEV = DEV.ID_DEV
             LEFT JOIN {db_name}.dbo.REC_STATUS RS (NOLOCK) ON RM.ID_REC_STATUS = RS.ID_REC_STATUS
-            WHERE RM.DT_EMISSAO >= @Hoje AND RM.DT_EMISSAO < @Amanha
-              AND RM.ID_REC_STATUS IN {settings.STATUS_UNIVERSO_SQL}
+            WHERE RM.rn = 1
               {settings.FILTRO_AGENTES_EXCLUIDOS_SQL}
               {assessoria_clause}
             GROUP BY U.NOME, DEV.CPF_CNPJ, DEV.NOME_RAZAO, RM.NR_RECEBIMENTO, RS.DESCR
@@ -229,6 +262,9 @@ def build_tabela_performance_periodo_query(
             ) A ON A.ID_USUARIO = U.ID_USUARIO
             LEFT JOIN (
                 -- STATUS_GERADOS = (1, 2, 3, 10, 12). PARCELA=0 é a primeira parcela neste banco.
+                -- Dedup (NR_RECEBIMENTO, ID_CARTEIRA, PARCELA): mesmo acordo pode ser
+                -- regravado por erro do sistema. Mantém só a parcela mais recente
+                -- (DT_EMISSAO mais nova; ID_REC como desempate em timestamp idêntico).
                 SELECT
                     ID_USUARIO,
                     COUNT(DISTINCT NR_RECEBIMENTO) AS qtd_acordos,
@@ -236,32 +272,61 @@ def build_tabela_performance_periodo_query(
                     SUM(CASE WHEN DT_VENCIMENTO < CAST(GETDATE() AS DATE) THEN ({settings.BOLETO_PAGO_PRAZO_SQL}) ELSE 0 END) AS qtd_boletos_pagos,
                     SUM(VALOR) AS valor_total,
                     SUM(CASE WHEN PARCELA = 0 THEN VALOR ELSE 0 END) AS soma_primeira_parcela
-                FROM {db}.dbo.REC_MASTER (NOLOCK)
-                WHERE DT_EMISSAO >= CAST('{df}' AS DATE) AND DT_EMISSAO < CAST('{dt}' AS DATE)
-                  AND ID_REC_STATUS IN {settings.STATUS_GERADOS_SQL}
+                FROM (
+                    SELECT RM.*,
+                           ROW_NUMBER() OVER (
+                               PARTITION BY RM.NR_RECEBIMENTO, RM.ID_CARTEIRA, RM.PARCELA
+                               ORDER BY RM.DT_EMISSAO DESC, RM.ID_REC DESC
+                           ) AS rn
+                    FROM {db}.dbo.REC_MASTER RM (NOLOCK)
+                    WHERE RM.DT_EMISSAO >= CAST('{df}' AS DATE) AND RM.DT_EMISSAO < CAST('{dt}' AS DATE)
+                      AND RM.ID_REC_STATUS IN {settings.STATUS_GERADOS_SQL}
+                ) RM
+                WHERE RM.rn = 1
                 GROUP BY ID_USUARIO
             ) AC ON AC.ID_USUARIO = U.ID_USUARIO
             LEFT JOIN (
                 -- Reprovados: status cuja descrição contém REJEITADO, REPROVADO ou RECUSADO.
+                -- Dedup (NR_RECEBIMENTO, ID_CARTEIRA, PARCELA) igual aos irmãos AC/EX acima:
+                -- sem isso, uma regravação que corrige o status pra fora dessas descrições
+                -- ainda deixa a linha antiga (reprovada) contar aqui.
                 SELECT RM.ID_USUARIO, COUNT(DISTINCT RM.NR_RECEBIMENTO) AS qtd_reprovados
-                FROM {db}.dbo.REC_MASTER RM (NOLOCK)
-                JOIN {db}.dbo.REC_STATUS RS (NOLOCK) ON RM.ID_REC_STATUS = RS.ID_REC_STATUS
-                WHERE RM.DT_EMISSAO >= CAST('{df}' AS DATE) AND RM.DT_EMISSAO < CAST('{dt}' AS DATE)
-                  AND (
-                      RS.DESCR LIKE '%REJEITADO%'
-                      OR RS.DESCR LIKE '%REPROVADO%'
-                      OR RS.DESCR LIKE '%RECUSADO%'
-                  )
+                FROM (
+                    SELECT RM.*,
+                           ROW_NUMBER() OVER (
+                               PARTITION BY RM.NR_RECEBIMENTO, RM.ID_CARTEIRA, RM.PARCELA
+                               ORDER BY RM.DT_EMISSAO DESC, RM.ID_REC DESC
+                           ) AS rn
+                    FROM {db}.dbo.REC_MASTER RM (NOLOCK)
+                    JOIN {db}.dbo.REC_STATUS RS (NOLOCK) ON RM.ID_REC_STATUS = RS.ID_REC_STATUS
+                    WHERE RM.DT_EMISSAO >= CAST('{df}' AS DATE) AND RM.DT_EMISSAO < CAST('{dt}' AS DATE)
+                      AND (
+                          RS.DESCR LIKE '%REJEITADO%'
+                          OR RS.DESCR LIKE '%REPROVADO%'
+                          OR RS.DESCR LIKE '%RECUSADO%'
+                      )
+                ) RM
+                WHERE RM.rn = 1
                 GROUP BY RM.ID_USUARIO
             ) R ON R.ID_USUARIO = U.ID_USUARIO
             LEFT JOIN (
+                -- Dedup (NR_RECEBIMENTO, ID_CARTEIRA, PARCELA): mesmo acordo pode ser
+                -- regravado por erro do sistema. Mantém só a parcela mais recente.
                 SELECT
                     ID_USUARIO,
                     COUNT(DISTINCT NR_RECEBIMENTO) AS qtd_excecoes,
                     SUM(VALOR) AS valor_excecoes
-                FROM {db}.dbo.REC_MASTER (NOLOCK)
-                WHERE DT_EMISSAO >= CAST('{df}' AS DATE) AND DT_EMISSAO < CAST('{dt}' AS DATE)
-                  AND ID_REC_STATUS IN {settings.STATUS_EXCECAO_SQL}
+                FROM (
+                    SELECT RM.*,
+                           ROW_NUMBER() OVER (
+                               PARTITION BY RM.NR_RECEBIMENTO, RM.ID_CARTEIRA, RM.PARCELA
+                               ORDER BY RM.DT_EMISSAO DESC, RM.ID_REC DESC
+                           ) AS rn
+                    FROM {db}.dbo.REC_MASTER RM (NOLOCK)
+                    WHERE RM.DT_EMISSAO >= CAST('{df}' AS DATE) AND RM.DT_EMISSAO < CAST('{dt}' AS DATE)
+                      AND RM.ID_REC_STATUS IN {settings.STATUS_EXCECAO_SQL}
+                ) RM
+                WHERE RM.rn = 1
                 GROUP BY ID_USUARIO
             ) EX ON EX.ID_USUARIO = U.ID_USUARIO
             WHERE (

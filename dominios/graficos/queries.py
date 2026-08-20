@@ -2,6 +2,32 @@ import config.settings as settings
 from core.utils.sql_helpers import build_assessoria_clause
 
 
+def _rec_master_dedup(database: str, alias: str = "R", extra_filter_sql: str = "") -> str:
+    """
+    REC_MASTER deduplicado por (NR_RECEBIMENTO, ID_CARTEIRA, PARCELA): mesmo
+    acordo pode ser regravado por erro do sistema. Mantém só a parcela mais
+    recente (DT_EMISSAO mais nova; ID_REC como desempate em timestamp idêntico).
+    Uso: FROM {_rec_master_dedup(database)} R ... WHERE R.rn = 1 AND ...
+
+    `extra_filter_sql`: predicados extras (cada um começando com "AND ..."),
+    aplicados a {alias} ANTES do ROW_NUMBER(). Todo filtro de negócio (janela
+    de data, status) que decide se uma linha é candidata válida deve entrar
+    aqui, nunca no WHERE externo pós-rn=1 — senão uma regravação com
+    status/data fora do filtro vence o rank e esconde a linha anterior
+    (válida) do mesmo grupo. Só colunas do próprio REC_MASTER (sem JOIN) —
+    roda dentro do derived table.
+    """
+    return f"""(
+                SELECT {alias}.*,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY {alias}.NR_RECEBIMENTO, {alias}.ID_CARTEIRA, {alias}.PARCELA
+                           ORDER BY {alias}.DT_EMISSAO DESC, {alias}.ID_REC DESC
+                       ) AS rn
+                FROM {database}.dbo.REC_MASTER {alias} (NOLOCK)
+                WHERE 1=1 {extra_filter_sql}
+            )"""
+
+
 def wrap_todos_or_single(db: str, base_fn, agg_select: str, order_by: str, date_from: str = None, date_to_exclusive: str = None) -> str:
     """
     Helper central dos builders. Monta o query final a partir de:
@@ -46,15 +72,18 @@ def build_primeira_parcela_dia_query(db: str, assessoria_token: str = "", date_f
     """
     def _base(database: str) -> str:
         assessoria_clause = build_assessoria_clause(assessoria_token)
+        extra_filter = f"""
+              AND R.PARCELA = {settings.PRIMEIRA_PARCELA}
+              AND R.DT_EMISSAO >= @Hoje AND R.DT_EMISSAO < @Amanha
+              AND R.ID_REC_STATUS IN {settings.STATUS_GERADOS_SQL}
+        """
         return f"""
             SELECT
                 SUM(R.VALOR) AS total_valor,
                 COUNT(DISTINCT R.NR_RECEBIMENTO) AS total_acordos
-            FROM {database}.dbo.REC_MASTER R (NOLOCK)
+            FROM {_rec_master_dedup(database, extra_filter_sql=extra_filter)} R
             JOIN {database}.dbo.USU_MASTER U (NOLOCK) ON R.ID_USUARIO = U.ID_USUARIO
-            WHERE R.PARCELA = {settings.PRIMEIRA_PARCELA}
-              AND R.DT_EMISSAO >= @Hoje AND R.DT_EMISSAO < @Amanha
-              AND R.ID_REC_STATUS IN {settings.STATUS_GERADOS_SQL}
+            WHERE R.rn = 1
               {settings.FILTRO_AGENTES_EXCLUIDOS_SQL}
               {assessoria_clause}
         """
@@ -74,12 +103,17 @@ def build_excecoes_por_portfolio_query(db: str, date_from: str = None, date_to_e
     um acordo tem múltiplas dívidas vinculadas.
     """
     def _base(database: str) -> str:
+        extra_filter = f"""
+              AND R.PARCELA = {settings.PRIMEIRA_PARCELA}
+              AND R.DT_EMISSAO >= @Hoje AND R.DT_EMISSAO < @Amanha
+              AND R.ID_REC_STATUS IN {settings.STATUS_EXCECAO_SQL}
+        """
         return f"""
             SELECT
                 DA.{settings.PORTFOLIO_COLUMN} AS portfolio_name,
                 COUNT(DISTINCT R.NR_RECEBIMENTO) AS qtd_excecoes,
                 SUM(R.VALOR) AS valor_excecoes
-            FROM {database}.dbo.REC_MASTER R (NOLOCK)
+            FROM {_rec_master_dedup(database, extra_filter_sql=extra_filter)} R
             JOIN {database}.dbo.USU_MASTER U (NOLOCK) ON R.ID_USUARIO = U.ID_USUARIO
             CROSS APPLY (
                 SELECT TOP 1 DA2.{settings.PORTFOLIO_COLUMN}
@@ -89,9 +123,7 @@ def build_excecoes_por_portfolio_query(db: str, date_from: str = None, date_to_e
                   AND RD.ID_CARTEIRA = R.ID_CARTEIRA
                   AND DA2.{settings.PORTFOLIO_COLUMN} IS NOT NULL
             ) DA
-            WHERE R.DT_EMISSAO >= @Hoje AND R.DT_EMISSAO < @Amanha
-              AND R.PARCELA = {settings.PRIMEIRA_PARCELA}
-              AND R.ID_REC_STATUS IN {settings.STATUS_EXCECAO_SQL}
+            WHERE R.rn = 1
               {settings.FILTRO_AGENTES_EXCLUIDOS_SQL}
             GROUP BY DA.{settings.PORTFOLIO_COLUMN}
         """
@@ -111,16 +143,19 @@ def build_excecoes_por_agente_query(db: str, date_from: str = None, date_to_excl
     Gráfico: exceções agrupadas por agente.
     """
     def _base(database: str) -> str:
+        extra_filter = f"""
+              AND R.PARCELA = {settings.PRIMEIRA_PARCELA}
+              AND R.DT_EMISSAO >= @Hoje AND R.DT_EMISSAO < @Amanha
+              AND R.ID_REC_STATUS IN {settings.STATUS_EXCECAO_SQL}
+        """
         return f"""
             SELECT
                 U.NOME AS agente,
                 COUNT(DISTINCT R.NR_RECEBIMENTO) AS qtd_excecoes,
                 SUM(R.VALOR) AS valor_excecoes
-            FROM {database}.dbo.REC_MASTER R (NOLOCK)
+            FROM {_rec_master_dedup(database, extra_filter_sql=extra_filter)} R
             JOIN {database}.dbo.USU_MASTER U (NOLOCK) ON R.ID_USUARIO = U.ID_USUARIO
-            WHERE R.DT_EMISSAO >= @Hoje AND R.DT_EMISSAO < @Amanha
-              AND R.PARCELA = {settings.PRIMEIRA_PARCELA}
-              AND R.ID_REC_STATUS IN {settings.STATUS_EXCECAO_SQL}
+            WHERE R.rn = 1
               {settings.FILTRO_AGENTES_EXCLUIDOS_SQL}
             GROUP BY U.NOME
         """
@@ -140,12 +175,17 @@ def build_acordos_por_portfolio_query(db: str, date_from: str = None, date_to_ex
     Gráfico: acordos gerados (1,2,3,10,12) agrupados por portfolio (CAMPO010 da DIV_AUX).
     """
     def _base(database: str) -> str:
+        extra_filter = f"""
+              AND R.PARCELA = {settings.PRIMEIRA_PARCELA}
+              AND R.DT_EMISSAO >= @Hoje AND R.DT_EMISSAO < @Amanha
+              AND R.ID_REC_STATUS IN {settings.STATUS_GERADOS_SQL}
+        """
         return f"""
             SELECT
                 DA.{settings.PORTFOLIO_COLUMN} AS portfolio_name,
                 COUNT(DISTINCT R.NR_RECEBIMENTO) AS qtd_acordos,
                 SUM(R.VALOR) AS valor_acordos
-            FROM {database}.dbo.REC_MASTER R (NOLOCK)
+            FROM {_rec_master_dedup(database, extra_filter_sql=extra_filter)} R
             JOIN {database}.dbo.USU_MASTER U (NOLOCK) ON R.ID_USUARIO = U.ID_USUARIO
             CROSS APPLY (
                 SELECT TOP 1 DA2.{settings.PORTFOLIO_COLUMN}
@@ -155,9 +195,7 @@ def build_acordos_por_portfolio_query(db: str, date_from: str = None, date_to_ex
                   AND RD.ID_CARTEIRA = R.ID_CARTEIRA
                   AND DA2.{settings.PORTFOLIO_COLUMN} IS NOT NULL
             ) DA
-            WHERE R.DT_EMISSAO >= @Hoje AND R.DT_EMISSAO < @Amanha
-              AND R.PARCELA = {settings.PRIMEIRA_PARCELA}
-              AND R.ID_REC_STATUS IN {settings.STATUS_GERADOS_SQL}
+            WHERE R.rn = 1
               {settings.FILTRO_AGENTES_EXCLUIDOS_SQL}
             GROUP BY DA.{settings.PORTFOLIO_COLUMN}
         """
@@ -179,6 +217,11 @@ def build_excecoes_sem_portfolio_query(db: str, date_from: str = None, date_to_e
     `excecoes-por-portfolio`. CPF mascarado: primeiros 3 + últimos 2 dígitos.
     """
     def _base(database: str) -> str:
+        extra_filter = f"""
+              AND R.PARCELA = {settings.PRIMEIRA_PARCELA}
+              AND R.DT_EMISSAO >= @Hoje AND R.DT_EMISSAO < @Amanha
+              AND R.ID_REC_STATUS IN {settings.STATUS_EXCECAO_SQL}
+        """
         return f"""
             SELECT
                 R.NR_RECEBIMENTO,
@@ -186,19 +229,18 @@ def build_excecoes_sem_portfolio_query(db: str, date_from: str = None, date_to_e
                 R.VALOR AS valor_primeira_parcela,
                 COALESCE((
                     SELECT SUM(R2.VALOR)
-                    FROM {database}.dbo.REC_MASTER R2 (NOLOCK)
+                    FROM {_rec_master_dedup(database, alias="R2")} R2
                     WHERE R2.NR_RECEBIMENTO = R.NR_RECEBIMENTO
                       AND R2.ID_CARTEIRA = R.ID_CARTEIRA
+                      AND R2.rn = 1
                 ), R.VALOR) AS valor_total,
                 U.NOME AS agente,
                 D.CPF_CNPJ AS cpf_mask,
                 D.NOME_RAZAO AS nome_devedor
-            FROM {database}.dbo.REC_MASTER R (NOLOCK)
+            FROM {_rec_master_dedup(database, extra_filter_sql=extra_filter)} R
             JOIN {database}.dbo.USU_MASTER U (NOLOCK) ON R.ID_USUARIO = U.ID_USUARIO
             LEFT JOIN {database}.dbo.DEV_MASTER D (NOLOCK) ON R.ID_DEV = D.ID_DEV
-            WHERE R.DT_EMISSAO >= @Hoje AND R.DT_EMISSAO < @Amanha
-              AND R.PARCELA = {settings.PRIMEIRA_PARCELA}
-              AND R.ID_REC_STATUS IN {settings.STATUS_EXCECAO_SQL}
+            WHERE R.rn = 1
               {settings.FILTRO_AGENTES_EXCLUIDOS_SQL}
               AND NOT EXISTS (
                 SELECT 1
@@ -222,12 +264,17 @@ def build_rejeitados_por_portfolio_query(db: str, date_from: str = None, date_to
     Gráfico: acordos rejeitados (ID_REC_STATUS = 7) por portfolio (CAMPO010).
     """
     def _base(database: str) -> str:
+        extra_filter = f"""
+              AND R.PARCELA = {settings.PRIMEIRA_PARCELA}
+              AND R.DT_EMISSAO >= @Hoje AND R.DT_EMISSAO < @Amanha
+              AND R.ID_REC_STATUS IN {settings.STATUS_REJEITADO_SQL}
+        """
         return f"""
             SELECT
                 DA.{settings.PORTFOLIO_COLUMN} AS portfolio_name,
                 COUNT(DISTINCT R.NR_RECEBIMENTO) AS qtd_rejeitados,
                 SUM(R.VALOR) AS valor_rejeitados
-            FROM {database}.dbo.REC_MASTER R (NOLOCK)
+            FROM {_rec_master_dedup(database, extra_filter_sql=extra_filter)} R
             JOIN {database}.dbo.USU_MASTER U (NOLOCK) ON R.ID_USUARIO = U.ID_USUARIO
             CROSS APPLY (
                 SELECT TOP 1 DA2.{settings.PORTFOLIO_COLUMN}
@@ -237,9 +284,7 @@ def build_rejeitados_por_portfolio_query(db: str, date_from: str = None, date_to
                   AND RD.ID_CARTEIRA = R.ID_CARTEIRA
                   AND DA2.{settings.PORTFOLIO_COLUMN} IS NOT NULL
             ) DA
-            WHERE R.DT_EMISSAO >= @Hoje AND R.DT_EMISSAO < @Amanha
-              AND R.PARCELA = {settings.PRIMEIRA_PARCELA}
-              AND R.ID_REC_STATUS IN {settings.STATUS_REJEITADO_SQL}
+            WHERE R.rn = 1
               {settings.FILTRO_AGENTES_EXCLUIDOS_SQL}
             GROUP BY DA.{settings.PORTFOLIO_COLUMN}
         """
@@ -259,12 +304,17 @@ def build_quebrados_por_portfolio_query(db: str, date_from: str = None, date_to_
     Gráfico: boletos quebrados (ID_REC_STATUS = 2) por portfolio (CAMPO010).
     """
     def _base(database: str) -> str:
+        extra_filter = f"""
+              AND R.PARCELA = {settings.PRIMEIRA_PARCELA}
+              AND R.DT_EMISSAO >= @Hoje AND R.DT_EMISSAO < @Amanha
+              AND R.ID_REC_STATUS IN {settings.STATUS_QUEBRADO_SQL}
+        """
         return f"""
             SELECT
                 DA.{settings.PORTFOLIO_COLUMN} AS portfolio_name,
                 COUNT(DISTINCT R.NR_RECEBIMENTO) AS qtd_quebrados,
                 SUM(R.VALOR) AS valor_quebrados
-            FROM {database}.dbo.REC_MASTER R (NOLOCK)
+            FROM {_rec_master_dedup(database, extra_filter_sql=extra_filter)} R
             JOIN {database}.dbo.USU_MASTER U (NOLOCK) ON R.ID_USUARIO = U.ID_USUARIO
             CROSS APPLY (
                 SELECT TOP 1 DA2.{settings.PORTFOLIO_COLUMN}
@@ -274,9 +324,7 @@ def build_quebrados_por_portfolio_query(db: str, date_from: str = None, date_to_
                   AND RD.ID_CARTEIRA = R.ID_CARTEIRA
                   AND DA2.{settings.PORTFOLIO_COLUMN} IS NOT NULL
             ) DA
-            WHERE R.DT_EMISSAO >= @Hoje AND R.DT_EMISSAO < @Amanha
-              AND R.PARCELA = {settings.PRIMEIRA_PARCELA}
-              AND R.ID_REC_STATUS IN {settings.STATUS_QUEBRADO_SQL}
+            WHERE R.rn = 1
               {settings.FILTRO_AGENTES_EXCLUIDOS_SQL}
             GROUP BY DA.{settings.PORTFOLIO_COLUMN}
         """
@@ -315,13 +363,18 @@ def build_portfolio_rollup_query(db: str, date_from: str = None, date_to_exclusi
     (scripts/parity_portfolio_rollup.py). `valor` é aditivo: paridade incondicional.
     """
     def _base(database: str) -> str:
+        extra_filter = f"""
+              AND R.PARCELA = {settings.PRIMEIRA_PARCELA}
+              AND R.DT_EMISSAO >= @Hoje AND R.DT_EMISSAO < @Amanha
+              AND R.ID_REC_STATUS IN {settings.STATUS_PORTFOLIO_ROLLUP_SQL}
+        """
         return f"""
             SELECT
                 DA.{settings.PORTFOLIO_COLUMN} AS portfolio_name,
                 R.ID_REC_STATUS AS id_rec_status,
                 COUNT(DISTINCT R.NR_RECEBIMENTO) AS qtd,
                 SUM(R.VALOR) AS valor
-            FROM {database}.dbo.REC_MASTER R (NOLOCK)
+            FROM {_rec_master_dedup(database, extra_filter_sql=extra_filter)} R
             JOIN {database}.dbo.USU_MASTER U (NOLOCK) ON R.ID_USUARIO = U.ID_USUARIO
             CROSS APPLY (
                 SELECT TOP 1 DA2.{settings.PORTFOLIO_COLUMN}
@@ -331,9 +384,7 @@ def build_portfolio_rollup_query(db: str, date_from: str = None, date_to_exclusi
                   AND RD.ID_CARTEIRA = R.ID_CARTEIRA
                   AND DA2.{settings.PORTFOLIO_COLUMN} IS NOT NULL
             ) DA
-            WHERE R.DT_EMISSAO >= @Hoje AND R.DT_EMISSAO < @Amanha
-              AND R.PARCELA = {settings.PRIMEIRA_PARCELA}
-              AND R.ID_REC_STATUS IN {settings.STATUS_PORTFOLIO_ROLLUP_SQL}
+            WHERE R.rn = 1
               {settings.FILTRO_AGENTES_EXCLUIDOS_SQL}
             GROUP BY DA.{settings.PORTFOLIO_COLUMN}, R.ID_REC_STATUS
         """
@@ -360,6 +411,11 @@ def _build_detalhe_por_portfolio(db: str, status_sql: str, date_from: str = None
     mascarado: primeiros 3 + últimos 2 dígitos.
     """
     def _base(database: str) -> str:
+        extra_filter = f"""
+              AND R.PARCELA = {settings.PRIMEIRA_PARCELA}
+              AND R.DT_EMISSAO >= @Hoje AND R.DT_EMISSAO < @Amanha
+              AND R.ID_REC_STATUS IN {status_sql}
+        """
         return f"""
             SELECT
                 R.NR_RECEBIMENTO,
@@ -367,9 +423,10 @@ def _build_detalhe_por_portfolio(db: str, status_sql: str, date_from: str = None
                 R.VALOR AS valor_primeira_parcela,
                 COALESCE((
                     SELECT SUM(R2.VALOR)
-                    FROM {database}.dbo.REC_MASTER R2 (NOLOCK)
+                    FROM {_rec_master_dedup(database, alias="R2")} R2
                     WHERE R2.NR_RECEBIMENTO = R.NR_RECEBIMENTO
                       AND R2.ID_CARTEIRA = R.ID_CARTEIRA
+                      AND R2.rn = 1
                 ), R.VALOR) AS valor_total,
                 U.NOME AS agente,
                 U.MATRICULA AS matricula,
@@ -378,12 +435,13 @@ def _build_detalhe_por_portfolio(db: str, status_sql: str, date_from: str = None
                 CONVERT(varchar(10), R.DT_EMISSAO, 120) AS data_acordo,
                 CONVERT(varchar(10), R.DT_VENCIMENTO, 120) AS data_vencimento,
                 (
-                    SELECT COUNT(1)
+                    -- Distinct por PARCELA: acordo regravado por erro não duplica a contagem.
+                    SELECT COUNT(DISTINCT R3.PARCELA)
                     FROM {database}.dbo.REC_MASTER R3 (NOLOCK)
                     WHERE R3.NR_RECEBIMENTO = R.NR_RECEBIMENTO
                       AND R3.ID_CARTEIRA = R.ID_CARTEIRA
                 ) AS total_parcelas
-            FROM {database}.dbo.REC_MASTER R (NOLOCK)
+            FROM {_rec_master_dedup(database, extra_filter_sql=extra_filter)} R
             JOIN {database}.dbo.USU_MASTER U (NOLOCK) ON R.ID_USUARIO = U.ID_USUARIO
             LEFT JOIN {database}.dbo.DEV_MASTER D (NOLOCK) ON R.ID_DEV = D.ID_DEV
             CROSS APPLY (
@@ -394,9 +452,7 @@ def _build_detalhe_por_portfolio(db: str, status_sql: str, date_from: str = None
                   AND RD.ID_CARTEIRA = R.ID_CARTEIRA
                   AND DA2.{settings.PORTFOLIO_COLUMN} IS NOT NULL
             ) DA
-            WHERE R.DT_EMISSAO >= @Hoje AND R.DT_EMISSAO < @Amanha
-              AND R.PARCELA = {settings.PRIMEIRA_PARCELA}
-              AND R.ID_REC_STATUS IN {status_sql}
+            WHERE R.rn = 1
               {settings.FILTRO_AGENTES_EXCLUIDOS_SQL}
               AND DA.{settings.PORTFOLIO_COLUMN} = ?
         """
@@ -411,6 +467,11 @@ def _build_detalhe_por_portfolio(db: str, status_sql: str, date_from: str = None
 def _build_detalhe_por_agente(db: str, status_sql: str, date_from: str = None, date_to_exclusive: str = None) -> str:
     """Detalhe por agente (U.NOME = ?) em vez de portfólio. Mesma estrutura de colunas."""
     def _base(database: str) -> str:
+        extra_filter = f"""
+              AND R.PARCELA = {settings.PRIMEIRA_PARCELA}
+              AND R.DT_EMISSAO >= @Hoje AND R.DT_EMISSAO < @Amanha
+              AND R.ID_REC_STATUS IN {status_sql}
+        """
         return f"""
             SELECT
                 R.NR_RECEBIMENTO,
@@ -418,9 +479,10 @@ def _build_detalhe_por_agente(db: str, status_sql: str, date_from: str = None, d
                 R.VALOR AS valor_primeira_parcela,
                 COALESCE((
                     SELECT SUM(R2.VALOR)
-                    FROM {database}.dbo.REC_MASTER R2 (NOLOCK)
+                    FROM {_rec_master_dedup(database, alias="R2")} R2
                     WHERE R2.NR_RECEBIMENTO = R.NR_RECEBIMENTO
                       AND R2.ID_CARTEIRA = R.ID_CARTEIRA
+                      AND R2.rn = 1
                 ), R.VALOR) AS valor_total,
                 U.NOME AS agente,
                 U.MATRICULA AS matricula,
@@ -429,17 +491,16 @@ def _build_detalhe_por_agente(db: str, status_sql: str, date_from: str = None, d
                 CONVERT(varchar(10), R.DT_EMISSAO, 120) AS data_acordo,
                 CONVERT(varchar(10), R.DT_VENCIMENTO, 120) AS data_vencimento,
                 (
-                    SELECT COUNT(1)
+                    -- Distinct por PARCELA: acordo regravado por erro não duplica a contagem.
+                    SELECT COUNT(DISTINCT R3.PARCELA)
                     FROM {database}.dbo.REC_MASTER R3 (NOLOCK)
                     WHERE R3.NR_RECEBIMENTO = R.NR_RECEBIMENTO
                       AND R3.ID_CARTEIRA = R.ID_CARTEIRA
                 ) AS total_parcelas
-            FROM {database}.dbo.REC_MASTER R (NOLOCK)
+            FROM {_rec_master_dedup(database, extra_filter_sql=extra_filter)} R
             JOIN {database}.dbo.USU_MASTER U (NOLOCK) ON R.ID_USUARIO = U.ID_USUARIO
             LEFT JOIN {database}.dbo.DEV_MASTER D (NOLOCK) ON R.ID_DEV = D.ID_DEV
-            WHERE R.DT_EMISSAO >= @Hoje AND R.DT_EMISSAO < @Amanha
-              AND R.PARCELA = {settings.PRIMEIRA_PARCELA}
-              AND R.ID_REC_STATUS IN {status_sql}
+            WHERE R.rn = 1
               {settings.FILTRO_AGENTES_EXCLUIDOS_SQL}
               AND U.NOME = ?
         """
@@ -457,6 +518,11 @@ def _build_detalhe_global(db: str, status_sql: str, date_from: str = None, date_
     acordos sem carteira mapeada) pra UI distinguir a carteira de cada linha.
     """
     def _base(database: str) -> str:
+        extra_filter = f"""
+              AND R.PARCELA = {settings.PRIMEIRA_PARCELA}
+              AND R.DT_EMISSAO >= @Hoje AND R.DT_EMISSAO < @Amanha
+              AND R.ID_REC_STATUS IN {status_sql}
+        """
         return f"""
             SELECT
                 R.NR_RECEBIMENTO,
@@ -464,9 +530,10 @@ def _build_detalhe_global(db: str, status_sql: str, date_from: str = None, date_
                 R.VALOR AS valor_primeira_parcela,
                 COALESCE((
                     SELECT SUM(R2.VALOR)
-                    FROM {database}.dbo.REC_MASTER R2 (NOLOCK)
+                    FROM {_rec_master_dedup(database, alias="R2")} R2
                     WHERE R2.NR_RECEBIMENTO = R.NR_RECEBIMENTO
                       AND R2.ID_CARTEIRA = R.ID_CARTEIRA
+                      AND R2.rn = 1
                 ), R.VALOR) AS valor_total,
                 U.NOME AS agente,
                 U.MATRICULA AS matricula,
@@ -476,12 +543,13 @@ def _build_detalhe_global(db: str, status_sql: str, date_from: str = None, date_
                 CONVERT(varchar(10), R.DT_EMISSAO, 120) AS data_acordo,
                 CONVERT(varchar(10), R.DT_VENCIMENTO, 120) AS data_vencimento,
                 (
-                    SELECT COUNT(1)
+                    -- Distinct por PARCELA: acordo regravado por erro não duplica a contagem.
+                    SELECT COUNT(DISTINCT R3.PARCELA)
                     FROM {database}.dbo.REC_MASTER R3 (NOLOCK)
                     WHERE R3.NR_RECEBIMENTO = R.NR_RECEBIMENTO
                       AND R3.ID_CARTEIRA = R.ID_CARTEIRA
                 ) AS total_parcelas
-            FROM {database}.dbo.REC_MASTER R (NOLOCK)
+            FROM {_rec_master_dedup(database, extra_filter_sql=extra_filter)} R
             JOIN {database}.dbo.USU_MASTER U (NOLOCK) ON R.ID_USUARIO = U.ID_USUARIO
             LEFT JOIN {database}.dbo.DEV_MASTER D (NOLOCK) ON R.ID_DEV = D.ID_DEV
             OUTER APPLY (
@@ -492,9 +560,7 @@ def _build_detalhe_global(db: str, status_sql: str, date_from: str = None, date_
                   AND RD.ID_CARTEIRA = R.ID_CARTEIRA
                   AND DA2.{settings.PORTFOLIO_COLUMN} IS NOT NULL
             ) DA
-            WHERE R.DT_EMISSAO >= @Hoje AND R.DT_EMISSAO < @Amanha
-              AND R.PARCELA = {settings.PRIMEIRA_PARCELA}
-              AND R.ID_REC_STATUS IN {status_sql}
+            WHERE R.rn = 1
               {settings.FILTRO_AGENTES_EXCLUIDOS_SQL}
         """
 
@@ -558,16 +624,19 @@ def build_primeira_parcela_por_agente_query(db: str, assessoria_token: str = "",
     """
     def _base(database: str) -> str:
         assessoria_clause = build_assessoria_clause(assessoria_token)
+        extra_filter = f"""
+              AND R.PARCELA = {settings.PRIMEIRA_PARCELA}
+              AND R.DT_EMISSAO >= @Hoje AND R.DT_EMISSAO < @Amanha
+              AND R.ID_REC_STATUS IN {settings.STATUS_GERADOS_SQL}
+        """
         return f"""
             SELECT
                 U.NOME AS agente,
                 COUNT(DISTINCT R.NR_RECEBIMENTO) AS qtd_acordos_primeira_parcela,
                 SUM(R.VALOR) AS valor_primeira_parcela
-            FROM {database}.dbo.REC_MASTER R (NOLOCK)
+            FROM {_rec_master_dedup(database, extra_filter_sql=extra_filter)} R
             JOIN {database}.dbo.USU_MASTER U (NOLOCK) ON R.ID_USUARIO = U.ID_USUARIO
-            WHERE R.PARCELA = {settings.PRIMEIRA_PARCELA}
-              AND R.DT_EMISSAO >= @Hoje AND R.DT_EMISSAO < @Amanha
-              AND R.ID_REC_STATUS IN {settings.STATUS_GERADOS_SQL}
+            WHERE R.rn = 1
               {settings.FILTRO_AGENTES_EXCLUIDOS_SQL}
               {assessoria_clause}
             GROUP BY U.NOME
@@ -589,12 +658,17 @@ def build_primeira_parcela_por_portfolio_query(db: str, date_from: str = None, d
     Acordos gerados (1,2,3,10,12). Usado para análise de rentabilidade por portfólio.
     """
     def _base(database: str) -> str:
+        extra_filter = f"""
+              AND R.PARCELA = {settings.PRIMEIRA_PARCELA}
+              AND R.DT_EMISSAO >= @Hoje AND R.DT_EMISSAO < @Amanha
+              AND R.ID_REC_STATUS IN {settings.STATUS_GERADOS_SQL}
+        """
         return f"""
             SELECT
                 DA.{settings.PORTFOLIO_COLUMN} AS portfolio_name,
                 COUNT(DISTINCT R.NR_RECEBIMENTO) AS qtd_acordos,
                 SUM(R.VALOR) AS valor_primeira_parcela
-            FROM {database}.dbo.REC_MASTER R (NOLOCK)
+            FROM {_rec_master_dedup(database, extra_filter_sql=extra_filter)} R
             JOIN {database}.dbo.USU_MASTER U (NOLOCK) ON R.ID_USUARIO = U.ID_USUARIO
             CROSS APPLY (
                 SELECT TOP 1 DA2.{settings.PORTFOLIO_COLUMN}
@@ -604,9 +678,7 @@ def build_primeira_parcela_por_portfolio_query(db: str, date_from: str = None, d
                   AND RD.ID_CARTEIRA = R.ID_CARTEIRA
                   AND DA2.{settings.PORTFOLIO_COLUMN} IS NOT NULL
             ) DA
-            WHERE R.DT_EMISSAO >= @Hoje AND R.DT_EMISSAO < @Amanha
-              AND R.PARCELA = {settings.PRIMEIRA_PARCELA}
-              AND R.ID_REC_STATUS IN {settings.STATUS_GERADOS_SQL}
+            WHERE R.rn = 1
               {settings.FILTRO_AGENTES_EXCLUIDOS_SQL}
             GROUP BY DA.{settings.PORTFOLIO_COLUMN}
         """
@@ -630,15 +702,26 @@ def build_real_por_portfolio_query(db: str, date_from: str = None, date_to_exclu
     DT_PAGAMENTO (caixa realizado no mês), não por DT_EMISSAO. Assim casa com o alvo
     mensal de caixa, independentemente de quando o acordo foi gerado.
     Usa CROSS APPLY TOP 1 (ADR-004) para resolver o portfólio sem multiplicar linhas.
+
+    Filtro de pagamento (DT_PAGAMENTO/VR_PAGO/status) vai dentro do dedup, pré-rank:
+    a ordenação de "versão vencedora" continua por DT_EMISSAO DESC (mesma convenção
+    de _rec_master_dedup), mas só entre linhas que já são um pagamento válido nesta
+    janela — senão uma regravação sem DT_PAGAMENTO no período vence o rank e esconde
+    o pagamento real do mesmo acordo (achado #6 do review pt4).
     """
     def _base(database: str) -> str:
+        extra_filter = f"""
+              AND R.DT_PAGAMENTO >= @Hoje AND R.DT_PAGAMENTO < @Amanha
+              AND R.VR_PAGO > 0
+              AND R.ID_REC_STATUS IN {settings.STATUS_GERADOS_SQL}
+        """
         return f"""
             SELECT
                 DA.{settings.PORTFOLIO_COLUMN} AS portfolio_name,
                 COUNT(DISTINCT R.NR_RECEBIMENTO) AS qtd_acordos,
                 SUM(R.VR_PAGO) AS valor_recebido,
                 SUM(CASE WHEN R.PARCELA = {settings.PRIMEIRA_PARCELA} THEN R.VR_PAGO ELSE 0 END) AS valor_primeira_parcela
-            FROM {database}.dbo.REC_MASTER R (NOLOCK)
+            FROM {_rec_master_dedup(database, extra_filter_sql=extra_filter)} R
             JOIN {database}.dbo.USU_MASTER U (NOLOCK) ON R.ID_USUARIO = U.ID_USUARIO
             CROSS APPLY (
                 SELECT TOP 1 DA2.{settings.PORTFOLIO_COLUMN}
@@ -648,9 +731,7 @@ def build_real_por_portfolio_query(db: str, date_from: str = None, date_to_exclu
                   AND RD.ID_CARTEIRA = R.ID_CARTEIRA
                   AND DA2.{settings.PORTFOLIO_COLUMN} IS NOT NULL
             ) DA
-            WHERE R.DT_PAGAMENTO >= @Hoje AND R.DT_PAGAMENTO < @Amanha
-              AND R.VR_PAGO > 0
-              AND R.ID_REC_STATUS IN {settings.STATUS_GERADOS_SQL}
+            WHERE R.rn = 1
               {settings.FILTRO_AGENTES_EXCLUIDOS_SQL}
             GROUP BY DA.{settings.PORTFOLIO_COLUMN}
         """

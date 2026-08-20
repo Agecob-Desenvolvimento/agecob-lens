@@ -62,6 +62,9 @@ def build_produtividade_query(
 {_date_decl(date_from, date_to_exclusive)}
 
 WITH CTE_Acordos AS (
+    -- Dedup (NR_RECEBIMENTO, ID_CARTEIRA, PARCELA): mesmo acordo pode ser
+    -- regravado por erro do sistema. Mantém só a parcela mais recente
+    -- (DT_EMISSAO mais nova; ID_REC como desempate em timestamp idêntico).
     SELECT
         RM.ID_USUARIO,
         RM.NR_RECEBIMENTO,
@@ -70,11 +73,19 @@ WITH CTE_Acordos AS (
         MAX(CASE WHEN RM.PARCELA = {settings.PRIMEIRA_PARCELA} THEN RM.VALOR ELSE 0 END) AS VALOR_P1,
         MAX(CASE WHEN RM.PARCELA = {settings.PRIMEIRA_PARCELA} THEN RM.VR_PAGO ELSE 0 END) AS VR_PAGO_P1,
         MAX(RM.PLANO) AS PLANO
-    FROM REC_MASTER RM (NOLOCK)
-     WHERE RM.DT_EMISSAO >= @Hoje AND RM.DT_EMISSAO < @Amanha
-       AND (RM.ID_REC_STATUS IN {settings.STATUS_UNIVERSO_SQL}
-            OR RM.ID_REC_STATUS IN {settings.STATUS_REJEITADO_SQL})
-       {cart_filter}
+    FROM (
+        SELECT RM.*,
+               ROW_NUMBER() OVER (
+                   PARTITION BY RM.NR_RECEBIMENTO, RM.ID_CARTEIRA, RM.PARCELA
+                   ORDER BY RM.DT_EMISSAO DESC, RM.ID_REC DESC
+               ) AS rn
+        FROM REC_MASTER RM (NOLOCK)
+        WHERE RM.DT_EMISSAO >= @Hoje AND RM.DT_EMISSAO < @Amanha
+          AND (RM.ID_REC_STATUS IN {settings.STATUS_UNIVERSO_SQL}
+               OR RM.ID_REC_STATUS IN {settings.STATUS_REJEITADO_SQL})
+          {cart_filter}
+    ) RM
+     WHERE RM.rn = 1
      GROUP BY RM.ID_USUARIO, RM.NR_RECEBIMENTO, RM.ID_REC_STATUS
 ),
 CTE_Saldo_Original AS (
@@ -161,11 +172,19 @@ CTE_Boletos_Agente AS (
         RM.ID_USUARIO,
         COUNT(*) AS qtd_boletos_emitidos,
         SUM({settings.BOLETO_PAGO_PRAZO_SQL}) AS qtd_boletos_pagos
-     FROM REC_MASTER RM (NOLOCK)
-     WHERE RM.DT_EMISSAO >= @Hoje AND RM.DT_EMISSAO < @Amanha
-       AND RM.ID_REC_STATUS IN {settings.STATUS_GERADOS_SQL}
-       AND RM.DT_VENCIMENTO < CAST(GETDATE() AS DATE)
-       {cart_filter}
+     FROM (
+        SELECT RM.*,
+               ROW_NUMBER() OVER (
+                   PARTITION BY RM.NR_RECEBIMENTO, RM.ID_CARTEIRA, RM.PARCELA
+                   ORDER BY RM.DT_EMISSAO DESC, RM.ID_REC DESC
+               ) AS rn
+        FROM REC_MASTER RM (NOLOCK)
+        WHERE RM.DT_EMISSAO >= @Hoje AND RM.DT_EMISSAO < @Amanha
+          AND RM.ID_REC_STATUS IN {settings.STATUS_GERADOS_SQL}
+          AND RM.DT_VENCIMENTO < CAST(GETDATE() AS DATE)
+          {cart_filter}
+     ) RM
+     WHERE RM.rn = 1
      GROUP BY RM.ID_USUARIO
 ),
 -- Acordos contados por CONTRATO (dívida): 1 por (NR_RECEBIMENTO, ID_CARTEIRA,
@@ -173,16 +192,27 @@ CTE_Boletos_Agente AS (
 -- só o KPI global "Qtd Acordos" da Home — qtd_acordos (grão do acordo) continua
 -- sendo o número por agente e o denominador de ticket médio e conversão.
 CTE_Contratos_Agente AS (
+    -- Mesmo dedup de regravação que CTE_Acordos (irmã): sem isso, uma regravação
+    -- que move o status pra fora de STATUS_GERADOS_SQL ainda deixa a linha antiga
+    -- (dentro do universo) contar aqui, divergindo do que CTE_Acordos decidiria.
     SELECT
         RM.ID_USUARIO,
         COUNT(DISTINCT CONCAT(RM.NR_RECEBIMENTO, '|', RM.ID_CARTEIRA, '|', RD.ID_DIVIDA)) AS qtd_acordos_por_contrato
-     FROM REC_MASTER RM (NOLOCK)
+     FROM (
+        SELECT RM.*,
+               ROW_NUMBER() OVER (
+                   PARTITION BY RM.NR_RECEBIMENTO, RM.ID_CARTEIRA, RM.PARCELA
+                   ORDER BY RM.DT_EMISSAO DESC, RM.ID_REC DESC
+               ) AS rn
+        FROM REC_MASTER RM (NOLOCK)
+        WHERE RM.DT_EMISSAO >= @Hoje AND RM.DT_EMISSAO < @Amanha
+          AND RM.ID_REC_STATUS IN {settings.STATUS_GERADOS_SQL}
+          {cart_filter}
+     ) RM
      JOIN REC_DIVIDAS RD (NOLOCK)
        ON RD.NR_RECEBIMENTO = RM.NR_RECEBIMENTO
       AND RD.ID_CARTEIRA = RM.ID_CARTEIRA
-     WHERE RM.DT_EMISSAO >= @Hoje AND RM.DT_EMISSAO < @Amanha
-       AND RM.ID_REC_STATUS IN {settings.STATUS_GERADOS_SQL}
-       {cart_filter}
+     WHERE RM.rn = 1
      GROUP BY RM.ID_USUARIO
 )
 SELECT
@@ -242,13 +272,13 @@ OPTION (USE HINT('ENABLE_PARALLEL_PLAN_PREFERENCE'), MAXDOP 0);
     if normalized == "cobwebrcbconsumer":
         usu_master = "SELECT ID_USUARIO, CHAVE, NOME, 'CONSUMER' AS origem FROM COBwebRCBCONSUMER.dbo.USU_MASTER (NOLOCK)"
         cto_master = f"SELECT CM2.ID_USUARIO, CM2.ID_CTO_MASTER, CM2.ID_COMPLEMENTO, CM2.ID_DEV, CM2.DATA, CASE WHEN CC.ALO = 1 AND CC.CONTATO = 1 THEN 1 ELSE 0 END AS contato, CASE WHEN CC.ALO = 1 THEN 1 ELSE 0 END AS alo, 'CONSUMER' AS origem FROM COBwebRCBCONSUMER.dbo.CTO_MASTER CM2 (NOLOCK) LEFT JOIN COBwebRCBCONSUMER.dbo.CTO_COMPLEMENTO CC (NOLOCK) ON CM2.ID_COMPLEMENTO = CC.ID_COMPLEMENTO WHERE CM2.DATA >= @Hoje AND CM2.DATA < @Amanha"
-        rec_master = "SELECT ID_USUARIO, NR_RECEBIMENTO, VALOR, PARCELA, ID_REC_STATUS, PLANO, ID_CARTEIRA, VR_PAGO, DT_PAGAMENTO, DT_VENCIMENTO, 'CONSUMER' AS origem FROM COBwebRCBCONSUMER.dbo.REC_MASTER (NOLOCK) WHERE DT_EMISSAO >= @Hoje AND DT_EMISSAO < @Amanha"
+        rec_master = "SELECT ID_REC, ID_USUARIO, NR_RECEBIMENTO, VALOR, PARCELA, ID_REC_STATUS, PLANO, ID_CARTEIRA, VR_PAGO, DT_PAGAMENTO, DT_VENCIMENTO, DT_EMISSAO, 'CONSUMER' AS origem FROM COBwebRCBCONSUMER.dbo.REC_MASTER (NOLOCK) WHERE DT_EMISSAO >= @Hoje AND DT_EMISSAO < @Amanha"
         rec_dividas = "SELECT NR_RECEBIMENTO, ID_DIVIDA, 'CONSUMER' AS origem FROM COBwebRCBCONSUMER.dbo.REC_DIVIDAS (NOLOCK)"
         div_master = "SELECT ID_DIVIDA, VR_SALDO, 'CONSUMER' AS origem FROM COBwebRCBCONSUMER.dbo.DIV_MASTER (NOLOCK)"
     elif normalized == "cobwebrcbautos":
         usu_master = "SELECT ID_USUARIO, CHAVE, NOME, 'AUTOS' AS origem FROM COBwebRCBAUTOS.dbo.USU_MASTER (NOLOCK)"
         cto_master = f"SELECT CM2.ID_USUARIO, CM2.ID_CTO_MASTER, CM2.ID_COMPLEMENTO, CM2.ID_DEV, CM2.DATA, CASE WHEN CC.ALO = 1 AND CC.CONTATO = 1 THEN 1 ELSE 0 END AS contato, CASE WHEN CC.ALO = 1 THEN 1 ELSE 0 END AS alo, 'AUTOS' AS origem FROM COBwebRCBAUTOS.dbo.CTO_MASTER CM2 (NOLOCK) LEFT JOIN COBwebRCBAUTOS.dbo.CTO_COMPLEMENTO CC (NOLOCK) ON CM2.ID_COMPLEMENTO = CC.ID_COMPLEMENTO WHERE CM2.DATA >= @Hoje AND CM2.DATA < @Amanha"
-        rec_master = "SELECT ID_USUARIO, NR_RECEBIMENTO, VALOR, PARCELA, ID_REC_STATUS, PLANO, ID_CARTEIRA, VR_PAGO, DT_PAGAMENTO, DT_VENCIMENTO, 'AUTOS' AS origem FROM COBwebRCBAUTOS.dbo.REC_MASTER (NOLOCK) WHERE DT_EMISSAO >= @Hoje AND DT_EMISSAO < @Amanha"
+        rec_master = "SELECT ID_REC, ID_USUARIO, NR_RECEBIMENTO, VALOR, PARCELA, ID_REC_STATUS, PLANO, ID_CARTEIRA, VR_PAGO, DT_PAGAMENTO, DT_VENCIMENTO, DT_EMISSAO, 'AUTOS' AS origem FROM COBwebRCBAUTOS.dbo.REC_MASTER (NOLOCK) WHERE DT_EMISSAO >= @Hoje AND DT_EMISSAO < @Amanha"
         rec_dividas = "SELECT NR_RECEBIMENTO, ID_DIVIDA, 'AUTOS' AS origem FROM COBwebRCBAUTOS.dbo.REC_DIVIDAS (NOLOCK)"
         div_master = "SELECT ID_DIVIDA, VR_SALDO, 'AUTOS' AS origem FROM COBwebRCBAUTOS.dbo.DIV_MASTER (NOLOCK)"
     else:
@@ -263,9 +293,9 @@ OPTION (USE HINT('ENABLE_PARALLEL_PLAN_PREFERENCE'), MAXDOP 0);
             SELECT CM2.ID_USUARIO, CM2.ID_CTO_MASTER, CM2.ID_COMPLEMENTO, CM2.ID_DEV, CM2.DATA, CASE WHEN CC.ALO = 1 AND CC.CONTATO = 1 THEN 1 ELSE 0 END AS contato, CASE WHEN CC.ALO = 1 THEN 1 ELSE 0 END AS alo, 'AUTOS' AS origem FROM COBwebRCBAUTOS.dbo.CTO_MASTER CM2 (NOLOCK) LEFT JOIN COBwebRCBAUTOS.dbo.CTO_COMPLEMENTO CC (NOLOCK) ON CM2.ID_COMPLEMENTO = CC.ID_COMPLEMENTO WHERE CM2.DATA >= @Hoje AND CM2.DATA < @Amanha
         """
         rec_master = """
-            SELECT ID_USUARIO, NR_RECEBIMENTO, VALOR, PARCELA, ID_REC_STATUS, PLANO, ID_CARTEIRA, VR_PAGO, DT_PAGAMENTO, DT_VENCIMENTO, 'CONSUMER' AS origem FROM COBwebRCBCONSUMER.dbo.REC_MASTER (NOLOCK) WHERE DT_EMISSAO >= @Hoje AND DT_EMISSAO < @Amanha
+            SELECT ID_REC, ID_USUARIO, NR_RECEBIMENTO, VALOR, PARCELA, ID_REC_STATUS, PLANO, ID_CARTEIRA, VR_PAGO, DT_PAGAMENTO, DT_VENCIMENTO, DT_EMISSAO, 'CONSUMER' AS origem FROM COBwebRCBCONSUMER.dbo.REC_MASTER (NOLOCK) WHERE DT_EMISSAO >= @Hoje AND DT_EMISSAO < @Amanha
             UNION ALL
-            SELECT ID_USUARIO, NR_RECEBIMENTO, VALOR, PARCELA, ID_REC_STATUS, PLANO, ID_CARTEIRA, VR_PAGO, DT_PAGAMENTO, DT_VENCIMENTO, 'AUTOS' AS origem FROM COBwebRCBAUTOS.dbo.REC_MASTER (NOLOCK) WHERE DT_EMISSAO >= @Hoje AND DT_EMISSAO < @Amanha
+            SELECT ID_REC, ID_USUARIO, NR_RECEBIMENTO, VALOR, PARCELA, ID_REC_STATUS, PLANO, ID_CARTEIRA, VR_PAGO, DT_PAGAMENTO, DT_VENCIMENTO, DT_EMISSAO, 'AUTOS' AS origem FROM COBwebRCBAUTOS.dbo.REC_MASTER (NOLOCK) WHERE DT_EMISSAO >= @Hoje AND DT_EMISSAO < @Amanha
         """
         rec_dividas = """
             SELECT NR_RECEBIMENTO, ID_DIVIDA, 'CONSUMER' AS origem FROM COBwebRCBCONSUMER.dbo.REC_DIVIDAS (NOLOCK)
@@ -307,6 +337,9 @@ CTE_Esforco AS (
     GROUP BY ID_USUARIO, origem
 ),
 
+-- Dedup (origem, NR_RECEBIMENTO, ID_CARTEIRA, PARCELA): mesmo acordo pode ser
+-- regravado por erro do sistema. Mantém só a parcela mais recente
+-- (DT_EMISSAO mais nova; ID_REC como desempate em timestamp idêntico).
 CTE_Acordos_Unicos AS (
     SELECT
         R.ID_USUARIO, R.origem, R.NR_RECEBIMENTO, R.ID_REC_STATUS,
@@ -314,8 +347,16 @@ CTE_Acordos_Unicos AS (
         MAX(CASE WHEN R.PARCELA = {settings.PRIMEIRA_PARCELA} THEN R.VALOR ELSE 0 END) AS VALOR_P1,
         MAX(CASE WHEN R.PARCELA = {settings.PRIMEIRA_PARCELA} THEN R.VR_PAGO ELSE 0 END) AS VR_PAGO_P1,
         MAX(R.PLANO) AS PLANO
-    FROM ({rec_master}) R
-    WHERE R.ID_REC_STATUS IN {settings.STATUS_UNIVERSO_SQL}
+    FROM (
+        SELECT R.*,
+               ROW_NUMBER() OVER (
+                   PARTITION BY R.origem, R.NR_RECEBIMENTO, R.ID_CARTEIRA, R.PARCELA
+                   ORDER BY R.DT_EMISSAO DESC, R.ID_REC DESC
+               ) AS rn
+        FROM ({rec_master}) R
+        WHERE R.ID_REC_STATUS IN {settings.STATUS_UNIVERSO_SQL}
+    ) R
+    WHERE R.rn = 1
     GROUP BY R.ID_USUARIO, R.origem, R.NR_RECEBIMENTO, R.ID_REC_STATUS
 ),
 
@@ -361,9 +402,17 @@ CTE_Boletos AS (
         R.ID_USUARIO, R.origem,
         COUNT(*) AS qtd_boletos_emitidos,
         SUM({settings.BOLETO_PAGO_PRAZO_SQL}) AS qtd_boletos_pagos
-    FROM ({rec_master}) R
-    WHERE R.ID_REC_STATUS IN {settings.STATUS_GERADOS_SQL}
-      AND R.DT_VENCIMENTO < CAST(GETDATE() AS DATE)
+    FROM (
+        SELECT R.*,
+               ROW_NUMBER() OVER (
+                   PARTITION BY R.origem, R.NR_RECEBIMENTO, R.ID_CARTEIRA, R.PARCELA
+                   ORDER BY R.DT_EMISSAO DESC, R.ID_REC DESC
+               ) AS rn
+        FROM ({rec_master}) R
+        WHERE R.ID_REC_STATUS IN {settings.STATUS_GERADOS_SQL}
+          AND R.DT_VENCIMENTO < CAST(GETDATE() AS DATE)
+    ) R
+    WHERE R.rn = 1
     GROUP BY R.ID_USUARIO, R.origem
 )
 
