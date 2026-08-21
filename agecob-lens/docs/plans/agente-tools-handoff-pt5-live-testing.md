@@ -512,6 +512,111 @@ untouched.
 
 ---
 
+## Cluster Q — Final-answer JSON parse fails on a raw newline inside a string value
+
+**Status: FIXED and confirmed (2026-08-21).** Found while live-testing a
+T7-adjacent hypothesis (below) — a different, more severe bug than the one
+being chased.
+
+**Starting hypothesis, tested and disproven:** suspected `query_kpi_historico`'s
+pagination (confirmed via direct Python call: a 52-day range returns only
+31/52 points on page 1, `meta.total_pages: 2`) could make the live agent
+silently undercount a long-window total if it only ever read page 1.
+Live-fired the natural follow-up that forces exactly this call shape ("Como
+evoluiu o valor gerado por dia no período?", `dateFrom=2026-07-01`,
+`dateTo=2026-08-21`, `db=todos`) and pulled the full Langfuse trace
+(`traceId a341dc9dcef74421cf6a1bfbd3b9d948`, via `npx langfuse-cli api
+observations list --trace-id ... --fields core,io` — `--trace-id` needs the
+real Langfuse trace id, not the app's own `run_id`; the two are different,
+`run_id` only lives in `metadata.run_id` on the root span, found by listing
+`--name agent-chat-turn` within the request's time window and matching that
+field). **Hypothesis disproven — the model handles pagination correctly.** It
+called `query_kpi_historico` for both real banks, read `meta.truncated: true`
+off the page-1 response, said so explicitly mid-conversation (*"A série tem 52
+pontos e foi truncada na página 1. Vou buscar a página 2 para completar os
+dados de agosto nas duas bases"*), and issued 2 more calls (page 2, both
+banks) — 4 calls total, all real data, nothing silently dropped.
+
+**What broke instead:** the final synthesis turn's raw output (same trace, the
+`deepseek-generate` GENERATION observation right after the 4th tool call) was
+prose followed by a fenced JSON blob:
+
+```
+Consolidei as duas bases (COBwebRCBCONSUMER + COBwebRCBAUTOS). Aqui está a
+evolução...:
+
+```json
+{"text": "Série diária consolidada...\n\nDestaques por mês:\n- **07/07**: ...", ...}
+```
+```
+
+Two defects stacked: (1) prose before the fence, which `_parse_agent_final_text`'s
+recovery logic already tolerated correctly (it locates the embedded `{...}` via
+`find("{")`/`rfind("}")`, not by requiring the fence at position 0); (2) inside
+the embedded JSON's own `"text"` field, the model wrote a **literal raw
+newline byte** between paragraphs instead of an escaped `\n` — a known class
+of LLM JSON-generation slip when writing multi-paragraph markdown inside a
+JSON string. `json.loads()`'s default `strict=True` rejects any unescaped
+control character inside a string with `Invalid control character` —
+confirmed directly by feeding the exact captured raw text (extracted from the
+trace via `json.loads`, never retyped by hand) through the real
+`_parse_agent_final_text`. On that `ValueError`, `payload = None`, and
+`_normalize_agent_response` takes its "not a dict" fallback: the **entire**
+raw blob — prose, code fence, unparsed JSON syntax and all — becomes the
+user-visible `text`, while `highlights`, `suggested_actions`, and
+`data_sources` are silently wiped and `confidence` is forced to `"low"`. The
+underlying data was 100% correct and fully gathered (both banks, both pages,
+real numbers) — the loss happens entirely in this last parsing step, same
+"gets the number right, then the presentation layer destroys it" pattern as
+every other cluster in this doc, via a new mechanism (JSON strictness)
+instead of a prompt-discipline gap.
+
+**Fix applied:** one line, `dominios/agente/agente.py`,
+`_parse_agent_final_text()` — `json.loads(candidate)` →
+`json.loads(candidate, strict=False)`. `strict=False` is a pure superset of
+`strict=True`: it never changes the parsed value of anything that already
+parsed successfully, it only additionally tolerates literal control
+characters inside string values. Zero regression risk by construction,
+confirmed by the full suite.
+
+**Verification:**
+- Fed the exact raw text captured from the live trace through the real
+  `_parse_agent_final_text` before and after the fix: before, `confidence:
+  low, data_sources: [], highlights: []`, `text` = the full broken blob;
+  after, `confidence: high`, real `data_sources`
+  (`["query_kpi_historico (COBwebRCBCONSUMER + COBwebRCBAUTOS)"]`), 3 real
+  `highlights`, clean `text` with no code fence. Also verified the recovered
+  Portuguese text's actual Unicode codepoints (`0xe9`/`0xe1` for é/á) directly
+  in Python rather than by eye — the `�` visible in this terminal's own stdout
+  was a console rendering artifact of this shell, not data corruption.
+- New regression test,
+  `tests/test_agente.py::test_parse_final_json_com_prosa_antes_e_quebra_de_linha_crua_no_texto`
+  — self-contained repro (prose prefix + a real embedded raw newline inside
+  the JSON `"text"` value, written as an actual Python string, not escaped),
+  asserts `confidence == "high"` and real `data_sources` survive.
+- `pytest tests/ -q`: 233 passed (232 baseline + 1 new), 0 failures.
+- Live re-fire of the exact conversation that originally broke it (same
+  `dateFrom`/`dateTo`/`db`, same 2-turn history), after restarting the dev
+  server — which had gone down during an idle gap mid-session, confirmed via
+  `Get-Process`/`preview_logs` before relaunching (not assumed) via the
+  `.claude/launch.json` "FastAPI (agecob-lens API)" config: clean response,
+  real prose, 4 real highlights, `confidence: high`. This run alone doesn't
+  independently reproduce the exact original failure — LLM output is
+  nondeterministic, this completion didn't happen to hit the same raw-newline
+  slip — so it's not the proof; the byte-for-byte replay against the real
+  function above is.
+
+**Scope note:** deliberately a parser-robustness fix, not a prompt fix — a
+system-prompt instruction ("always escape newlines in JSON strings") would be
+exactly the kind of prose-level guardrail this campaign has repeatedly found
+to be "large improvement, not a hard guarantee" (Clusters J, L, N). The
+code-level fix holds regardless of what the model does. Not otherwise
+investigated: whether other raw control characters (tabs, etc.) can trigger
+the same failure — `strict=False` covers the whole class, not just newlines,
+so no further action was needed.
+
+---
+
 ## Prod-readiness test plan
 
 Organized by priority. "Blocker" items produce wrong-but-confident answers or unbounded resource use — must be fixed and re-verified before real traffic. "High" items are correctness under normal, non-adversarial use. "Security" is non-negotiable regardless of priority label. "Process" is ongoing discipline, not a one-time test.
@@ -533,6 +638,7 @@ Organized by priority. "Blocker" items produce wrong-but-confident answers or un
 - ~~**T6 — Fuzzy portfolio name resolution.**~~ **DONE.** See Cluster O above. Battery run: "santander 24" (roman numeral) and "bvfinanceira 3" resolved correctly/unambiguously; "bv" and bare "santander"-family prefixes exposed a real silent-first-match gap, now fixed for `get_portfolio_metrics`/`get_cruzamento_agente_carteira` (`aviso_ambiguidade` field + prompt rule). Not extended to `compare_portfolios` or the `detalhe_portfolio.py` copy of the resolver — flagged as a follow-up boundary, not a live-confirmed gap in those two paths.
 - **T7 — Date-range edge cases.** "hoje", "ontem", "esse mês", explicit `YYYY-MM-DD`, month/quarter boundaries, and days with zero activity (weekends/holidays). Confirm the agent doesn't fabricate a number for a day with no rows. **Partially done:** "ontem" vs. real system date when the session's filtered period differs from today — see Cluster M above (fixed, live-reverified 5/5, regression test added). Still open: "esse mês"/"esse trimestre" and other relative phrases beyond "hoje"/"ontem", month/quarter boundaries, zero-activity days.
 - **T8 — Confidence calibration sweep.** A battery spanning full-data, partial-data (the case `f44bfac` just fixed), and no-data-at-all questions. Confirm `low`/`medium`/`high` match the rule in `system_prompt.md`, not just the 3 cases already tested.
+- ~~**T17 — Final-answer JSON parse robustness.**~~ **DONE (2026-08-21).** Not in the original plan — found while investigating T7. See Cluster Q above: `_parse_agent_final_text` now uses `json.loads(..., strict=False)`, so a literal raw newline inside the model's JSON `"text"` field (a real, observed DeepSeek slip) no longer nukes the entire structured response down to a broken low-confidence text dump.
 
 ### Medium
 
