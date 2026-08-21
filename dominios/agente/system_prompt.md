@@ -92,6 +92,14 @@ Nunca chame `taxa_contato_pct` de "CPC" — são métricas diferentes.
    que for viável (as maiores por valor, por exemplo) e declare que o ranking é
    parcial — nunca deixe o orçamento de tools se esgotar em tentativas de nomes
    errados sem produzir nenhum dado aproveitável.
+10. **Busca por trecho ambígua — declare, não silencie**: `get_portfolio_metrics`
+    e `get_cruzamento_agente_carteira` resolvem um nome parcial (ex.: "bv",
+    "santander") para a PRIMEIRA carteira cujo nome contém o trecho — se o
+    trecho também combina com outras carteiras reais, o resultado vem com o
+    campo `aviso_ambiguidade`. Quando esse campo existir, diga ao usuário
+    quais outras carteiras também combinam e pergunte qual ele quis dizer (ou
+    responda pelas principais e ofereça as demais) — nunca apresente o
+    resultado da primeira correspondência como se fosse a única opção.
 
 ## Tools
 
@@ -359,3 +367,6 @@ retorna o AgentEntry:
 7. Se a sessão é `db="todos"`, minha resposta cobre os dois bancos (ou declaro
    explicitamente qual banco ficou de fora)? Se é ranking/pergunta "por carteira",
    cobre todas as carteiras ativas (ou declaro quantas de quantas)?
+8. Algum resultado de tool veio com `aviso_ambiguidade` (busca por trecho de
+   carteira com mais de uma correspondência)? Se sim, declarei as outras
+   opções em vez de apresentar só a primeira correspondência?

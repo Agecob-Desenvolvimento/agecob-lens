@@ -136,13 +136,30 @@ def _NO_AGENTS():
 def test_tool_get_portfolio_metrics_exato_e_substring():
     exact = dispatch_tool("get_portfolio_metrics", {"portfolio_name": "banco alfa"}, SAMPLE_ENTRIES, _NO_AGENTS)
     assert exact["portfolio_name"] == "BANCO ALFA"
+    assert "aviso_ambiguidade" not in exact
 
     partial = dispatch_tool("get_portfolio_metrics", {"portfolio_name": "gama"}, SAMPLE_ENTRIES, _NO_AGENTS)
     assert partial["portfolio_name"] == "CARTEIRA GAMA"
+    assert "aviso_ambiguidade" not in partial
 
     missing = dispatch_tool("get_portfolio_metrics", {"portfolio_name": "inexistente"}, SAMPLE_ENTRIES, _NO_AGENTS)
     assert "error" in missing
     assert "BANCO ALFA" in missing["available_portfolios"]
+
+
+def test_tool_get_portfolio_metrics_substring_ambigua_declara_outras_correspondencias():
+    """
+    Regressão de achado ao vivo (pt5 handoff, T6): "bv" resolvia em silêncio
+    pra BVFinanceira III (primeira correspondência por trecho), escondendo
+    BVFinanceira IV e VII, com confidence=high - nenhum sinal de que a busca
+    era ambígua. "banco" aqui bate em BANCO ALFA e BANCO BETA (SAMPLE_ENTRIES).
+    """
+    ambiguo = dispatch_tool("get_portfolio_metrics", {"portfolio_name": "banco"}, SAMPLE_ENTRIES, _NO_AGENTS)
+    # ainda devolve a primeira correspondência como dado usável...
+    assert ambiguo["portfolio_name"] == "BANCO ALFA"
+    # ...mas com um aviso citando a outra carteira que também combina.
+    assert "aviso_ambiguidade" in ambiguo
+    assert "BANCO BETA" in ambiguo["aviso_ambiguidade"]
 
 
 def test_tool_filter_by_risk():
@@ -666,6 +683,19 @@ def test_tool_cruzamento_exige_exatamente_um_lado():
     )
     assert por_agente == {"ok": 1}
     assert seen == {"p": None, "a": "ADRIANNA SILVA"}
+
+
+def test_tool_cruzamento_carteira_ambigua_declara_outras_correspondencias():
+    """Mesma regressão T6 do get_portfolio_metrics, aplicada ao outro
+    dispatch branch que resolve carteira por trecho (`_find_portfolio`)."""
+    providers = {"get_cruzamento_agente_carteira": lambda p, a: {"portfolio": p, "ok": 1}}
+
+    resultado = dispatch_tool(
+        "get_cruzamento_agente_carteira", {"portfolio": "banco"}, SAMPLE_ENTRIES, _AGENTS, providers=providers
+    )
+    assert resultado["portfolio"] == "BANCO ALFA"
+    assert "aviso_ambiguidade" in resultado
+    assert "BANCO BETA" in resultado["aviso_ambiguidade"]
 
 
 def test_tool_ranking_dimensao_e_limite():

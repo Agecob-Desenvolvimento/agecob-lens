@@ -319,6 +319,31 @@ def _find_portfolio(name: str, entries: List[Dict[str, Any]]) -> Optional[Dict[s
     return None
 
 
+def _ambiguity_warning(name: str, resolved: Dict[str, Any], entries: List[Dict[str, Any]]) -> Optional[str]:
+    """
+    T6 (pt5-live-testing.md, "bv" resolvendo em silêncio pra BVFinanceira III
+    escondendo IV e VII, confidence=high): `_find_portfolio` sempre devolve a
+    PRIMEIRA correspondência por trecho, sem sinalizar quando o trecho também
+    bate em outras carteiras reais. Chame isto depois de um match não-exato
+    para anexar um aviso ao resultado em vez de silenciar a ambiguidade —
+    resolve() continua devolvendo dado usável mesmo quando ambíguo.
+    """
+    wanted = (name or "").strip().lower()
+    if not wanted or resolved["portfolio_name"].strip().lower() == wanted:
+        return None  # match exato: sem ambiguidade a declarar
+    others = [
+        e["portfolio_name"] for e in entries
+        if wanted in e["portfolio_name"].lower() and e["portfolio_name"] != resolved["portfolio_name"]
+    ]
+    if not others:
+        return None
+    return (
+        f"Busca por trecho {name!r} também combina com: {', '.join(others)}. "
+        f"Retornando {resolved['portfolio_name']!r} (primeira correspondência) — "
+        f"confirme com o usuário se for a carteira pretendida."
+    )
+
+
 # Espelha o enum de order_by no schema de list_agents_performance — o enum do
 # schema é orientativo para o modelo, não é validado pelo provedor.
 _AGENT_ORDER_BY_FIELDS = frozenset({
@@ -370,9 +395,11 @@ def dispatch_tool(
     breakdown de status, fases) — também lazy: cada query roda só se chamada.
     """
     if name == "get_portfolio_metrics":
-        entry = _find_portfolio(str(args.get("portfolio_name") or ""), entries)
+        portfolio_name_arg = str(args.get("portfolio_name") or "")
+        entry = _find_portfolio(portfolio_name_arg, entries)
         if entry is not None:
-            return entry
+            aviso = _ambiguity_warning(portfolio_name_arg, entry, entries)
+            return {**entry, "aviso_ambiguidade": aviso} if aviso else entry
         return {
             "error": "Carteira não encontrada no período.",
             "available_portfolios": [e["portfolio_name"] for e in entries],
@@ -473,6 +500,7 @@ def dispatch_tool(
         if bool(raw_portfolio) == bool(raw_agente):
             return {"error": "Informe exatamente um filtro: portfolio OU agent_name."}
         portfolio = agente = None
+        aviso_ambiguidade = None
         if raw_portfolio:
             entry = _find_portfolio(str(raw_portfolio), entries)
             if entry is None:
@@ -481,6 +509,7 @@ def dispatch_tool(
                     "available_portfolios": [e["portfolio_name"] for e in entries],
                 }
             portfolio = entry["portfolio_name"]
+            aviso_ambiguidade = _ambiguity_warning(str(raw_portfolio), entry, entries)
         else:
             agent_entry = _find_agent(str(raw_agente), get_agents())
             if agent_entry is None:
@@ -489,7 +518,10 @@ def dispatch_tool(
                     "available_agents": [a["agent_name"] for a in get_agents()],
                 }
             agente = agent_entry["agent_name"]
-        return fn(portfolio, agente)
+        result = fn(portfolio, agente)
+        if aviso_ambiguidade and isinstance(result, dict):
+            result = {**result, "aviso_ambiguidade": aviso_ambiguidade}
+        return result
 
     if name == "get_ranking_agentes_por_dimensao":
         fn = (providers or {}).get("get_ranking_agentes_por_dimensao")
