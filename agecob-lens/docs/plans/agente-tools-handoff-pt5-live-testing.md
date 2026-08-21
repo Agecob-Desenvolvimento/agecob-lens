@@ -323,6 +323,68 @@ resistance, not a permanent guarantee.
 
 ---
 
+## Cluster O — Ambiguous substring portfolio search silently resolves to the first match (T6)
+
+**Status: FIXED and confirmed live (2026-08-21).**
+
+`_find_portfolio` (`tools.py`) and `_find_portfolio_name` (`detalhe_portfolio.py`) both
+resolve a partial portfolio name by exact match first, then **first substring match** — with
+no signal to the caller when the substring also matches other real portfolios. The "not
+found" path already returns `available_portfolios`; the "found, but ambiguously" path
+returned nothing extra at all.
+
+**Live repro, `get_portfolio_metrics`** (real portfolio set, 01/08-20/08 window): question
+*"Quanto foi gerado pela carteira bv no período?"* — "bv" substring-matches 4 real
+portfolios (BVFinanceira III/IV/V/VII). Before the fix, 2/2 runs silently answered with only
+**BVFinanceira III** (the first match by whatever order `entries` happens to carry) at
+`confidence: "high"` - zero mention that 3 other real "bv" portfolios existed, and nothing
+in the tool's own JSON output would have let the model discover the gap even if it had
+wanted to check. Cross-checked against a different repro in the same session -
+*"santander 24"* (24 as roman numeral XXIV, matching **both** Santander XXIV and Santander
+Financeira XXIV) - which the model handled correctly by disclosing both matches. Same
+underlying code path, opposite outcomes: confirms this was inconsistent LLM behavior papering
+over a real gap in the tool contract, not a case that was already reliably handled.
+
+**Fix applied:** `dominios/agente/tools.py` - new `_ambiguity_warning(name, resolved,
+entries)` helper: returns `None` for an exact match (no ambiguity to declare) or when the
+substring uniquely identifies one portfolio, otherwise a message naming the other real
+portfolios that also matched. Wired into both call sites in this file that resolve a single
+portfolio via `_find_portfolio` - `get_portfolio_metrics` (attaches `aviso_ambiguidade` to
+the returned `PortfolioEntry`) and `get_cruzamento_agente_carteira` (merges it into the
+provider's result dict). The resolved entry/result is still returned as usable data either
+way - this doesn't block on ambiguity, it just stops hiding it. New rule 10 in
+`system_prompt.md`'s "Regras de negócio (invioláveis)" and checklist item 8 tell the model to
+surface `aviso_ambiguidade` explicitly instead of presenting the first match as the only one.
+
+**Scope boundary (not fixed in this pass):** `compare_portfolios` (same file, also calls
+`_find_portfolio` per name) and the parallel `_find_portfolio_name` copy in
+`detalhe_portfolio.py` (used by `query_kpi_historico`'s `portfolio` filter and
+`detalhar_portfolio`) share the identical silent-first-match risk and were not touched -
+`compare_portfolios` already takes an explicit list of names (ambiguity there is a smaller
+concern - the user is already naming multiple carteiras on purpose) and the second function
+is a separate near-duplicate implementation, not a shared one, so extending this fix there is
+a distinct, slightly larger change. Flagging for a follow-up pass rather than expanding this
+one - the two fixed call sites cover the exact live-confirmed repro.
+
+**Live re-verification**, same repro question, 2 runs after the fix: both correctly opened
+with an explicit ambiguity disclosure (*"O trecho 'bv' combina com mais de uma carteira...
+Qual dessas carteiras você quer analisar?"*) and `confidence` correctly downgraded to
+`"medium"`. The second run went further unprompted and proactively fetched all 4 matching
+portfolios' real figures instead of just the first, before asking which one was intended -
+better than the minimum bar the fix required.
+
+**Regression tests:** `tests/test_agente.py::test_tool_get_portfolio_metrics_substring_ambigua_declara_outras_correspondencias`
+and `::test_tool_cruzamento_carteira_ambigua_declara_outras_correspondencias` - both offline
+(`dispatch_tool` called directly, no LLM), using the existing `SAMPLE_ENTRIES` fixture's
+pre-existing ambiguous pair (`BANCO ALFA`/`BANCO BETA` both contain "banco"). Also extended
+the pre-existing `test_tool_get_portfolio_metrics_exato_e_substring` with explicit
+`"aviso_ambiguidade" not in result` assertions on its exact-match and unambiguous-substring
+cases, to lock in that the new field only appears when genuinely ambiguous.
+`pytest tests/ -q --ignore=tests/test_eval_harness.py --ignore=tests/test_golden_set.py`:
+196 passed (194 baseline + 2 new tests).
+
+---
+
 ## Prod-readiness test plan
 
 Organized by priority. "Blocker" items produce wrong-but-confident answers or unbounded resource use — must be fixed and re-verified before real traffic. "High" items are correctness under normal, non-adversarial use. "Security" is non-negotiable regardless of priority label. "Process" is ongoing discipline, not a one-time test.
@@ -341,7 +403,7 @@ Organized by priority. "Blocker" items produce wrong-but-confident answers or un
 
 ### High
 
-- **T6 — Fuzzy portfolio name resolution.** Battery of typos/abbreviations/case variants ("bv", "BV Financeira", "bvfinanceira 3", "santander 24") against `_find_portfolio_name`. Confirm correct resolution or an honest "carteira não encontrada, você quis dizer X?" — never a silent wrong match.
+- ~~**T6 — Fuzzy portfolio name resolution.**~~ **DONE.** See Cluster O above. Battery run: "santander 24" (roman numeral) and "bvfinanceira 3" resolved correctly/unambiguously; "bv" and bare "santander"-family prefixes exposed a real silent-first-match gap, now fixed for `get_portfolio_metrics`/`get_cruzamento_agente_carteira` (`aviso_ambiguidade` field + prompt rule). Not extended to `compare_portfolios` or the `detalhe_portfolio.py` copy of the resolver — flagged as a follow-up boundary, not a live-confirmed gap in those two paths.
 - **T7 — Date-range edge cases.** "hoje", "ontem", "esse mês", explicit `YYYY-MM-DD`, month/quarter boundaries, and days with zero activity (weekends/holidays). Confirm the agent doesn't fabricate a number for a day with no rows. **Partially done:** "ontem" vs. real system date when the session's filtered period differs from today — see Cluster M above (fixed, live-reverified 5/5, regression test added). Still open: "esse mês"/"esse trimestre" and other relative phrases beyond "hoje"/"ontem", month/quarter boundaries, zero-activity days.
 - **T8 — Confidence calibration sweep.** A battery spanning full-data, partial-data (the case `f44bfac` just fixed), and no-data-at-all questions. Confirm `low`/`medium`/`high` match the rule in `system_prompt.md`, not just the 3 cases already tested.
 
