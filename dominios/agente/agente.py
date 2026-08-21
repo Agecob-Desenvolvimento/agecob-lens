@@ -218,7 +218,13 @@ def _parse_agent_final_text(final_text: str) -> Dict[str, Any]:
         if start != -1 and end > start:
             candidate = candidate[start:end + 1]
     try:
-        payload = json.loads(candidate)
+        # strict=False: tolera caractere de controle literal (quebra de linha crua)
+        # dentro de string do JSON — DeepSeek às vezes escreve um "\n" real em vez
+        # de escapado ao gerar texto markdown multi-parágrafo dentro do campo
+        # "text" (achado live, pt5-live-testing.md). strict=False é superset puro
+        # de strict=True: nunca muda o valor de algo que já parseava, só tolera
+        # mais - zero risco de regressão nos casos que já funcionavam.
+        payload = json.loads(candidate, strict=False)
     except (ValueError, TypeError):
         payload = None
     return _normalize_agent_response(payload, fallback_text=raw)

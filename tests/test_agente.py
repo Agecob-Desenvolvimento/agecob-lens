@@ -827,6 +827,30 @@ def test_parse_final_json_com_cerca_de_codigo():
     assert parsed["confidence"] == "medium"
 
 
+def test_parse_final_json_com_prosa_antes_e_quebra_de_linha_crua_no_texto():
+    """
+    Repro do achado live (pt5-live-testing.md): DeepSeek às vezes prefixa a
+    resposta final com prosa antes da cerca ```json, E escreve uma quebra de
+    linha crua (não escapada) dentro do valor de "text" ao gerar markdown
+    multi-parágrafo. json.loads(strict=True, o default) rejeita isso com
+    "Invalid control character" -> payload=None -> todo o blob (prosa + JSON
+    cru) vira o "text" da resposta, highlights/data_sources somem e confidence
+    degrada pra "low", mesmo com o dado real intacto. strict=False resolve.
+    """
+    raw = (
+        "Aqui está a evolução:\n\n"
+        "```json\n"
+        '{"text": "Parágrafo um.\n\nParágrafo dois.", "confidence": "high",'
+        ' "highlights": [], "suggested_actions": [], "data_sources": ["query_kpi_historico"]}\n'
+        "```"
+    )
+    parsed = _parse_agent_final_text(raw)
+    assert parsed["confidence"] == "high"
+    assert parsed["data_sources"] == ["query_kpi_historico"]
+    assert "Parágrafo um." in parsed["text"]
+    assert "```" not in parsed["text"]
+
+
 def test_parse_final_texto_invalido_degrada_para_low():
     parsed = _parse_agent_final_text("resposta solta sem json")
     assert parsed["text"] == "resposta solta sem json"
