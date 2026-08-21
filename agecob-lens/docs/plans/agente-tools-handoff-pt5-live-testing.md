@@ -165,6 +165,38 @@ Question: *"Ranking de geração de acordos por carteira ontem - quais as 5 que 
 
 **Residual gap found in that same re-verification, not yet fixed:** the answer talks about **21/08** ("Em 21/08 apenas 1 carteira...") even though the question explicitly asked for **ontem (20/08)**, a day with real multi-portfolio activity (45 acordos combined, confirmed in Cluster K above). Rule 9 stopped the crash and the name-guessing, but the model took the path of least resistance — answered with the session-scoped tools (`filter_portfolios_by_value`/`get_portfolio_metrics`, which reflect the session's own `date_from`/`date_to`, i.e. today) instead of correctly reading "ontem" from the question text, and never flagged that it substituted a different day. Same shape as Cluster J's silent metric substitution, one more dimension over (date, not metric or scope) — a real, portfolio-ranking-specific instance of what T3 (the still-unbuilt aggregate-by-portfolio tool) would probably resolve properly, since it would let the agent ask for a specific day's ranking directly instead of falling back to session-scoped single-carteira tools. Not fixing now — flagging for whoever picks up T3.
 
+**Re-checked 2026-08-21, after T3 (Cluster G/O's vencimentos ranking tool) and Cluster M (the
+"ontem" date-anchoring fix) both landed.** Fired the exact same repro question again, default
+session date (no explicit `dateFrom`/`dateTo`, so "hoje" = 21/08 same as the original run):
+
+*"O ranking de geração de ontem (20/08) ficou **parcial** — consegui medir 3 carteiras com
+geração antes do limite de consultas... Dados apurados até aqui: Panamericano XV (R$ 6.413),
+Santander XXII (R$ 444,81), Santander Financeira XXVIII (R$ 240,00)... Para fechar o ranking
+das 5 maiores, ainda precisa consultar as demais carteiras ativas de ontem"* -
+`confidence: "low"`, `data_sources: ["filter_portfolios_by_value", "query_kpi_historico"]`.
+
+Both original problems confirmed fixed: (1) no crash - real prose, real partial data, instead
+of the single `{` token; (2) correctly resolved "ontem" to **20/08** this time, not 21/08 -
+the date-substitution half of this residual gap is gone, exactly as Cluster M's fix intended.
+
+**What's left is a distinct, narrower, already-understood capability gap, not a bug:**
+`filter_portfolios_by_value` (the tool that answered instantly, cheaply, for "hoje") only
+ever reflects the *session's* fixed `date_from`/`date_to` - it has no per-call date override,
+so it structurally cannot answer "ranking for a specific day other than the session's window."
+For "ontem" specifically, the agent correctly fell back to calling `query_kpi_historico`
+per-portfolio (real names only, per Rule 9) and stopped honestly within budget instead of
+guessing or crashing - the *correct* behavior given the tool it had, just not a *complete*
+5-item ranking, because no tool exists yet that does for "geração" (valor gerado per
+portfolio per arbitrary day) what T3 built for "vencimentos" (a single-call, all-portfolios,
+any-day ranking). Confirms the original prediction half-right: T3 fixed the crash/guessing
+failure modes (those were general, not vencimentos-specific) and Cluster M fixed the date
+confusion, but the ranking is still capability-limited, not bug-limited. **Follow-up scoped,
+not built this pass:** a "T3b" - a `query_kpi_historico`-adjacent or `detalhar_portfolio`-style
+aggregate-by-portfolio ranking for `valor_acordos_gerados`/`qtd_acordos` on an arbitrary day,
+mirroring T3's `_build_ef_resumo_por_portfolio_ranking_sql` implementation shape almost
+exactly. Left for a dedicated pass rather than rushed here - it's a genuine new SQL/tool
+build, same class of scope as T3 itself.
+
 ---
 
 ## Cluster M — "Ontem" resolved against the filtered period instead of real system date (T7)
@@ -397,7 +429,7 @@ Organized by priority. "Blocker" items produce wrong-but-confident answers or un
 
   Verified three ways before calling it done: (1) direct Python call against ground truth — returned all 25 real 20/08 portfolios in one call, `truncated: false`, and the top entries matched figures already independently verified earlier in this doc byte-for-byte (BVFinanceira III R$693,50/2 boletos, Bradesco VIII R$64,00/2 boletos/R$0 recebido); (2) re-ran the original Cluster G repro question live — one `detalhar_portfolio(vencimentos)` call, correct 26-portfolio consolidated answer, `confidence: high`, proactively flagged the highest-risk carteiras (big value vencendo, zero recebido); (3) pulled the Langfuse trace — 5 tool calls total across the whole turn, no spiral, nowhere near the step cap. 193 tests passing (was 186 — 6 new SQL-shape tests mirroring the existing single-portfolio ones, 1 new dispatch test covering both the ranking path and the still-required-portfolio path on the other 5 drilldowns).
 - ~~**T4 — Coverage disclosure rule.**~~ **DONE.** See Clusters K and L above — two rules added (db-scope disclosure, no portfolio-name guessing), both live-reverified. T3 (the aggregate-by-portfolio tool) is still the real fix for Cluster L's residual date-substitution gap — a direct per-day ranking tool removes the need to fall back to session-scoped single-carteira tools at all.
-- **T5 — Cross-db scope-mixing retest.** Re-derive the issue described above with fresh questions, confirm whether it's still real post-`f44bfac`, document exact repro before scoping a fix.
+- ~~**T5 — Cross-db scope-mixing retest.**~~ **DONE, confirmed clean (2026-08-21).** Fired 2 fresh questions (different phrasing than Cluster K's original repro), `db="todos"`: "Qual o valor total de acordos gerados hoje, somando tudo?" and "Compare acordos de hoje com ontem, no geral". Both correctly called `query_kpi_historico` once per real bank and summed - R$ 308,71 (R$ 120,71 CONSUMER + R$ 188,00 AUTOS) and R$ 66.628,91 ontem vs R$ 308,71 hoje, both exact matches to ground truth (`build_kpi_historico` direct calls). Also verified, while investigating this, that Rule 8's premise still holds precisely as written: traced `query_kpi_historico`/`comparar_agentes`/`detalhar_portfolio`'s `db` field in `schemas.py` to `_DB_LITERAL = Literal["COBwebRCBCONSUMER", "COBwebRCBAUTOS"]` - "todos" is schema-rejected for exactly the 3 tools that expose a per-call `db` argument, so "call once per real bank and sum" remains the only correct way to get a cross-bank total through those tools (the ~11 other tools don't take a per-call `db` at all - they inherit the session's `db`, which can legitimately be "todos" and already aggregates both banks in one query via `wrap_todos_or_single`, `dominios/graficos/queries.py` - a different, already-working mechanism Rule 8 was never about). No fix needed - Cluster K/T4's fix holds under fresh questions.
 - ~~**T15 — Nota/disclaimer enforcement (Cluster I).**~~ **DONE.** See Cluster I above for the fix (3 edits to `system_prompt.md`) and the live re-verification.
 - ~~**T16 — Stop silent metric substitution (Cluster J).**~~ **DONE.** See Cluster J above for the fix (glossário row split, `conversao_pct` field description corrected, new rule #7, new checklist item, tightened `query_kpi_historico` description) and the live re-verification against the S4 repro plus 5 rewordings/controls.
 
