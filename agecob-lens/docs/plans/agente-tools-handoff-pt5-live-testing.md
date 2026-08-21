@@ -417,6 +417,101 @@ cases, to lock in that the new field only appears when genuinely ambiguous.
 
 ---
 
+## Cluster P — Synthesis-faithfulness regression check (T2)
+
+**Status: FIXED and confirmed via the harness's own self-test suite (2026-08-21).**
+
+**Correction to this doc's own T2 entry:** the stated blocker — "the eval harness
+can't even collect right now due to a pre-existing missing `freezegun`
+dependency" (repeated verbatim in Clusters I and J above) does not hold in this
+environment. `freezegun` has been in `requirements.txt` since `4fb405e`
+("feat(agente): rebuild agent toolset..."), 16 commits before any of the work
+that stated it was missing. Verified directly, not assumed: `python -c "import
+freezegun"` succeeds (1.5.5 installed), `pytest tests/test_eval_harness.py
+tests/test_golden_set.py --collect-only -q` collects all 32 tests with zero
+errors, and `pytest tests/ -q` (the full suite, no `--ignore`) passed 228/228
+before this change — matching the "196" baseline plus these 32. Likely
+explanation: a local venv that predated the `4fb405e` requirements.txt update
+and was never `pip install -r requirements.txt`-refreshed afterward; not
+investigated further since it's moot here. **Going forward, the `--ignore`
+flags used throughout Clusters I/J/M/O above are unnecessary** — plain
+`pytest tests/ -q` covers everything.
+
+**What T2 actually needed, once unblocked:** `dominios/agente/evals/harness.py`
+already runs the *real* `run_agent()`/`RunGuard.dispatch()`/`dispatch_tool()`
+end to end — only the LLM and the raw SQL-layer builders are mocked (the
+module's own docstring: "testa a MÁQUINA, não o julgamento do modelo real").
+But its `trace` was reconstructed purely from the case's own YAML script
+(`{name, args}` per call), never from what `dispatch()` actually returned — so
+`error_type`/`row_count`, the exact fields T2's own definition names, existed
+nowhere in the harness's output. `RunState.dispatch()` (`guards.py:258`)
+already computes both into `self.last_call_meta` on every call, but that dict
+is overwritten each call and only ever read once, immediately after, by
+`_tool_result_json()` (`agente.py:308`) to build one
+`_agent_ndjson("agent_tool_call", {...})` log line per call — the same line
+Cluster E's NDJSON telemetry and every other live-testing finding in this doc
+was read from. That call site was the correct hook: no other place in the run
+holds a full per-call history.
+
+**Fix applied**, `dominios/agente/evals/harness.py`:
+- `run_case()` now monkeypatches `agente_mod._agent_ndjson` for the duration
+  of the run (same technique `apply_fixture` already uses for the data-layer
+  builders) to capture every `agent_tool_call` event's `data` dict into a new
+  `tool_telemetry` list, returned alongside `trace`/`response`/`fixture`. This
+  is real telemetry from the real dispatch path, not reconstructed from the
+  script.
+- New assertion, camada 5, `assert_no_false_unavailability(resposta_text,
+  tool_telemetry, frases_proibidas)`: if any call in `tool_telemetry` has
+  `error_type is None` and `row_count > 0`, and any phrase in
+  `frases_proibidas` appears in the final text, flags a violation. Wired into
+  `evaluate_case_verbose` as opt-in via a new
+  `esperado.resposta.frases_indisponibilidade_proibidas` field — same pattern
+  as the existing `numeros_rastreaveis` flag — so none of the 17 existing
+  golden cases (all `deve_passar: true`, confirmed by grep, none opt in)
+  change behavior.
+- Deliberately phrase-based, not entity-based: it checks whether *some* call
+  succeeded with data while the text claims *something* is unavailable, not
+  *which* source got called unavailable. Documented as a safety net in the
+  same terms the module already uses for camada 2
+  (`assert_numbers_traceable`'s own docstring: "não substitui a camada 3...
+  para os poucos casos que precisam de precisão exata") — it would not, for
+  instance, catch the real F2 case's exact shape (one true gap and one false
+  one bundled in the same sentence, about two different portfolios) without
+  also being told which entity was legitimately absent. Entity-aware matching
+  was scoped out as materially more code than "a small scripted check" calls
+  for; flagging as a follow-up boundary, same spirit as Cluster O's
+  `compare_portfolios` scope note.
+
+**Why no new golden case (`gs018.yaml`):** considered adding one modeling the
+real Cluster F2 shape end-to-end through `all_case_paths()`, but every one of
+the 17 existing cases is `deve_passar: true` (verified by grep, not assumed),
+and `test_gates_de_ci_secao_6_4`/`test_injection_pass_rate_e_hard_gate` both
+iterate `all_case_paths()` unconditionally — `compute_metrics` has no path
+that excludes a deliberately-failing case from the aggregate
+accuracy/faithfulness gates. Adding one would either silently skew those gates
+or require also patching `compute_metrics` to filter `deve_passar: false`
+cases out of the CI-gate denominator — a real, defensible fix, but a change to
+shared gate-computation logic that's out of scope for "add a regression
+check." Chose the smaller-blast-radius option instead: the full pipeline is
+proven end to end by a new test in `tests/test_eval_harness.py` that builds
+its case inline (reuses the existing `gs001.json` fixture, never touches
+`golden/`), so `all_case_paths()`, the 17-case count, and both CI gates are
+untouched.
+
+**Verification:**
+- `pytest tests/test_eval_harness.py -v`: 16/16 passed (12 pre-existing + 4
+  new — 3 unit tests on `assert_no_false_unavailability` directly, 1
+  end-to-end through `run_case()` reproducing the Cluster F2 shape:
+  `list_agents_performance` succeeds with 2 real rows from the `gs001`
+  fixture, scripted final text says *"Essa informação não está disponível no
+  momento"* — captured `tool_telemetry` shows the real `error_type: None,
+  row_count: 2`, and `assert_no_false_unavailability` correctly flags it).
+- `pytest tests/ -q`: 232 passed (228 baseline + 4 new), 0 failures. Golden-set
+  case count, both CI-gate tests, and the injection hard-gate all unchanged
+  and green — confirms zero regression from the opt-in wiring.
+
+---
+
 ## Prod-readiness test plan
 
 Organized by priority. "Blocker" items produce wrong-but-confident answers or unbounded resource use — must be fixed and re-verified before real traffic. "High" items are correctness under normal, non-adversarial use. "Security" is non-negotiable regardless of priority label. "Process" is ongoing discipline, not a one-time test.
@@ -424,7 +519,7 @@ Organized by priority. "Blocker" items produce wrong-but-confident answers or un
 ### Blocker
 
 - ~~**T1 — Step cap enforcement.**~~ **DONE.** Root cause was `RunState.dispatch()` never checking its own budget — see Cluster E above for the fix, the regression test, and the live telemetry trace proving it fired correctly under real DeepSeek behavior.
-- **T2 — Synthesis faithfulness.** Build a small scripted check (reuse the `dominios/agente/evals/` harness if it already supports this shape) that, for every tool call in a run, asserts the final answer's claims about that tool's data are consistent with `error_type`/`row_count` in telemetry. At minimum: a tool call with `error_type: null` and non-empty rows must never be followed by a final answer claiming that data is unavailable.
+- ~~**T2 — Synthesis faithfulness.**~~ **DONE (2026-08-21).** See Cluster P above — new camada 5 in `dominios/agente/evals/harness.py` (`assert_no_false_unavailability`), fed by real per-call telemetry captured from `_agent_ndjson`, opt-in via `esperado.resposta.frases_indisponibilidade_proibidas`. Also corrects this doc's own claim that the eval harness was blocked on a missing `freezegun` dependency — it wasn't, in this environment; the `--ignore` flags used throughout Clusters I/J/M/O above were unnecessary. 232 tests passing (`pytest tests/ -q`, no ignores).
 - ~~**T3 — Aggregate-by-portfolio vencimentos tool.**~~ **DONE (2026-08-21).** `detalhar_portfolio(drilldown="vencimentos")` with `portfolio` omitted now returns every portfolio in the window ranked by `valor_vencendo` in one call (`_build_ef_resumo_por_portfolio_ranking_sql`, `dominios/efetividade/queries.py` — same `pago_expr`/`recv_expr`/OUTER APPLY as the single-portfolio version, swaps the `portfolio_name = ?` filter for `GROUP BY portfolio_name` + `ORDER BY amount_maturing DESC`). `portfolio` is required on every other drilldown, validated in `DetalharPortfolioInput`. Response includes `total_carteiras_no_periodo`/`carteiras_retornadas`/`truncated` so the agent (and T4's disclosure rule) can tell whether coverage is complete.
 
   Verified three ways before calling it done: (1) direct Python call against ground truth — returned all 25 real 20/08 portfolios in one call, `truncated: false`, and the top entries matched figures already independently verified earlier in this doc byte-for-byte (BVFinanceira III R$693,50/2 boletos, Bradesco VIII R$64,00/2 boletos/R$0 recebido); (2) re-ran the original Cluster G repro question live — one `detalhar_portfolio(vencimentos)` call, correct 26-portfolio consolidated answer, `confidence: high`, proactively flagged the highest-risk carteiras (big value vencendo, zero recebido); (3) pulled the Langfuse trace — 5 tool calls total across the whole turn, no spiral, nowhere near the step cap. 193 tests passing (was 186 — 6 new SQL-shape tests mirroring the existing single-portfolio ones, 1 new dispatch test covering both the ranking path and the still-required-portfolio path on the other 5 drilldowns).
@@ -458,6 +553,22 @@ Organized by priority. "Blocker" items produce wrong-but-confident answers or un
 
 ## Suggested order
 
-T1 done. Remaining E/F/G/H/I/J fixes (T2-T5, T15-T16) block prod — they produce confidently wrong or mislabeled answers, which is worse than no answer. T6-T8 should run before prod but may not need code changes if they already pass. T9-T11 can run in parallel with the blockers. T12-T13 are a hard gate regardless of schedule pressure. T14 applies throughout, not at the end.
+**Update 2026-08-21: every Blocker item is done** (T1-T5, T15-T16 all
+confirmed live or, for T2, via the harness's own self-test suite — see
+Cluster P). T12-T13 (the hard security gate) are also done — see Cluster N.
+T6 (High) is done too — see Cluster O. What's actually left: the rest of T7
+(month/quarter boundaries, "esse mês" and other relative-date phrases beyond
+"ontem" — Cluster M only covered "ontem"), T8 (confidence calibration sweep,
+untested beyond the 3 original cases), T9-T11 (Medium — concurrency, error
+paths, wall-clock remeasure under the now-enforced step cap), and T3b (scoped
+in Cluster L's re-check — an aggregate-by-portfolio ranking tool for
+`valor_acordos_gerados`/`qtd_acordos` on an arbitrary day, mirroring T3's
+vencimentos-ranking shape). T14 (regression discipline) applies throughout,
+not at the end — every fix above already carries one except where explicitly
+noted (Clusters I/J's system-prompt-only fixes, N's live-only security probes).
 
-T15/T16 are likely the cheapest blockers left — both are system-prompt-level fixes (no new SQL, no new tools), same class of change as the `f44bfac` confidence-rule fix. Worth doing before T3/T4 (the aggregate-portfolio tool, which is a real feature build).
+Original ordering rationale, for history: T1 done first because an unenforced
+step cap invalidated every other budget's sizing assumption. T2-T5/T15-T16
+(Blocker) came next because they produce confidently wrong or mislabeled
+answers, worse than no answer. T12-T13 (Security) were treated as a hard gate
+regardless of schedule pressure throughout, not deferred to the end.
