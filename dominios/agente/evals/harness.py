@@ -158,6 +158,12 @@ def run_case(monkeypatch, case: Dict[str, Any]) -> Dict[str, Any]:
     contrato de erro, sanitização de saída — tudo de verdade), com LLM e
     dados mocados. `trace` vem do próprio script (é exatamente o que o
     "modelo" foi instruído a chamar) — não precisa reconstrução.
+
+    `tool_telemetry` é diferente: vem do `_agent_ndjson` real (capturado via
+    monkeypatch, mesma técnica de `apply_fixture`), não do script — é o que
+    `RunState.dispatch` (guards.py) de fato produziu por chamada
+    (error_type/row_count/cache_hit), o mesmo dado que `_tool_result_json`
+    grava no ndjson de produção (T2, pt5-live-testing.md, Cluster F).
     """
     fixture = load_fixture(case["fixture"])
     apply_fixture(monkeypatch, fixture)
@@ -165,6 +171,14 @@ def run_case(monkeypatch, case: Dict[str, Any]) -> Dict[str, Any]:
     fake_sdk, seen_requests = _build_fake_deepseek_module(case["mock_model"]["turns"])
     monkeypatch.setitem(sys.modules, "openai", fake_sdk)
     monkeypatch.setattr(settings, "AGENT_PROVIDER", "deepseek")
+
+    tool_telemetry: List[Dict[str, Any]] = []
+
+    def _capture_ndjson(hypothesis_id, location, message, data, run_id=None):
+        if message == "agent_tool_call":
+            tool_telemetry.append(dict(data))
+
+    monkeypatch.setattr(agente_mod, "_agent_ndjson", _capture_ndjson)
 
     sessao = case["sessao"]
     frozen_today = case.get("frozen_today", sessao["date_to"])
@@ -175,7 +189,10 @@ def run_case(monkeypatch, case: Dict[str, Any]) -> Dict[str, Any]:
         )
 
     trace = [t["tool_call"] for t in case["mock_model"]["turns"] if "tool_call" in t]
-    return {"response": response, "trace": trace, "requests": seen_requests, "fixture": fixture}
+    return {
+        "response": response, "trace": trace, "requests": seen_requests,
+        "fixture": fixture, "tool_telemetry": tool_telemetry,
+    }
 
 
 # ─── camada 1 — seleção de tool ─────────────────────────────────────
@@ -312,6 +329,42 @@ def assert_llm_judge(*_args, **_kwargs) -> Optional[str]:
     )
 
 
+# ─── camada 5 — anti-indisponibilidade-falsa (T2, Cluster F) ───────
+
+
+def assert_no_false_unavailability(
+    resposta_text: str,
+    tool_telemetry: List[Dict[str, Any]],
+    frases_proibidas: List[str],
+) -> Optional[str]:
+    """
+    T2 (pt5-live-testing.md): nenhuma tool call com error_type=None e
+    row_count>0 pode ser seguida de uma resposta que alega indisponibilidade
+    de dado (padrão Cluster F: 8/8 chamadas com sucesso, resposta final diz
+    "não retorna essa carteira"). `tool_telemetry` é o ndjson real da
+    chamada (run_case captura via monkeypatch de _agent_ndjson) — mede o que
+    dispatch_tool de fato devolveu, não o script do caso.
+
+    Rede de segurança por frase, não por entidade: não distingue QUAL fonte
+    foi chamada de indisponível — se qualquer chamada teve sucesso com dado
+    e o texto contém qualquer frase de `frases_proibidas`, acusa. Não pega
+    o caso (real, achado F2) de uma resposta que mistura uma indisponibilidade
+    verdadeira com uma falsa na mesma frase — mesma limitação, documentada,
+    da camada 2 (rede de segurança, não substitui checagem exata).
+    """
+    teve_sucesso_com_dado = any(
+        t.get("error_type") is None and (t.get("row_count") or 0) > 0
+        for t in tool_telemetry
+    )
+    if not teve_sucesso_com_dado:
+        return None
+    texto_lower = resposta_text.lower()
+    for frase in frases_proibidas:
+        if frase.lower() in texto_lower:
+            return f"resposta alega indisponibilidade ({frase!r}) mas houve tool call bem-sucedida com dado real (row_count>0)"
+    return None
+
+
 # ─── avaliação de 1 caso (todas as camadas aplicáveis) ─────────────
 
 
@@ -353,6 +406,12 @@ def evaluate_case_verbose(monkeypatch, case: Dict[str, Any]) -> Dict[str, Any]:
     ground_truth = esperado.get("ground_truth")
     if ground_truth:
         check = assert_ground_truth(result["fixture"], ground_truth)
+        if check:
+            violacoes.append(check)
+
+    frases_indisponibilidade = resposta.get("frases_indisponibilidade_proibidas")
+    if frases_indisponibilidade:
+        check = assert_no_false_unavailability(texto, result["tool_telemetry"], frases_indisponibilidade)
         if check:
             violacoes.append(check)
 

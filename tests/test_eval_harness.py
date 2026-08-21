@@ -6,10 +6,12 @@ harness não acusa falso positivo — nunca que ele pega um problema de verdade.
 """
 from dominios.agente.evals.harness import (
     assert_ground_truth,
+    assert_no_false_unavailability,
     assert_no_sql_channel,
     assert_numbers_traceable,
     assert_params,
     assert_tool_selection,
+    run_case,
 )
 
 
@@ -79,3 +81,68 @@ def test_assert_ground_truth_pega_valor_divergente():
 def test_assert_ground_truth_passa_dentro_da_tolerancia():
     fixture = {"agents": [{"taxa_contato_pct": 22.39}]}
     assert assert_ground_truth(fixture, {"agents.0.taxa_contato_pct": 22.39}) is None
+
+
+def test_assert_no_false_unavailability_pega_alegacao_falsa_apos_sucesso_com_dado():
+    telemetry = [{"tool_name": "detalhar_portfolio", "error_type": None, "row_count": 2}]
+    resultado = assert_no_false_unavailability(
+        "A carteira BVFinanceira III não está disponível no detalhamento desta base.",
+        telemetry,
+        ["não está disponível"],
+    )
+    assert resultado is not None
+
+
+def test_assert_no_false_unavailability_nao_acusa_quando_tool_realmente_falhou():
+    telemetry = [{"tool_name": "detalhar_portfolio", "error_type": "upstream_5xx", "row_count": None}]
+    resultado = assert_no_false_unavailability(
+        "A carteira BVFinanceira III não está disponível no momento.",
+        telemetry,
+        ["não está disponível"],
+    )
+    assert resultado is None
+
+
+def test_assert_no_false_unavailability_nao_acusa_sem_frase_proibida_no_texto():
+    telemetry = [{"tool_name": "detalhar_portfolio", "error_type": None, "row_count": 2}]
+    resultado = assert_no_false_unavailability(
+        "A carteira BVFinanceira III tem R$ 693,50 vencendo hoje.",
+        telemetry,
+        ["não está disponível"],
+    )
+    assert resultado is None
+
+
+def test_run_case_camada5_pega_indisponibilidade_falsa_end_to_end(monkeypatch):
+    """
+    Repro do padrão Cluster F (pt5-live-testing.md, achado F2): tool call
+    bem-sucedida com dado real (list_agents_performance, fixture gs001 — 2
+    agentes), resposta final scriptada alega indisponibilidade mesmo assim.
+    Prova o pipeline inteiro (run_agent real + RunGuard.dispatch real +
+    captura de ndjson via monkeypatch de _agent_ndjson em run_case), não só
+    a função assert_no_false_unavailability isolada com telemetria de
+    mentirinha.
+    """
+    case = {
+        "fixture": "gs001.json",
+        "sessao": {"db": "COBwebRCBAUTOS", "date_from": "2026-08-10", "date_to": "2026-08-16"},
+        "pergunta": "Quais agentes tiveram a melhor taxa de contato no período?",
+        "mock_model": {
+            "turns": [
+                {"tool_call": {"name": "list_agents_performance", "args": {"order_by": "taxa_contato_pct", "limit": 5}}},
+                {"final": {
+                    "text": "Essa informação não está disponível no momento.",
+                    "highlights": [],
+                    "suggested_actions": [],
+                    "data_sources": [],
+                    "confidence": "low",
+                }},
+            ]
+        },
+    }
+    result = run_case(monkeypatch, case)
+    assert result["tool_telemetry"], "esperava telemetria real capturada para list_agents_performance"
+    violacao = assert_no_false_unavailability(
+        result["response"]["text"], result["tool_telemetry"], ["não está disponível"]
+    )
+    assert violacao is not None
