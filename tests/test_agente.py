@@ -1075,6 +1075,64 @@ def test_run_agent_ancora_ontem_na_data_real_do_sistema_nao_no_periodo_filtrado(
     assert f"Data real de ontem (sistema): {ontem_real}" in system_content
 
 
+def test_run_agent_ancora_inicio_do_trimestre_na_data_real_do_sistema(monkeypatch):
+    """
+    Regressão de achado ao vivo (pt5 handoff, Cluster Q/T7): sem uma âncora
+    explícita, "esse trimestre" reproduziu 2/2 vezes ao vivo o mesmo bug que
+    Cluster M já tinha corrigido para "ontem" - o modelo confundiu o período
+    pedido com o período filtrado da sessão (1 dia) e recusou responder,
+    dizendo que a sessão "não cobre um trimestre", em vez de calcular o
+    início do trimestre real e chamar query_kpi_historico com esse range
+    explícito. Fixa a data de início do trimestre real no prompt, mesmo
+    padrão de hoje_real/ontem_real.
+    """
+    final_json = '{"text": "ok", "confidence": "high"}'
+
+    class _ToolFn:
+        name = "filter_portfolios_by_risk"
+        arguments = '{"level": "medio"}'
+
+    class _ToolCall:
+        id = "call_1"
+        function = _ToolFn()
+
+    fake_responses = [
+        _Block(choices=[_Block(message=_Block(content=None, tool_calls=[_ToolCall()]))]),
+        _Block(choices=[_Block(message=_Block(content=final_json, tool_calls=None))]),
+    ]
+    seen_requests = []
+
+    class _FakeCompletions:
+        def create(self, **kwargs):
+            seen_requests.append(kwargs)
+            return fake_responses[len(seen_requests) - 1]
+
+    class _FakeOpenAIClient:
+        def __init__(self, api_key, base_url, **kwargs):
+            self.chat = _Block(completions=_FakeCompletions())
+
+    fake_sdk = types.ModuleType("openai")
+    fake_sdk.OpenAI = _FakeOpenAIClient
+    fake_sdk.OpenAIError = type("OpenAIError", (Exception,), {})
+    monkeypatch.setitem(sys.modules, "openai", fake_sdk)
+    monkeypatch.setattr(settings, "AGENT_PROVIDER", "deepseek")
+    monkeypatch.setattr(settings, "AGENT_MODEL", "deepseek-chat")
+    _stub_dataset(monkeypatch)
+
+    # Sessão filtrada para um único dia (hoje) - o cenário real onde o bug
+    # apareceu: "trimestre" foi confundido com esse filtro de 1 dia.
+    hoje_iso = date.today().isoformat()
+    run_agent(
+        [{"role": "user", "content": "quanto foi gerado esse trimestre?"}],
+        "todos", hoje_iso, hoje_iso,
+    )
+
+    system_content = seen_requests[0]["messages"][0]["content"]
+    hoje_real = date.today()
+    inicio_trimestre_real = date(hoje_real.year, ((hoje_real.month - 1) // 3) * 3 + 1, 1).isoformat()
+    assert f"Início do trimestre real (sistema): {inicio_trimestre_real}" in system_content
+
+
 def test_run_agent_loop_anthropic_forces_final_when_rounds_exhausted(monkeypatch):
     """Regressão: modelo que encadeia tool_use em toda rodada não pode devolver
     resposta vazia quando AGENT_MAX_TOOL_ITERS esgota antes do RunGuard (steps<10,

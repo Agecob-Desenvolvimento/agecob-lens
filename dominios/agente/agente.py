@@ -688,11 +688,15 @@ def _run_agent_impl(
 
     hoje_real = date.today()
     ontem_real = hoje_real - timedelta(days=1)
+    inicio_trimestre_real = date(hoje_real.year, ((hoje_real.month - 1) // 3) * 3 + 1, 1)
     system_prompt = _load_system_prompt(date_to)
     system_prompt += (
         f"\n\n## Contexto desta sessão\n"
         f"- Data real de hoje (sistema): {hoje_real.isoformat()} — use sempre que a "
         f"pergunta mencionar \"hoje\", independente do período filtrado abaixo.\n"
+        f"- Início do trimestre real (sistema): {inicio_trimestre_real.isoformat()} — use "
+        f"sempre que a pergunta mencionar \"esse/neste trimestre\": vai desse dia até a "
+        f"data real de hoje acima (nunca até o fim do trimestre, que pode ser no futuro).\n"
         f"- Data real de ontem (sistema): {ontem_real.isoformat()} — use sempre que a "
         f"pergunta mencionar \"ontem\": é o dia anterior à data real de hoje acima, "
         f"NUNCA o dia anterior ao período filtrado abaixo (os dois só coincidem "
