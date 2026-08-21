@@ -167,6 +167,83 @@ Question: *"Ranking de geração de acordos por carteira ontem - quais as 5 que 
 
 ---
 
+## Cluster M — "Ontem" resolved against the filtered period instead of real system date (T7)
+
+**Status: FIXED and confirmed live (2026-08-21).** Found while starting T6 (fuzzy portfolio
+name resolution) — a portfolio-lookup repro accidentally surfaced a date bug first.
+
+**Root cause:** the runtime context block `_run_agent_impl` injects into the system prompt
+(`dominios/agente/agente.py`, right after `_load_system_prompt`) pinned an explicit absolute
+date for "hoje" only:
+
+```python
+f"- Data real de hoje (sistema): {date.today().isoformat()} — use sempre que a "
+f"pergunta mencionar \"hoje\", independente do período filtrado abaixo.\n"
+```
+
+Nothing anchored "ontem" the same way. When the session's filtered period (`date_from`/
+`date_to`, e.g. from a user who changed the dashboard's date picker before opening the chat)
+differs from the real system date, the model has to compute "ontem" itself from two competing
+anchors — real today, or the filtered period's date — with no rule saying which. Rule in
+`system_prompt.md`'s "Estilo" section only disambiguated "hoje" the same lopsided way.
+
+**Live repro:** session `db="todos"`, `dateFrom=dateTo=2026-08-20` (filtered period one day
+before real system today, 2026-08-21) — a realistic shape: user looking at yesterday's report
+in the dashboard, then asking the chat about "ontem". Question: *"Quanto foi gerado ontem na
+carteira BV Financeira?"*, fired 3 times verbatim before touching any code:
+
+| Run | Resolved "ontem" as | BVFinanceira III value returned |
+|---|---|---|
+| 1 | **19/08** (wrong — one day before the *filtered period*, not before real today) | R$ 26.797,38 |
+| 2 | **20/08** (correct) | R$ 515,57 |
+| 3 | **20/08** (correct) | R$ 515,57 |
+
+1-in-3 failure rate on an identical question, same session context — confirms non-deterministic
+LLM date computation, not a deterministic code bug, which is exactly why it needed pinning
+rather than a prose-only fix. Ground truth for BVFinanceira III (`query_kpi_historico`
+direct call): 19/08 = R$ 26.797,38, 20/08 = R$ 515,57 — both real numbers, so this is the same
+"right number, wrong label" pattern as Clusters F/I/J/K, one dimension further (date, not
+metric/scope/portfolio).
+
+**Confirmed at the tool-call level, not just final text** (`npx langfuse-cli api observations
+list --type TOOL`, pulled from the real local Langfuse instance): the failing run's
+`tool-query_kpi_historico` observation shows `"input":"{\"tool_name\": \"query_kpi_historico\",
+\"db\": \"COBwebRCBAUTOS\", \"date_from\": \"2026-08-19\", \"date_to\": \"2026-08-19\"}"` — the
+model actually sent the wrong date to the tool, not just mislabeled a correct one in prose.
+
+**Fix applied:** `dominios/agente/agente.py` — compute `ontem_real = hoje_real - timedelta(days=1)`
+alongside the existing `hoje_real`, and add a second explicit line to the injected session
+context pinning "ontem" to that absolute date with the same wording pattern as "hoje" (plus a
+one-line rationale: the two only coincide when the filtered period is today, since that's the
+exact condition that was silently assumed before). `system_prompt.md`'s "Estilo" bullet
+extended to mention both words are anchored to real system dates, with a worked example. No
+tool/SQL changes — same class of fix as Clusters I/J/K/L (prompt/context discipline, not a data
+bug).
+
+**Live re-verification:** same exact question, 5 more runs after the fix (hot-reloaded, no
+restart) — **5/5 correctly resolved "ontem" to 20/08**, values internally consistent across all
+runs (BVFinanceira IV R$ 1.317,87, III R$ 515,57, VII R$ 0,00 — matching the pre-fix runs 2/3
+that happened to get it right). Re-pulled the Langfuse trace for the last of these 5 runs:
+`tool-query_kpi_historico` input now shows `"date_from": "2026-08-20", "date_to": "2026-08-20"`
+— fix confirmed at the same tool-call level the bug was found at, not just in the final text.
+Control check (session filter still 2026-08-20, question asks "hoje" instead): correctly
+resolved to 21/08 (3 acordos, matches ground truth) — no regression on the word the context
+block already handled correctly.
+
+**Regression test:** `tests/test_agente.py::test_run_agent_ancora_ontem_na_data_real_do_sistema_nao_no_periodo_filtrado`
+— offline (mocked DeepSeek client, no LLM call), asserts the injected system prompt contains
+both `f"Data real de hoje (sistema): {date.today()}"` and `f"Data real de ontem (sistema):
+{date.today() - timedelta(days=1)}"` when the session's filtered period is 5 days in the past.
+Computes both dates dynamically from `date.today()` at test-run time — no `freezegun` needed,
+no hardcoded date to rot. `pytest tests/ -q --ignore=tests/test_eval_harness.py
+--ignore=tests/test_golden_set.py`: 194 passed (193 baseline + this test).
+
+**Scope note:** this fixes the "ontem" anchor specifically (the word actually observed failing
+live). Other relative-date phrases ("essa semana", "esse mês") were not tested and are not
+covered by this fix — still open, see T7 below.
+
+---
+
 ## Prod-readiness test plan
 
 Organized by priority. "Blocker" items produce wrong-but-confident answers or unbounded resource use — must be fixed and re-verified before real traffic. "High" items are correctness under normal, non-adversarial use. "Security" is non-negotiable regardless of priority label. "Process" is ongoing discipline, not a one-time test.
@@ -186,7 +263,7 @@ Organized by priority. "Blocker" items produce wrong-but-confident answers or un
 ### High
 
 - **T6 — Fuzzy portfolio name resolution.** Battery of typos/abbreviations/case variants ("bv", "BV Financeira", "bvfinanceira 3", "santander 24") against `_find_portfolio_name`. Confirm correct resolution or an honest "carteira não encontrada, você quis dizer X?" — never a silent wrong match.
-- **T7 — Date-range edge cases.** "hoje", "ontem", "esse mês", explicit `YYYY-MM-DD`, month/quarter boundaries, and days with zero activity (weekends/holidays). Confirm the agent doesn't fabricate a number for a day with no rows.
+- **T7 — Date-range edge cases.** "hoje", "ontem", "esse mês", explicit `YYYY-MM-DD`, month/quarter boundaries, and days with zero activity (weekends/holidays). Confirm the agent doesn't fabricate a number for a day with no rows. **Partially done:** "ontem" vs. real system date when the session's filtered period differs from today — see Cluster M above (fixed, live-reverified 5/5, regression test added). Still open: "esse mês"/"esse trimestre" and other relative phrases beyond "hoje"/"ontem", month/quarter boundaries, zero-activity days.
 - **T8 — Confidence calibration sweep.** A battery spanning full-data, partial-data (the case `f44bfac` just fixed), and no-data-at-all questions. Confirm `low`/`medium`/`high` match the rule in `system_prompt.md`, not just the 3 cases already tested.
 
 ### Medium
