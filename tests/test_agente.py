@@ -7,6 +7,7 @@ completo com SDKs stubados (Anthropic e DeepSeek/OpenAI).
 import json
 import sys
 import types
+from datetime import date, timedelta
 
 import config.settings as settings
 from dominios.agente import risco as risco_mod
@@ -960,6 +961,64 @@ def test_run_agent_loop_deepseek_offline(monkeypatch):
     assert second[-1]["role"] == "tool"
     assert second[-1]["tool_call_id"] == "call_1"
     assert "BANCO BETA" in second[-1]["content"]
+
+
+def test_run_agent_ancora_ontem_na_data_real_do_sistema_nao_no_periodo_filtrado(monkeypatch):
+    """
+    Regressão de achado ao vivo (pt5 handoff, Cluster M): com o período filtrado
+    da sessão diferente de hoje real (ex.: usuário olhando um dia passado no
+    dashboard e perguntando "ontem" no chat), o contexto injetado só fixava a
+    data real de "hoje" - "ontem" ficava por conta do cálculo do modelo, que
+    errou ~1 em cada 3 repetições ao vivo (ancorou no dia anterior ao período
+    filtrado, não ao dia anterior a hoje real). Fixa as duas datas explícitas
+    no prompt para o modelo não precisar calcular nenhuma delas.
+    """
+    final_json = '{"text": "ok", "confidence": "high"}'
+
+    class _ToolFn:
+        name = "filter_portfolios_by_risk"
+        arguments = '{"level": "medio"}'
+
+    class _ToolCall:
+        id = "call_1"
+        function = _ToolFn()
+
+    fake_responses = [
+        _Block(choices=[_Block(message=_Block(content=None, tool_calls=[_ToolCall()]))]),
+        _Block(choices=[_Block(message=_Block(content=final_json, tool_calls=None))]),
+    ]
+    seen_requests = []
+
+    class _FakeCompletions:
+        def create(self, **kwargs):
+            seen_requests.append(kwargs)
+            return fake_responses[len(seen_requests) - 1]
+
+    class _FakeOpenAIClient:
+        def __init__(self, api_key, base_url, **kwargs):
+            self.chat = _Block(completions=_FakeCompletions())
+
+    fake_sdk = types.ModuleType("openai")
+    fake_sdk.OpenAI = _FakeOpenAIClient
+    fake_sdk.OpenAIError = type("OpenAIError", (Exception,), {})
+    monkeypatch.setitem(sys.modules, "openai", fake_sdk)
+    monkeypatch.setattr(settings, "AGENT_PROVIDER", "deepseek")
+    monkeypatch.setattr(settings, "AGENT_MODEL", "deepseek-chat")
+    _stub_dataset(monkeypatch)
+
+    # Período filtrado da sessão é uma data passada, diferente de hoje real -
+    # exatamente o cenário em que o bug apareceu ao vivo.
+    dia_filtrado_passado = (date.today() - timedelta(days=5)).isoformat()
+    run_agent(
+        [{"role": "user", "content": "o que aconteceu ontem?"}],
+        "todos", dia_filtrado_passado, dia_filtrado_passado,
+    )
+
+    system_content = seen_requests[0]["messages"][0]["content"]
+    hoje_real = date.today().isoformat()
+    ontem_real = (date.today() - timedelta(days=1)).isoformat()
+    assert f"Data real de hoje (sistema): {hoje_real}" in system_content
+    assert f"Data real de ontem (sistema): {ontem_real}" in system_content
 
 
 def test_run_agent_loop_anthropic_forces_final_when_rounds_exhausted(monkeypatch):

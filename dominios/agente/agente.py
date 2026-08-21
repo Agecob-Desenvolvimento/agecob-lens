@@ -9,7 +9,7 @@ API subir mesmo sem os pacotes instalados (rota responde 503 com instrução).
 import json
 import os
 import time
-from datetime import date
+from datetime import date, timedelta
 from typing import Any, Callable, Dict, List, Optional
 
 from fastapi import HTTPException
@@ -680,11 +680,17 @@ def _run_agent_impl(
     def get_agents() -> List[Dict[str, Any]]:
         return build_agent_entries(db, date_from, date_to, run_id=run_id)
 
+    hoje_real = date.today()
+    ontem_real = hoje_real - timedelta(days=1)
     system_prompt = _load_system_prompt(date_to)
     system_prompt += (
         f"\n\n## Contexto desta sessão\n"
-        f"- Data real de hoje (sistema): {date.today().isoformat()} — use sempre que a "
+        f"- Data real de hoje (sistema): {hoje_real.isoformat()} — use sempre que a "
         f"pergunta mencionar \"hoje\", independente do período filtrado abaixo.\n"
+        f"- Data real de ontem (sistema): {ontem_real.isoformat()} — use sempre que a "
+        f"pergunta mencionar \"ontem\": é o dia anterior à data real de hoje acima, "
+        f"NUNCA o dia anterior ao período filtrado abaixo (os dois só coincidem "
+        f"quando o período filtrado é hoje).\n"
         f"- Base de dados ativa: {db}\n"
         f"- Período analisado (filtro selecionado pelo usuário): {date_from} a {date_to}\n"
         f"- Carteiras carregadas no período: {len(entries)}\n"
