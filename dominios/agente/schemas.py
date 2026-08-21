@@ -74,12 +74,22 @@ class CompararAgentesInput(_DateRangeValidatorMixin, BaseModel):
 class DetalharPortfolioInput(_DateRangeValidatorMixin, BaseModel):
     model_config = ConfigDict(extra="forbid")
     db: _DB_LITERAL
-    portfolio: str = Field(max_length=80)
+    # Opcional só quando drilldown="vencimentos": omitido vira ranking de
+    # TODAS as carteiras da janela (T3, agente-tools-handoff-pt5-live-testing.md
+    # Cluster G) em vez de UMA carteira. Nos outros 5 drilldowns continua
+    # obrigatório — validado abaixo, não dá pra expressar isso só com o tipo.
+    portfolio: Optional[str] = Field(None, max_length=80)
     date_from: date
     date_to: date
     drilldown: Literal["aprovados", "excecao", "rejeitado", "quebrado", "resumo", "vencimentos"] = "resumo"
     page: int = Field(1, ge=1, le=10)
     page_size: Literal[10, 25, 50] = 25
+
+    @model_validator(mode="after")
+    def _portfolio_obrigatorio_exceto_ranking_vencimentos(self):
+        if not self.portfolio and self.drilldown != "vencimentos":
+            raise ValueError("portfolio é obrigatório para este drilldown.")
+        return self
 
 
 class ExplicarMetricaInput(BaseModel):

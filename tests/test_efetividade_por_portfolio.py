@@ -13,7 +13,9 @@ DIV_AUX) que _build_ef_detalhe_sql já usa — não inventa filtro novo.
 """
 from dominios.efetividade.queries import (
     _build_ef_resumo_por_portfolio_params,
+    _build_ef_resumo_por_portfolio_ranking_sql,
     _build_ef_resumo_por_portfolio_sql,
+    _ef_date_params,
 )
 
 
@@ -53,3 +55,54 @@ def test_params_um_banco_vs_todos():
 
     todos = _build_ef_resumo_por_portfolio_params("todos", "20260819", "20260819", "BANCO ALFA")
     assert todos == ("20260819", "20260819", "BANCO ALFA", "20260819", "20260819", "BANCO ALFA")
+
+
+# _build_ef_resumo_por_portfolio_ranking_sql — T3 (pt5-live-testing.md, Cluster G):
+# mesma consulta acima, mas para TODAS as carteiras da janela numa chamada só,
+# ranqueada por valor vencendo. Sem isso o agente perguntava carteira por
+# carteira e sub-amostrava em silêncio (BVFinanceira III, R$12k+ vencendo,
+# ficou fora de um "consolidado" que só cobriu 7 de 20 carteiras reais).
+
+
+def test_ranking_nao_filtra_por_nome_agrupa_por_carteira():
+    sql = _build_ef_resumo_por_portfolio_ranking_sql("COBwebRCBAUTOS", "primeira")
+    assert "DA.portfolio_name = ?" not in sql  # essa é a chave do resumo de UMA carteira, não desta
+    assert "GROUP BY portfolio_name" in sql
+    assert "ORDER BY amount_maturing DESC" in sql
+    assert "OUTER APPLY" in sql
+
+
+def test_ranking_exclui_linhas_sem_carteira_resolvida():
+    sql = _build_ef_resumo_por_portfolio_ranking_sql("COBwebRCBAUTOS", "primeira")
+    assert "DA.portfolio_name IS NOT NULL" in sql  # senão o grupo "sem carteira" entra no ranking
+
+
+def test_ranking_reusa_expressoes_de_pagamento_do_resumo_geral():
+    sql = _build_ef_resumo_por_portfolio_ranking_sql("COBwebRCBAUTOS", "primeira")
+    assert "amount_maturing" in sql
+    assert "amount_received" in sql
+    assert "DATEADD(DAY, 5, DT_VENCIMENTO)" in sql
+
+
+def test_ranking_parcela_condicional_primeira_vs_colchao():
+    primeira = _build_ef_resumo_por_portfolio_ranking_sql("COBwebRCBAUTOS", "primeira")
+    colchao = _build_ef_resumo_por_portfolio_ranking_sql("COBwebRCBAUTOS", "colchao")
+    assert "R.PARCELA = 0" in primeira
+    assert "R.PARCELA > 0" in colchao
+
+
+def test_ranking_todos_bancos_gera_union_all():
+    sql_um_banco = _build_ef_resumo_por_portfolio_ranking_sql("COBwebRCBAUTOS", "primeira")
+    sql_todos = _build_ef_resumo_por_portfolio_ranking_sql("todos", "primeira")
+    assert "UNION ALL" in sql_todos
+    assert "UNION ALL" not in sql_um_banco
+
+
+def test_ranking_usa_ef_date_params_sem_portfolio():
+    # a ranking query nao tem parametro de nome de carteira - reusa o
+    # helper generico de data (_ef_date_params), nao um _params dedicado
+    um_banco = _ef_date_params("COBwebRCBAUTOS", "20260819", "20260819")
+    assert um_banco == ("20260819", "20260819")
+
+    todos = _ef_date_params("todos", "20260819", "20260819")
+    assert todos == ("20260819", "20260819", "20260819", "20260819")

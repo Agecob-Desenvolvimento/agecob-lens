@@ -735,6 +735,36 @@ def test_tool_detalhar_portfolio_valida_e_despacha():
     assert page_size_ruim["ok"] is False
 
 
+def test_tool_detalhar_portfolio_vencimentos_sem_portfolio_vira_ranking():
+    """T3 (pt5-live-testing.md, Cluster G): portfolio omitido + drilldown
+    'vencimentos' despacha em modo ranking (todas as carteiras) - nos outros
+    5 drilldowns, portfolio continua obrigatório."""
+    seen = {}
+
+    def fake_detalhe(**kwargs):
+        seen.update(kwargs)
+        return {"ok": 1}
+
+    providers = {"detalhar_portfolio": fake_detalhe}
+    sem_portfolio = {k: v for k, v in _DETALHAR_ARGS.items() if k != "portfolio"}
+
+    ranking = dispatch_tool(
+        "detalhar_portfolio", {**sem_portfolio, "drilldown": "vencimentos"},
+        SAMPLE_ENTRIES, _NO_AGENTS, providers=providers,
+    )
+    assert ranking == {"ok": 1}
+    assert seen["portfolio"] is None
+    assert seen["drilldown"] == "vencimentos"
+
+    for drilldown in ("resumo", "aprovados", "excecao", "rejeitado", "quebrado"):
+        sem_portfolio_ruim = dispatch_tool(
+            "detalhar_portfolio", {**sem_portfolio, "drilldown": drilldown},
+            SAMPLE_ENTRIES, _NO_AGENTS, providers=providers,
+        )
+        assert sem_portfolio_ruim["ok"] is False
+        assert sem_portfolio_ruim["error_type"] == "validation"
+
+
 def test_tool_list_agents_aceita_novas_metricas():
     por_ticket = dispatch_tool(
         "list_agents_performance", {"order_by": "ticket_medio", "limit": 1}, SAMPLE_ENTRIES, _AGENTS

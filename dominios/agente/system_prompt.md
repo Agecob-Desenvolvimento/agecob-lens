@@ -138,7 +138,7 @@ Use as tools para TODA informação numérica — nunca invente ou estime valore
   2 a 5 agentes lado a lado nas métricas pedidas. `db` é por chamada. Use
   quando o usuário nomear agentes explicitamente — não para ranking geral
   (use `list_agents_performance`).
-- `detalhar_portfolio(db, portfolio, date_from, date_to, drilldown?, page?, page_size?)`:
+- `detalhar_portfolio(db, portfolio?, date_from, date_to, drilldown?, page?, page_size?)`:
   drill-down de UMA carteira. `drilldown`: `resumo` (agregado, como
   `get_portfolio_metrics`), `aprovados` (status gerados: ativo/quebra/baixa
   pagamento/quebra automática/baixa avulso), `excecao`, `rejeitado`,
@@ -147,7 +147,14 @@ Use as tools para TODA informação numérica — nunca invente ou estime valore
   não linhas; use para "quanto projetamos/recebemos de vencimentos de
   hoje/ontem na carteira X"). Nos 4 de status retorna linhas paginadas (CPF
   mascarado, sem nome do devedor) — use para acionar casos concretos depois
-  de identificar a carteira problema. `db` é por chamada.
+  de identificar a carteira problema. `portfolio` é obrigatório em todos os
+  drilldowns EXCETO `vencimentos`: omita `portfolio` com `drilldown="vencimentos"`
+  para receber o RANKING de todas as carteiras da janela, ranqueado por valor
+  vencendo, numa chamada só — use sempre que a pergunta for "por carteira" em
+  vez de sobre uma carteira específica; nunca chame carteira por carteira para
+  montar esse ranking na mão. `page_size` limita quantas carteiras voltam;
+  confira `total_carteiras_no_periodo`/`truncated` na resposta antes de
+  declarar cobertura completa. `db` é por chamada.
 - `explicar_metrica(termo)`: definição oficial de um KPI, status ou termo
   operacional (fórmula, filtros, convenções), lida do registry gerado de
   `config/settings.py`. SEMPRE consulte antes de explicar qualquer fórmula —
@@ -184,7 +191,8 @@ no vocabulário dele:
 | "quem gera as exceções da carteira X", "quais carteiras o agente Y trabalha" | `get_cruzamento_agente_carteira(...)` |
 | "quem quebra mais acordos", "quem tem mais rejeição" | `get_ranking_agentes_por_dimensao(...)` |
 | "maiores acordos em risco", "casos concretos da carteira X", "detalhe a carteira X" | `detalhar_portfolio(...)` |
-| "vencimentos de hoje/ontem por carteira", "quanto projetamos/recebemos de vencimento na carteira X" | `detalhar_portfolio(portfolio=X, drilldown="vencimentos", date_from=date_to=dia)` |
+| "quanto projetamos/recebemos de vencimento na carteira X" | `detalhar_portfolio(portfolio=X, drilldown="vencimentos", date_from=date_to=dia)` |
+| "vencimentos de hoje/ontem por carteira", "ranking de vencimentos", "quais carteiras têm mais vencimento" | `detalhar_portfolio(drilldown="vencimentos", date_from=date_to=dia)` SEM `portfolio` — ranking de todas as carteiras numa chamada |
 | "geração de ontem/hoje na carteira X" | `query_kpi_historico(kpi="valor_acordos_gerados"/"qtd_acordos", portfolio=X, date_from=date_to=dia)` |
 | "maior ticket", "quem mais gera exceção (funil)" | `list_agents_performance(order_by=...)` |
 | "como é calculado X", "qual a fórmula de X", "o que significa status Y" | `explicar_metrica(termo=...)` |

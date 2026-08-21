@@ -296,6 +296,73 @@ FROM (
 """
 
 
+def _build_ef_resumo_por_portfolio_ranking_sql(db: str, parcela_tipo: str) -> str:
+    """Mesmo resumo de _build_ef_resumo_por_portfolio_sql, mas para TODAS as
+    carteiras da janela numa chamada só, ranqueado por amount_maturing DESC —
+    mesmo padrão dos endpoints acordos-por-portfolio/excecoes-por-portfolio
+    (dominios/graficos/queries.py), que já retornam todas as carteiras de uma
+    vez em vez de forçar N chamadas. T3 do handoff pt5-live-testing.md
+    (Cluster G): sem isso, o agente perguntava carteira por carteira e
+    sub-amostrava em silêncio. Mesmo pago_expr/recv_expr/OUTER APPLY de
+    _build_ef_resumo_por_portfolio_sql — só troca o filtro `DA.portfolio_name
+    = ?` por GROUP BY, e exige DA.portfolio_name IS NOT NULL (senão o grupo
+    "sem carteira resolvida" entraria no ranking)."""
+    parcela_cond = "= 0" if parcela_tipo == "primeira" else "> 0"
+
+    pago_expr = (
+        "CASE WHEN DT_PAGAMENTO IS NOT NULL AND VR_PAGO > 0 "
+        "AND DT_PAGAMENTO <= DATEADD(DAY, 5, DT_VENCIMENTO) "
+        "THEN 1 ELSE 0 END"
+    )
+    recv_expr = (
+        "CASE WHEN DT_PAGAMENTO IS NOT NULL AND VR_PAGO > 0 "
+        "THEN VR_PAGO ELSE 0 END"
+    )
+
+    def _one(database: str) -> str:
+        return f"""
+    SELECT R.NR_RECEBIMENTO, R.VALOR, R.VR_PAGO, R.DT_PAGAMENTO, R.DT_VENCIMENTO, R.ID_REC_STATUS,
+           DA.portfolio_name
+    FROM {database}.dbo.REC_MASTER R (NOLOCK)
+    INNER JOIN {database}.dbo.USU_MASTER U (NOLOCK) ON R.ID_USUARIO = U.ID_USUARIO
+    OUTER APPLY (
+        SELECT TOP 1 DA2.{settings.PORTFOLIO_COLUMN} AS portfolio_name
+        FROM {database}.dbo.REC_DIVIDAS RD2 (NOLOCK)
+        JOIN {database}.dbo.DIV_AUX DA2 (NOLOCK) ON RD2.ID_DIVIDA = DA2.ID_DIVIDA
+        WHERE RD2.NR_RECEBIMENTO = R.NR_RECEBIMENTO
+          AND RD2.ID_CARTEIRA = R.ID_CARTEIRA
+          AND DA2.{settings.PORTFOLIO_COLUMN} IS NOT NULL
+    ) DA
+    WHERE R.DT_VENCIMENTO >= CONVERT(DATE, ?, 112)
+      AND R.DT_VENCIMENTO <= CONVERT(DATE, ?, 112)
+      AND R.ID_REC_STATUS IN {settings.STATUS_GERADOS_SQL}
+      AND R.PARCELA {parcela_cond}
+      AND DA.portfolio_name IS NOT NULL
+      {_EF_AGENT_FILTER}
+"""
+
+    inner = (
+        f"{_one(_EF_DB_A)}\n    UNION ALL\n{_one(_EF_DB_C)}"
+        if db == "todos"
+        else _one(db)
+    )
+
+    return f"""
+SELECT
+    portfolio_name,
+    COUNT(*) AS generated,
+    SUM({pago_expr}) AS paid_on_time,
+    COALESCE(SUM(VALOR), 0) AS amount_maturing,
+    COALESCE(SUM({recv_expr}), 0) AS amount_received,
+    CAST(100.0 * SUM({recv_expr}) / NULLIF(SUM(VALOR), 0) AS DECIMAL(8, 2)) AS effectiveness_pct
+FROM (
+{inner}
+) AS T
+GROUP BY portfolio_name
+ORDER BY amount_maturing DESC
+"""
+
+
 def _build_ef_resumo_por_portfolio_params(
     db: str, date_from_lit: str, date_to_lit: str, portfolio_name: str,
 ) -> Tuple[Any, ...]:

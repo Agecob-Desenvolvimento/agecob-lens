@@ -31,7 +31,9 @@ from core.utils.validation import validate_database_or_todos
 from dominios.agente.risco import build_portfolio_entries
 from dominios.efetividade.queries import (
     _build_ef_resumo_por_portfolio_params,
+    _build_ef_resumo_por_portfolio_ranking_sql,
     _build_ef_resumo_por_portfolio_sql,
+    _ef_date_params,
 )
 from dominios.graficos.queries import (
     build_acordos_detalhe_query,
@@ -66,9 +68,48 @@ def _find_portfolio_name(name: str, entries: List[Dict[str, Any]]) -> Optional[s
     return None
 
 
+def _build_vencimentos_ranking(
+    validated_db: str, date_from: str, date_to: str, limit: int, run_id: Optional[str],
+) -> Dict[str, Any]:
+    """T3 (pt5-live-testing.md, Cluster G): vencimentos de TODAS as carteiras
+    da janela numa chamada só, ranqueado por valor vencendo - sem isso o
+    agente tinha que perguntar carteira por carteira e sub-amostrava em
+    silêncio. `limit` reusa page_size do schema (10/25/50); sem paginação de
+    verdade porque um ranking não se beneficia de "página 2" do jeito que
+    uma lista de casos individuais se beneficia."""
+    conn_db = settings.ALLOWED_DATABASES[0] if validated_db == "todos" else validated_db
+    query = _build_ef_resumo_por_portfolio_ranking_sql(validated_db, "primeira")
+    params = _ef_date_params(validated_db, date_from.replace("-", ""), date_to.replace("-", ""))
+    rows = run_query(
+        query, conn_db, params=params, run_id=run_id,
+        context="agente/detalhe-portfolio/vencimentos-ranking",
+    )
+    ranking = [
+        {
+            "portfolio": row.get("portfolio_name"),
+            "boletos_gerados": int(row.get("generated") or 0),
+            "boletos_pagos_no_prazo": int(row.get("paid_on_time") or 0),
+            "valor_vencendo": float(row.get("amount_maturing") or 0),
+            "valor_recebido": float(row.get("amount_received") or 0),
+            "efetividade_pct": float(row.get("effectiveness_pct") or 0),
+        }
+        for row in rows[:limit]
+    ]
+    return {
+        "drilldown": "vencimentos_ranking",
+        "db": validated_db,
+        "date_from": date_from,
+        "date_to": date_to,
+        "total_carteiras_no_periodo": len(rows),
+        "carteiras_retornadas": len(ranking),
+        "ranking": ranking,
+        "truncated": len(rows) > limit,
+    }
+
+
 def build_detalhe_portfolio(
     db: str,
-    portfolio: str,
+    portfolio: Optional[str],
     date_from: str,
     date_to: str,
     drilldown: str,
@@ -77,6 +118,10 @@ def build_detalhe_portfolio(
     run_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     validated_db = validate_database_or_todos(db)
+
+    if drilldown == "vencimentos" and not portfolio:
+        return _build_vencimentos_ranking(validated_db, date_from, date_to, page_size, run_id)
+
     entries = build_portfolio_entries(validated_db, date_from, date_to, run_id=run_id)
     resolved_name = _find_portfolio_name(portfolio, entries)
     if resolved_name is None:

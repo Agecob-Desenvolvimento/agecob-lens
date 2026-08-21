@@ -241,7 +241,14 @@ AGENT_TOOLS: List[Dict[str, Any]] = [
             "'quanto projetamos/recebemos de vencimentos de hoje/ontem na carteira "
             "X'; devolve um resumo agregado, não linhas). Nos 4 de status, retorna "
             "linhas paginadas (CPF mascarado, sem nome do devedor). db é por "
-            "chamada — pode diferir do filtro da sessão."
+            "chamada — pode diferir do filtro da sessão. portfolio é obrigatório em "
+            "todo drilldown, EXCETO 'vencimentos': omita portfolio nesse caso para "
+            "receber o RANKING de todas as carteiras da janela ranqueadas por valor "
+            "vencendo numa chamada só (use para 'vencimentos por carteira', 'ranking "
+            "de vencimentos', 'quais carteiras têm mais vencimento hoje/ontem') — "
+            "não chame carteira por carteira para montar esse ranking manualmente. "
+            "page_size (10/25/50) limita quantas carteiras voltam; a resposta inclui "
+            "total_carteiras_no_periodo e truncated para você saber se cobriu tudo."
         ),
         "input_schema": DetalharPortfolioInput.model_json_schema(),
     },
