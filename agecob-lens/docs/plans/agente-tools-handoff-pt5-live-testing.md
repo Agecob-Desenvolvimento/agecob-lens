@@ -713,6 +713,193 @@ isn't near a quarter boundary).
 
 ---
 
+## Cluster S — "Essa semana", "mês/trimestre passado", and the quarter-boundary edge all confirmed already correct (T7)
+
+**Status: verified correct, no fix needed (2026-08-28).** Closes the rest of
+T7 left open by Cluster R. Real system date this pass: 2026-08-28 (Friday).
+
+**Starting hypothesis, tested and disproven:** the T7 handoff note above
+guessed "essa semana" would need start/end anchored *without* the
+to-today clamp Cluster R's trimestre fix used ("a week that's already fully
+in the past doesn't need that clamp"). Live testing shows the opposite for
+the *current* week: "essa semana" is an ongoing period exactly like "esse
+trimestre"/"esse mês" — its calendar end (Sunday) can be in the future
+relative to real today, so it needs, and gets, the identical to-date clamp.
+The hypothesis conflated "essa semana" (current, ongoing) with "semana
+passada" (prior, fully closed) — verified both separately below, not
+assumed.
+
+### "Essa semana" — 5/5 correct, no fix applied
+
+Tested `db="todos"`, session filter deliberately set to a date in a
+**different calendar week** than real today (2026-08-19, a Wednesday in the
+17-23/08 week) so a filtered-period-anchor bug would visibly diverge from a
+real-today-anchor answer — same adversarial design as Cluster M's original
+"ontem" repro, one relative-phrase further. One run also used the sharpest
+possible gap (2026-08-23, the single day immediately before the real-today
+week's Monday) to mirror Cluster M's exact 1-day-apart shape as closely as
+possible for a week-grained question.
+
+| Run | Session filter | Question | Resolved window | Total (both banks) |
+|---|---|---|---|---|
+| 1 | 2026-08-19 | "Quanto foi gerado essa semana, no total?" | 24-28/08 | R$ 249,5 mil |
+| 2 | 2026-08-19 (repeat) | same | 24-28/08 | R$ 249.549,14 |
+| 3 | 2026-08-19 | "Qual o total gerado nesta semana ate agora?" | 24-28/08 | R$ 249.549,14 |
+| 4 | **2026-08-23** (1 day before week boundary) | "Quanto foi gerado essa semana, no total?" | 24-28/08 | R$ 249.549,14 |
+
+Run 1 went further than the minimum bar unprompted, explicitly disclosing the
+anchor choice: *"Nota: o período analisado da sessão é 19/08, mas como você
+pediu 'essa semana', ancorei na data real de hoje (28/08)."* Every run
+correctly resolved to Monday-of-the-real-today-week (24/08) through real
+today (28/08) — **clamped to today, not extending to the future Sunday
+(30/08)** — directly contradicting the "no clamp needed" half of the
+hypothesis above.
+
+**Ground truth** (`build_kpi_historico("todos", "valor_acordos_gerados",
+"2026-08-24", "2026-08-28", "dia", 1)`, called fresh immediately after these
+runs, not reused from earlier): daily values 37.182,21 / 35.728,12 / 72.881,28
+/ 103.757,53 / 0,00 = **R$ 249.549,14** — exact match to the cent against
+every run above.
+
+**Root cause of why this already works, confirmed by reading the actual
+mechanism, not just observing the outcome:** two things stack. (1) Rule 11
+(`system_prompt.md`, added by Cluster R) states the *general* principle —
+"qualquer período relativo que não seja hoje/ontem... devem ser calculados a
+partir da data real de hoje" — broad enough that the model generalizes the
+worked "esse trimestre" example (run from the real anchor to real today,
+never to a future calendar boundary) to "semana" even though the rule's
+prose never names the word. (2) `_DateRangeValidatorMixin._validar_janela`
+(`dominios/agente/schemas.py:30-40`) is a hard Pydantic backstop, independent
+of prompt discipline: `date_to > date.today()` raises `ValueError` on the
+tool call itself. If the model ever *did* send the future Sunday, the call
+would fail and force a retry. Empirically the model never needed that
+backstop — in all 4 non-flawed runs above it sent the correct `date_to` on
+the first attempt (confirmed at the tool-call level via this worktree's own
+NDJSON telemetry, `logs/agent-debug.log`: `row_count: 5` for the week calls,
+matching a 5-day 24-28/08 window, not 7) — but its existence means a future
+prompt regression here would degrade to a forced retry, not a silent wrong
+answer.
+
+### "Mês passado" — 3/3 correct, no fix applied
+
+Session filter fixed at 2026-06-10 (June — two months from real today,
+August) so a filtered-period-anchor bug would produce "maio" instead of the
+correct "julho". All 3 runs (2 identical phrasings + 1 reworded) resolved to
+**julho/2026**, **R$ 1.606.301,83** (Consumer R$ 585.225,71 + Autos
+R$ 1.021.076,12), one run additionally reporting 899 acordos (405 + 494).
+Ground truth (`build_kpi_historico("todos", "valor_acordos_gerados",
+"2026-07-01", "2026-07-31", "mes", 1)`): **R$ 1.606.301,83** — exact match,
+3/3.
+
+### "Trimestre passado" — 3/3 correct, no fix applied
+
+Session filter fixed at 2026-01-15 (January, Q1) so a filtered-period-anchor
+bug would produce Q4-2025 (out/nov/dez) instead of the correct Q2-2026.
+All 3 runs (2 identical phrasings + 1 reworded) resolved to **01/04 a
+30/06/2026**, **R$ 2.815.203,49**, **2.531 acordos** (Autos R$ 2.223.895,22 /
+1.265 acordos, Consumer R$ 591.308,27 / 1.266 acordos) — byte-identical
+across all 3 runs. Ground truth (`build_kpi_historico` per month, abr/mai/jun
+2026): valor 928.573,20 + 901.504,94 + 985.125,35 = **R$ 2.815.203,49**;
+qtd_acordos 1.111 + 778 + 642 = **2.531** — exact match on both figures, 3/3.
+
+Confirms the hypothesis's other half was right: unlike "essa semana", both
+"mês passado" and "trimestre passado" are fully-past periods (end date
+always ≤ real today by construction), so the `date_to > date.today()` clamp
+is never at risk of firing and the trimestre-real fix's clamping logic
+genuinely isn't relevant here, as flagged in the original task framing —
+confirmed by testing, not assumed. Rule 11's general "compute from real
+anchors" principle is sufficient on its own.
+
+### "Semana passada" — 2/2 correct, no fix applied (bonus check, adjacent to the explicit T7 scope)
+
+Not explicitly named in the T7 backlog, but directly adjacent to "essa
+semana" and cheap to verify, so checked rather than left as an implied gap.
+Session filter fixed at 2026-06-10. Both runs (2 phrasings) resolved to
+**17-23/08/2026**, **R$ 260.229,06** (Autos R$ 244.726,92, Consumer
+R$ 15.502,14). Ground truth (`build_kpi_historico`, 2026-08-17 to
+2026-08-23, `dia`): daily sum = **R$ 260.229,06** — exact match, 2/2. Same
+"fully-past, no clamp needed" shape as mês/trimestre passado.
+
+### Quarter-boundary edge (today = 1st day of a quarter) — inspected only, not live-testable this pass
+
+Real system date this pass (2026-08-28) isn't near a quarter boundary, same
+constraint Cluster R hit at 21/08 — so this was verified by direct
+computation against the actual formula in
+`dominios/agente/agente.py:691` (`inicio_trimestre_real = date(hoje_real.year,
+((hoje_real.month - 1) // 3) * 3 + 1, 1)`), not live-fired:
+
+| hoje_real | inicio_trimestre_real | `hoje_real == inicio_trimestre_real`? |
+|---|---|---|
+| 2026-01-01 | 2026-01-01 | True |
+| 2026-03-31 | 2026-01-01 | False (correctly still Q1) |
+| 2026-04-01 | 2026-04-01 | True |
+| 2026-07-01 | 2026-07-01 | True |
+| 2026-09-30 | 2026-07-01 | False (correctly still Q3) |
+| 2026-10-01 | 2026-10-01 | True |
+| 2026-10-02 | 2026-10-01 | False (correctly stays Q4-start, doesn't drift) |
+
+Confirmed on every quarter-start date the formula produces `inicio_trimestre_real
+== hoje_real` exactly, and confirmed the *rendered* injected context reads
+sensibly rather than contradictorily in that case: for `hoje_real =
+2026-10-01`, the context block says "Início do trimestre real: 2026-10-01...
+vai desse dia até a data real de hoje" + "Data real de hoje: 2026-10-01" —
+i.e. a 1-day quarter-to-date window (today only). That's mathematically
+correct (on day 1 of a quarter, "this quarter so far" is just today), not a
+contradiction. No code change made — the existing formula already handles
+this correctly. **Scope note:** inspection of the anchor computation only;
+the downstream LLM synthesis behavior for a genuine 1-day "trimestre"
+question (e.g., does it phrase a 1-day quarter window oddly) remains
+untested and would need to wait for a real quarter-boundary date, or a
+deliberate `date.today()` monkeypatch of the live server process — not done
+here, judged too invasive for an edge case this narrow (see Constraints
+note below).
+
+### Regression
+
+`pytest tests/ -q` from a clean fast-forward of this worktree onto `main`
+(`baf3e96`, zero code edits made in this pass): **224 passed, 9 skipped
+(expected — `agecob-lens/dist` not built in this worktree), 1 failed.** The
+1 failure, `tests/test_eval_harness.py::test_run_case_camada5_pega_indisponibilidade_falsa_end_to_end`,
+is **pre-existing and unrelated to T7** — reproduces deterministically (3/3)
+with zero code changes, traces to `dominios/agente/evals/harness.py:185`
+(`with freeze_time(frozen_today):`) throwing
+`pydantic.errors.PydanticSchemaGenerationError` on entering the freezegun
+context manager itself, before any of this project's code inside the block
+runs. This is a `freezegun`/`pydantic` version-compatibility break (pydantic
+isn't pinned in `requirements.txt`, only pulled transitively via FastAPI) in
+Cluster P's T2 eval-harness test — it passed 16/16 when Cluster P added it,
+so something drifted in the shared venv since then. Not fixed here: out of
+T7's scope (no date-anchoring logic involved), and the venv is shared across
+every agent worktree in this campaign, so a `pip install`/version pin needs
+deliberate, isolated handling rather than a side effect of this pass.
+Flagged separately for follow-up (not tracked as a T-number in this doc — a
+dependency regression, not a product-behavior gap). No new regression test
+added in this pass: nothing in `dominios/agente/agente.py` or
+`system_prompt.md` changed, so there is no new code behavior to lock in —
+same reasoning Cluster R applied to its own "esse mês already works"
+finding.
+
+### Scope notes — what this pass does and doesn't close
+
+**Closed:** "essa semana" (current), "mês passado", "trimestre passado",
+"semana passada" (bonus) — all verified correct against fresh ground truth,
+multiple phrasings, adversarial filtered-period gaps designed to catch a
+filtered-period-anchor bug if one existed. Quarter-boundary anchor
+computation verified correct by direct inspection/computation across every
+2026 quarter-start date.
+
+**Not closed / explicitly still open:** the *live LLM synthesis* behavior on
+an actual quarter-boundary date (day 1 of a quarter) — only the anchor
+*computation* was verified, not a real model response to a 1-day trimestre
+window, since no real date in this session or Cluster R's landed on one.
+Whoever next works this session near 01/01, 01/04, 01/07, or 01/10 should
+fire a live "esse trimestre" question that day and confirm the synthesis
+doesn't phrase a 1-day window oddly (same class of check Cluster R did for
+zero-activity days). The pre-existing `freezegun`/`pydantic` test failure
+flagged above is also unresolved — separate from T7, needs its own pass.
+
+---
+
 ## Prod-readiness test plan
 
 Organized by priority. "Blocker" items produce wrong-but-confident answers or unbounded resource use — must be fixed and re-verified before real traffic. "High" items are correctness under normal, non-adversarial use. "Security" is non-negotiable regardless of priority label. "Process" is ongoing discipline, not a one-time test.
@@ -732,7 +919,7 @@ Organized by priority. "Blocker" items produce wrong-but-confident answers or un
 ### High
 
 - ~~**T6 — Fuzzy portfolio name resolution.**~~ **DONE.** See Cluster O above. Battery run: "santander 24" (roman numeral) and "bvfinanceira 3" resolved correctly/unambiguously; "bv" and bare "santander"-family prefixes exposed a real silent-first-match gap, now fixed for `get_portfolio_metrics`/`get_cruzamento_agente_carteira` (`aviso_ambiguidade` field + prompt rule). Not extended to `compare_portfolios` or the `detalhe_portfolio.py` copy of the resolver — flagged as a follow-up boundary, not a live-confirmed gap in those two paths.
-- **T7 — Date-range edge cases.** "hoje", "ontem", "esse mês", explicit `YYYY-MM-DD`, month/quarter boundaries, and days with zero activity (weekends/holidays). Confirm the agent doesn't fabricate a number for a day with no rows. **Mostly done:** "hoje"/"ontem" anchored (Cluster M); "esse mês" confirmed correct 3/3 live, no fix needed; "esse trimestre" reproduced the same bug 2/2 and is now fixed and anchored (Cluster R); explicit `YYYY-MM-DD` and a zero-activity weekend day both confirmed correct live (zero-activity got a small tone fix, also Cluster R). Still open: "essa semana", "mês/trimestre passado" (a different anchor shape, no clamp-to-today needed), and the exact-quarter-boundary edge (today being the 1st of a quarter) — untested, this session's real date isn't near one.
+- ~~**T7 — Date-range edge cases.**~~ **DONE (2026-08-28).** "hoje", "ontem", "esse mês", explicit `YYYY-MM-DD`, month/quarter boundaries, and days with zero activity (weekends/holidays). Confirm the agent doesn't fabricate a number for a day with no rows. "hoje"/"ontem" anchored (Cluster M); "esse mês" confirmed correct 3/3 live, no fix needed; "esse trimestre" reproduced the same bug 2/2 and is now fixed and anchored (Cluster R); explicit `YYYY-MM-DD` and a zero-activity weekend day both confirmed correct live (zero-activity got a small tone fix, also Cluster R). "Essa semana" (5/5), "mês passado" (3/3), "trimestre passado" (3/3), and bonus "semana passada" (2/2) all confirmed already correct against fresh ground truth, no fix needed (Cluster S) — Rule 11 + the existing real-date anchors already generalize correctly, no phrase-specific hardcoding required. Quarter-boundary anchor computation (today = 1st of a quarter) verified correct by direct inspection across every 2026 quarter start, also Cluster S — **still not live-tested** (no session date in this campaign has landed on one); whoever hits that date next should fire a live "esse trimestre" question to confirm the synthesis handles a 1-day quarter-to-date window cleanly.
 - **T8 — Confidence calibration sweep.** A battery spanning full-data, partial-data (the case `f44bfac` just fixed), and no-data-at-all questions. Confirm `low`/`medium`/`high` match the rule in `system_prompt.md`, not just the 3 cases already tested.
 - ~~**T17 — Final-answer JSON parse robustness.**~~ **DONE (2026-08-21).** Not in the original plan — found while investigating T7. See Cluster Q above: `_parse_agent_final_text` now uses `json.loads(..., strict=False)`, so a literal raw newline inside the model's JSON `"text"` field (a real, observed DeepSeek slip) no longer nukes the entire structured response down to a broken low-confidence text dump.
 
