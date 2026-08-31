@@ -218,8 +218,9 @@ CTE_Contratos_Agente AS (
 SELECT
     U.CHAVE,
     U.NOME,
-    -- Nome operacional do agente no COBweb (USU_MASTER.AGENTE) — consumido pelo Modo TV.
-    U.AGENTE AS agente,
+    -- USU_MASTER não tem coluna de nome operacional; Modo TV usa este alias e
+    -- encurta para 1º nome + sobrenome no cliente.
+    U.NOME AS agente,
     -- qtd_acionamentos = devedores únicos acionados no dia (dedupe por ID_DEV)
     ISNULL(E.qtd_acionamentos, 0) AS qtd_acionamentos,
     -- Alô = alguém atendeu (CTO_COMPLEMENTO.ALO=1). Etapa do funil entre
