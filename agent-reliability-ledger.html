@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>AgDash Agent Reliability Ledger</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    --bg: #f8fafc; --card: #ffffff; --border: #e2e8f0; --text: #0f172a; --muted: #64748b;
+    --closed-bg: #ecfdf5; --closed-border: #a7f3d0; --closed-fg: #047857;
+    --open-bg: #fffbeb; --open-border: #fde68a; --open-fg: #b45309;
+    --partial-bg: #fff7ed; --partial-border: #fed7aa; --partial-fg: #c2410c;
+    --sec-bg: #eff6ff; --sec-border: #bfdbfe; --sec-fg: #1d4ed8;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0b1220; --card: #111a2e; --border: #22314f; --text: #e6ebf5; --muted: #93a3bd;
+      --closed-bg: #062b20; --closed-border: #0f5132; --closed-fg: #4ade80;
+      --open-bg: #2b1f05; --open-border: #6b4a05; --open-fg: #fbbf24;
+      --partial-bg: #2b1607; --partial-border: #7c3a12; --partial-fg: #fb923c;
+      --sec-bg: #0b1f3a; --sec-border: #1e40af; --sec-fg: #93c5fd;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.55 -apple-system, "Segoe UI", Inter, system-ui, sans-serif;
+    padding: 32px 20px 80px;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; }
+  header { margin-bottom: 28px; }
+  h1 { font-size: 1.65rem; font-weight: 700; margin: 0 0 6px; letter-spacing: -0.01em; }
+  .subtitle { color: var(--muted); font-size: 0.92rem; }
+  .meta-row {
+    display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px;
+  }
+  .meta-pill {
+    font-family: var(--mono); font-size: 0.78rem; background: var(--card);
+    border: 1px solid var(--border); border-radius: 6px; padding: 5px 10px; color: var(--muted);
+  }
+  .meta-pill b { color: var(--text); }
+
+  .stats {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px; margin: 24px 0 32px;
+  }
+  .stat {
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 16px;
+  }
+  .stat .n { font-size: 1.7rem; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .stat .l { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 4px; }
+  .stat.closed .n { color: var(--closed-fg); }
+  .stat.open .n { color: var(--open-fg); }
+  .stat.sec .n { color: var(--sec-fg); }
+
+  h2 {
+    font-size: 1.05rem; font-weight: 700; margin: 40px 0 4px;
+    padding-bottom: 8px; border-bottom: 1px solid var(--border);
+  }
+  .section-note { color: var(--muted); font-size: 0.86rem; margin: 6px 0 16px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 0.86rem; margin-bottom: 8px; }
+  th {
+    text-align: left; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--muted); font-weight: 600; padding: 8px 10px; border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  td { padding: 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  .id-cell { white-space: nowrap; font-family: var(--mono); font-weight: 700; font-size: 0.82rem; }
+  .finding { color: var(--text); }
+  .evidence { color: var(--muted); font-size: 0.8rem; }
+  code {
+    font-family: var(--mono); font-size: 0.82em; background: var(--border);
+    padding: 1px 5px; border-radius: 4px;
+  }
+  .badge {
+    display: inline-block; font-size: 0.68rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.04em; padding: 3px 8px; border-radius: 20px; white-space: nowrap;
+  }
+  .badge.closed { background: var(--closed-bg); border: 1px solid var(--closed-border); color: var(--closed-fg); }
+  .badge.open { background: var(--open-bg); border: 1px solid var(--open-border); color: var(--open-fg); }
+  .badge.partial { background: var(--partial-bg); border: 1px solid var(--partial-border); color: var(--partial-fg); }
+  .badge.sec { background: var(--sec-bg); border: 1px solid var(--sec-border); color: var(--sec-fg); }
+
+  .card-list { display: flex; flex-direction: column; gap: 10px; margin: 12px 0 8px; }
+  .risk-card {
+    background: var(--card); border: 1px solid var(--border); border-left: 3px solid var(--open-fg);
+    border-radius: 8px; padding: 12px 14px;
+  }
+  .risk-card .rt { font-weight: 700; font-size: 0.88rem; margin-bottom: 3px; }
+  .risk-card .rd { color: var(--muted); font-size: 0.84rem; }
+
+  .queue-item {
+    background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+    padding: 12px 14px; margin-bottom: 8px;
+  }
+  .queue-item .qt { font-weight: 700; font-size: 0.9rem; }
+  .queue-item .qs { color: var(--muted); font-size: 0.84rem; margin-top: 3px; }
+
+  .constraints { list-style: none; margin: 12px 0; padding: 0; counter-reset: c; }
+  .constraints li {
+    counter-increment: c; padding: 8px 0 8px 32px; position: relative; font-size: 0.88rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .constraints li:last-child { border-bottom: none; }
+  .constraints li::before {
+    content: counter(c); position: absolute; left: 0; top: 8px;
+    font-family: var(--mono); font-weight: 700; color: var(--muted); font-size: 0.8rem;
+  }
+
+  footer {
+    margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--border);
+    color: var(--muted); font-size: 0.8rem;
+  }
+  a { color: var(--sec-fg); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>AgDash Agent Reliability Ledger</h1>
+  <div class="subtitle">Status board for the DeepSeek chat-agent reliability campaign. Derived in full from <code>agecob-lens/docs/plans/agente-tools-handoff-pt5-live-testing.md</code> — that document is the narrative source of truth; this page is the scannable index.</div>
+  <div class="meta-row">
+    <span class="meta-pill">Generated: <b>2026-08-24</b></span>
+    <span class="meta-pill">HEAD: <b>baf3e96</b></span>
+    <span class="meta-pill">Baseline: <b>pytest tests/ -q → 234 passed, 0 failed, 0 exclusions</b> (re-verified live at generation time, not copied from doc)</span>
+  </div>
+</header>
+
+<div class="stats">
+  <div class="stat closed"><div class="n">12 / 14</div><div class="l">Clusters closed</div></div>
+  <div class="stat open"><div class="n">6</div><div class="l">Tasks still open</div></div>
+  <div class="stat sec"><div class="n">2 / 2</div><div class="l">Security gate (T12+T13)</div></div>
+  <div class="stat closed"><div class="n">0</div><div class="l">Fabricated numbers, all batteries</div></div>
+</div>
+
+<h2>Closed clusters</h2>
+<div class="section-note">Every row live-reverified against the running dev server after its fix (not just unit-tested), per the doc's own verification method: ground truth always pulled via a direct Python call to the underlying builder, never trusted from the agent's own text.</div>
+<table>
+<thead><tr><th>ID</th><th>Finding</th><th>Fix</th><th>Regression test / evidence</th><th>Residual risk</th></tr></thead>
+<tbody>
+<tr>
+  <td class="id-cell">E · T1</td>
+  <td class="finding">Step cap (<code>MAX_STEPS=10</code>) didn't fire mid-batch — DeepSeek returned up to 4 tool_calls per round, dispatched unconditionally; Q1 hit 11 calls uncapped.</td>
+  <td class="evidence"><code>1e512ad</code> — <code>RunState.dispatch()</code> checks <code>steps_exceeded()</code> before running anything, not just at round boundaries.</td>
+  <td class="evidence"><code>test_dispatch_recusa_executar_apos_estourar_step_budget</code>. Live: trace <code>srv-83df2e682a70</code>, calls 11-15 blocked with structured <code>step_budget_exceeded</code>, <code>state.steps</code> held at 10.</td>
+  <td class="evidence">None noted.</td>
+</tr>
+<tr>
+  <td class="id-cell">G · T3</td>
+  <td class="finding">No aggregate-by-portfolio tool for vencimentos — every other <code>*-por-portfolio</code> capability returns all portfolios in one call, this one was single-portfolio only, forcing an uncontrolled manual loop (G1: 1/9 checked, G2: 7/20 checked, biggest vencimento in the dataset silently excluded).</td>
+  <td class="evidence"><code>f5f19e5</code> — new <code>_build_ef_resumo_por_portfolio_ranking_sql</code>; <code>detalhar_portfolio(drilldown="vencimentos")</code> with <code>portfolio</code> omitted returns every portfolio ranked by <code>valor_vencendo</code> in one call, with <code>total_carteiras_no_periodo</code>/<code>truncated</code>.</td>
+  <td class="evidence">6 new SQL-shape tests + 1 dispatch test. Live: 3-way check — ground truth (25/25 portfolios, <code>truncated:false</code>), original G repro (1 call, <code>confidence:high</code>), Langfuse trace (5 calls total, no spiral). Status updated in <code>227b464</code>.</td>
+  <td class="evidence">T3b (arbitrary-day <em>generation</em> ranking, not vencimentos) not built — see Open queue.</td>
+</tr>
+<tr>
+  <td class="id-cell">I · T15</td>
+  <td class="finding"><code>get_acordo_status_breakdown()</code> flags via its own <code>nota</code> that GERADOS = status (1,2,3,10,12) only — agent summed <em>every</em> status and labeled it "gerados" anyway, overstating generated value by 424% (R$15.631,56 reported vs. real R$2.981,26).</td>
+  <td class="evidence"><code>2203e2c</code> — rule #6 in "Regras de negócio (invioláveis)", tightened tool description, new pre-answer checklist item. No SQL/tool change — the tool was already correct and self-documenting.</td>
+  <td class="evidence">No automated regression test (nothing in the runnable suite exercises <code>system_prompt.md</code> prose). Live: re-fired G3 verbatim, new answer reports per-status breakdown, never labels a summed total "gerados."</td>
+  <td class="evidence">Prose-only fix — "large improvement, not a hard guarantee" per the doc's own framing.</td>
+</tr>
+<tr>
+  <td class="id-cell">J · T16</td>
+  <td class="finding">"Conversão" questions silently answered with <code>kpi="efetividade"</code> (pagos/emitidos — a different, already-once-renamed metric) and labeled "Conversão" throughout. Prompt's own glossary routed the query there; <code>AgentEntry</code> field docs had the formula backwards.</td>
+  <td class="evidence"><code>2203e2c</code> (same commit as I) — glossary row split, <code>conversao_pct</code> description corrected, <code>pagos_por_cpc_pct</code> documented, new rule #7, new checklist item, tightened <code>query_kpi_historico</code> description.</td>
+  <td class="evidence">No automated test (same reason as I). Live: S4 repro + 5 rewordings/controls, all correct — genuine conversão questions now disclose the grain limitation instead of substituting; legitimate efetividade questions still route correctly.</td>
+  <td class="evidence"><b>Landmine, not fixed:</b> <code>dominios/agente/conversao.py</code>'s payload itself names its keys <code>conversao_pct</code> and asserts <code>criterio: "Conversão oficial..."</code> for the efetividade formula — the tool <em>output</em> still self-mislabels. Renaming touches 4 exact-dict assertions in <code>test_agente.py</code>; out of scope for the prompt-level pass. Live tests held despite this (model never called efetividade and relabeled it in 6 re-tests), but it's a live risk for future rewordings or model drift.</td>
+</tr>
+<tr>
+  <td class="id-cell">K · T4</td>
+  <td class="finding">Cross-db scope silently narrowed — <code>db="todos"</code> session, one answer used CONSUMER-only data and presented it as "a base" (45 real vs. 15 reported, 3x off). Model's own reasoning trace showed it knew it was narrowing scope and intended to disclose, but the disclosure didn't survive into final JSON.</td>
+  <td class="evidence"><code>e518ea5</code> — rule #8: when <code>db="todos"</code> and consolidated answer wanted, call once per real bank and sum; if budget allows only one, say which bank was skipped. Checklist item 7.</td>
+  <td class="evidence">Live: repro re-fired, exact ground-truth match, both banks shown, <code>data_sources</code> confirms both were queried. Doc: <code>ab4fa58</code>. Retested clean with 2 fresh-phrased questions under T5 (<code>00e3514</code>).</td>
+  <td class="evidence">None noted beyond general prose-fix caveat.</td>
+</tr>
+<tr>
+  <td class="id-cell">L · T4</td>
+  <td class="finding">Portfolio-name guessing burned the step budget on failed lookups (5x retried a name the tool's own error response already said didn't exist) — force-final synthesis on an all-failure context degenerated to a single <code>{</code> token, not a graceful partial answer.</td>
+  <td class="evidence"><code>e518ea5</code> (same commit as K) — rule #9: only try portfolio names that already came from a tool result; a "not found" means stop, not retry; if the candidate list exceeds remaining budget, answer with what's feasible and say the ranking is partial.</td>
+  <td class="evidence">Live: re-verified 3 times across this campaign (initial fix, post-T3/M recheck). No more crash; correctly refused to pad a 5-item ranking that didn't exist; <code>data_sources</code> down to 2 real calls from 5 failed ones.</td>
+  <td class="evidence">Residual date-substitution gap (answered for the wrong day, fell back to session-scoped tools) — root-caused as a distinct capability gap, not a bug: resolved by M (date anchor) + still needs T3b (arbitrary-day generation ranking) to close completely. See Open queue.</td>
+</tr>
+<tr>
+  <td class="id-cell">M · T7 (partial — "ontem" only)</td>
+  <td class="finding">"Ontem" resolved against the session's <em>filtered</em> period instead of real system date — only "hoje" was pinned in the injected context. 1-in-3 live failure rate on an identical question (non-deterministic, not a code bug), confirmed at the tool-call level (wrong date sent to <code>query_kpi_historico</code>, not just mislabeled in prose).</td>
+  <td class="evidence"><code>93a42c8</code> — compute <code>ontem_real = hoje_real - timedelta(days=1)</code>, pin it into session context with the same wording pattern as "hoje."</td>
+  <td class="evidence"><code>test_run_agent_ancora_ontem_na_data_real_do_sistema_nao_no_periodo_filtrado</code> (dynamic, no <code>freezegun</code>). Live: 5/5 correct post-fix, cross-checked at the Langfuse tool-input level. Doc: <code>4d49196</code>.</td>
+  <td class="evidence">Scope-limited to "ontem" by design — "essa semana," "mês/trimestre passado" explicitly left open (rest of T7).</td>
+</tr>
+<tr>
+  <td class="id-cell">N · T12+T13</td>
+  <td class="finding">T12: PII leakage risk in the only row-level tool surface. T13: prompt-injection via tool-returned data (portfolio name field).</td>
+  <td class="evidence">T12: <code>8ed06da</code> — labels the <code>agente</code> field "cobrador" so it can't misread as debtor identity next to a masked CPF (the PII itself was already structurally absent — hardcoded 10-field allowlist, not a filter). T13: no code change — verification only.</td>
+  <td class="evidence">T12: grepped every agent-wired provider file for <code>DEV_MASTER</code>/<code>NOME_RAZAO</code>/<code>CPF_CNPJ</code>/<code>nome_devedor</code> — zero hits outside the allowlisted wrapper; live-checked all 4 row-level drilldowns, zero hits, CPF correctly masked every row. T13: 2 live adversarial payloads (system-override impersonation, dev-priority-tier impersonation + fake tag escape) against the real running model — 0% compliance, 0% leakage, one run proactively flagged the anomaly. Doc: <code>79e83b6</code>.</td>
+  <td class="evidence">T13 explicitly <b>not exhaustive</b> — 2 payload shapes, 1 vector (<code>portfolio_name</code>) tested. Evidence of current resistance, not a permanent guarantee.</td>
+</tr>
+<tr>
+  <td class="id-cell">O · T6</td>
+  <td class="finding">Ambiguous substring portfolio search silently resolved to the first match with no signal to the caller — "bv" matches 4 real portfolios, agent answered with only the first at <code>confidence:"high"</code>, zero mention of the other 3.</td>
+  <td class="evidence"><code>26fd0fa</code> — new <code>_ambiguity_warning()</code> helper wired into <code>get_portfolio_metrics</code> and <code>get_cruzamento_agente_carteira</code>; attaches <code>aviso_ambiguidade</code> without blocking the resolved data. Rule #10, checklist item 8.</td>
+  <td class="evidence">2 new regression tests (offline, existing <code>SAMPLE_ENTRIES</code> ambiguous pair) + extended assertions on the exact-match path. Live: 2 runs post-fix, both correctly disclosed the ambiguity and downgraded confidence to "medium"; one proactively fetched all 4 matches. Doc: <code>5a93190</code>.</td>
+  <td class="evidence">Not extended to <code>compare_portfolios</code> or the separate <code>_find_portfolio_name</code> copy in <code>detalhe_portfolio.py</code> — same silent-first-match risk, flagged as follow-up, not live-confirmed as broken there.</td>
+</tr>
+<tr>
+  <td class="id-cell">P · T2</td>
+  <td class="finding">Eval harness had no faithfulness check for "tool succeeded with data, final text claims unavailable" (the exact F1/F2 shape). Doc's own earlier claim that the harness was blocked on missing <code>freezegun</code> was itself wrong — verified false, dependency was present.</td>
+  <td class="evidence"><code>50245c2</code> — <code>run_case()</code> captures real per-call telemetry via monkeypatched <code>_agent_ndjson</code>; new camada 5 <code>assert_no_false_unavailability</code>, opt-in via <code>esperado.resposta.frases_indisponibilidade_proibidas</code>.</td>
+  <td class="evidence"><code>pytest tests/test_eval_harness.py -v</code>: 16/16 (12 pre-existing + 4 new, incl. one end-to-end repro of the Cluster F2 shape). Full suite: 232/232, all 17 golden cases and both CI gates unchanged. Doc: <code>36286a7</code>.</td>
+  <td class="evidence">Phrase-based, not entity-based — would not catch F2's exact shape (one true gap + one false gap bundled in one sentence about two different portfolios) without also knowing which entity was legitimately absent. Flagged as a follow-up boundary, not built.</td>
+</tr>
+<tr>
+  <td class="id-cell">Q · T17</td>
+  <td class="finding">Final-answer JSON parse failed on a literal raw newline inside the model's own <code>"text"</code> string value (a real DeepSeek slip) — <code>json.loads(strict=True)</code> rejected it, and the fallback path silently wiped <code>highlights</code>/<code>suggested_actions</code>/<code>data_sources</code> and forced <code>confidence:"low"</code>, even though all underlying data was 100% correct and fully gathered.</td>
+  <td class="evidence"><code>16cfb44</code> — one-line fix, <code>_parse_agent_final_text()</code>: <code>json.loads(candidate, strict=False)</code>. Pure superset of <code>strict=True</code> — zero regression risk by construction.</td>
+  <td class="evidence"><code>test_parse_final_json_com_prosa_antes_e_quebra_de_linha_crua_no_texto</code>. Verified against the exact raw bytes captured from the live Langfuse trace, before/after. Full suite: 233/233. Doc: <code>4e0ecb6</code>.</td>
+  <td class="evidence">Found while investigating a different hypothesis (pagination undercounting) that was tested and disproven — the model handles pagination correctly.</td>
+</tr>
+<tr>
+  <td class="id-cell">R · T7 (partial — "esse trimestre" + zero-tone)</td>
+  <td class="finding">"Esse trimestre" reproduced Cluster M's exact bug shape (2/2 failed, conflated session's filtered period with the question's period) — no anchor existed for any relative period beyond "hoje"/"ontem." Separately: a genuine R$0,00/zero-acordos day (real Saturday) got the correct number but hedged as if it might be a recording error.</td>
+  <td class="evidence"><code>b403fdb</code> — computes <code>inicio_trimestre_real</code>, injects alongside <code>hoje_real</code>/<code>ontem_real</code>; rule #11 (compute relative periods from real anchors, never call an answerable wider-period question "out of scope"); zero-activity tone line added to "Estilo."</td>
+  <td class="evidence"><code>test_run_agent_ancora_inicio_do_trimestre_na_data_real_do_sistema</code> (dynamic). Live: 2 rewordings post-fix, exact ground-truth match (cross-checked against a <em>fresh</em> ground-truth pull — the doc notes the dataset itself drifts within a session). Full suite: 234/234. Doc: <code>baf3e96</code>.</td>
+  <td class="evidence">"Esse mês" confirmed already correct 3/3, no fix needed — explicitly not anchored defensively since it wasn't broken.</td>
+</tr>
+</tbody>
+</table>
+
+<h2>Not independently closed <span class="badge partial">no dedicated fix</span></h2>
+<div class="section-note">Both surfaced in the doc's initial write-up (<code>cd89cbd</code>) with no "Status: FIXED" line of their own. Listed separately rather than folded into the closed table above — marking these "closed" would repeat the exact failure class this campaign exists to catch (presenting partial coverage as complete).</div>
+<table>
+<thead><tr><th>ID</th><th>Finding</th><th>What actually addressed it</th><th>Gap</th></tr></thead>
+<tbody>
+<tr>
+  <td class="id-cell">F</td>
+  <td class="finding">Two questions where every tool call succeeded (error_type: null) but the final synthesis told the user data was "unavailable." F2: a real portfolio with the single largest vencimento in the dataset reported as if it didn't exist.</td>
+  <td class="evidence">F1's trigger condition (running out of step budget mid-task) is what Cluster E's fix now surfaces honestly instead of silently. F2's under-sampling cause is what T3/Cluster G's aggregate tool removes the need for. Cluster P's camada 5 (<code>assert_no_false_unavailability</code>) adds a general safety-net test for this shape.</td>
+  <td class="evidence">No dedicated repro was re-fired against F's own original questions after E/G/P landed. The doc itself says P's check "would not... catch the real F2 case's exact shape" (two gaps, one true one false, bundled in one sentence) without entity-aware matching, which was explicitly scoped out.</td>
+</tr>
+<tr>
+  <td class="id-cell">H</td>
+  <td class="finding">Agent described its own incomplete portfolio sampling as a tool/data limitation ("as demais carteiras... não estão cobertas pela consulta") rather than disclosing it only checked 1 of 9.</td>
+  <td class="evidence">Disclosure discipline broadly improved by K's rule #8, L's rule #9, O's <code>aviso_ambiguidade</code>, and the general checklist growth — plus T3's aggregate tool removes the sampling requirement that created the gap in the first place.</td>
+  <td class="evidence">No standalone fix paragraph and no re-fired H-specific repro exist in the doc. The doc's own text frames this as a recommendation ("The system prompt <em>should</em> require...") not a confirmed fix.</td>
+</tr>
+</tbody>
+</table>
+
+<h2>Open queue</h2>
+<div class="section-note">Per the doc's "Suggested order" (2026-08-21) — all Blocker items and the security gate are closed; this is what remains.</div>
+<div class="card-list">
+  <div class="queue-item">
+    <div class="qt">T7 — rest <span class="badge open">Agent-B</span></div>
+    <div class="qs">"Essa semana," "mês passado"/"trimestre passado" (a different anchor shape — start <em>and</em> end both in the past, no clamp-to-today needed, unlike "esse trimestre"). Also untested: the exact quarter-boundary edge (today being the 1st of a quarter) — no session date in this campaign has landed near one.</div>
+  </div>
+  <div class="queue-item">
+    <div class="qt">T8 — Confidence calibration sweep <span class="badge open">Agent-C</span></div>
+    <div class="qs">Full-data / partial-data / no-data battery, checked against <code>system_prompt.md</code>'s stated rule. Only the 3 original real-user questions have been verified this way so far.</div>
+  </div>
+  <div class="queue-item">
+    <div class="qt">T10 — Error-path handling <span class="badge open">Agent-C</span></div>
+    <div class="qs">Invalid <code>db</code> param, a portfolio with zero rows, a simulated DB timeout. Confirm honest "sem dado"/error reporting instead of a fabricated plausible-looking number.</div>
+  </div>
+  <div class="queue-item">
+    <div class="qt">T9 — Concurrency / cache isolation <span class="badge open">Agent-D</span></div>
+    <div class="qs">pt4's cross-session cache-key fix (missing <code>date_from</code>/<code>date_to</code>) was reportedly fixed but only serially retested. Needs genuine concurrent load — 2+ simultaneous sessions, different date filters — serial testing cannot reproduce a race.</div>
+  </div>
+  <div class="queue-item">
+    <div class="qt">T11 — Wall-clock budget remeasure <span class="badge open">Agent-D</span></div>
+    <div class="qs">Q1 took 17.8s for 11 <em>uncapped</em> calls, pre-Cluster-E. Needs remeasurement now that the step cap actually caps, to confirm <code>WALL_CLOCK_S</code> cuts off a run that would otherwise exceed it.</div>
+  </div>
+  <div class="queue-item">
+    <div class="qt">T3b — Arbitrary-day generation-ranking-by-portfolio tool <span class="badge open">Agent-E</span></div>
+    <div class="qs">New build, not a bug fix. Mirrors T3's <code>_build_ef_resumo_por_portfolio_ranking_sql</code> shape almost exactly, but for <code>valor_acordos_gerados</code>/<code>qtd_acordos</code> instead of vencimentos. Closes Cluster L's residual date-substitution gap completely — <code>filter_portfolios_by_value</code> only reflects the session's fixed window and has no per-call date override.</div>
+  </div>
+</div>
+
+<h2>Live landmines <span class="badge partial">flagged, not fixed</span></h2>
+<div class="section-note">Confirmed real, deliberately left unfixed within their pass's scope. Carried forward so no successor re-discovers these from zero.</div>
+<div class="card-list">
+  <div class="risk-card">
+    <div class="rt">conversao.py self-mislabels its own payload</div>
+    <div class="rd"><code>dominios/agente/conversao.py</code> (backs <code>kpi="efetividade"</code>) returns a <code>criterio</code> field literally asserting "Conversão oficial: ... pagos no prazo / emitidos" and names its own keys <code>conversao_pct</code> — the tool <em>output itself</em> claims to be the official conversion formula, contradicting the real dictionary formula. Same bug class the 2026-08-03 rename already fixed once elsewhere (<code>data-layer.md</code>), recurring at a level Cluster J's prompt-only fix can't reach. Fixing it touches 4 exact-dict assertions in <code>test_agente.py</code> — a data-shape change, bigger blast radius than a synthesis-discipline pass.</div>
+  </div>
+  <div class="risk-card">
+    <div class="rt">Ambiguity disclosure has 2 unpatched twins</div>
+    <div class="rd"><code>compare_portfolios</code> and the separate <code>_find_portfolio_name</code> implementation in <code>detalhe_portfolio.py</code> (used by <code>query_kpi_historico</code>'s <code>portfolio</code> filter and <code>detalhar_portfolio</code>) share Cluster O's exact silent-first-match risk. Not extended in that pass — <code>compare_portfolios</code> already takes an explicit name list (smaller risk, user is naming multiple carteiras on purpose) and the second function is a genuinely separate implementation, not a shared one.</div>
+  </div>
+  <div class="risk-card">
+    <div class="rt">T13's injection testing is 2 payloads on 1 vector</div>
+    <div class="rd">Both live adversarial tests went through <code>portfolio_name</code> only. If a future tool ever wires in free-text fields (<code>CTO_AGENDA.TEXTO</code>, <code>CTO_COMPLEMENTO.DESCR</code> — confirmed today to have zero live path anywhere in the app), this evidence does not automatically extend to that vector.</div>
+  </div>
+  <div class="risk-card">
+    <div class="rt">Ground truth drifts within a single verification session</div>
+    <div class="rd">Confirmed twice during Cluster R's testing: the same MTD total moved by R$16,198.58 across ~15 minutes, and a Q3-to-date total moved by exactly R$6,000.00 in about a minute. Any future cluster comparing "live answer" against "ground truth captured earlier in the same doc-writing pass" must re-pull ground truth immediately before comparing, not reuse an earlier pull.</div>
+  </div>
+  <div class="risk-card">
+    <div class="rt">Prose-only fixes are "large improvement," not guarantees</div>
+    <div class="rd">Explicitly true of I, J, L, and N's cobrador-labeling fix per the doc's own repeated framing — none of these have a code-level backstop the way Q's <code>strict=False</code> does. Re-verify periodically, don't treat a clean live re-test as permanent.</div>
+  </div>
+</div>
+
+<h2>Methodology this ledger inherits</h2>
+<ul class="constraints">
+  <li>Never trust the agent's own final text as evidence. Every closed cluster above was verified by calling the underlying Python builder directly with the same args the agent used, and comparing.</li>
+  <li>A single clean run is not proof. Cluster M found a 1-in-3 failure rate on an identical question; Cluster R deliberately re-tested "esse mês" 3x across different phrasings before declaring it unbroken.</li>
+  <li>Trace-level evidence over transcript-level evidence where available. Clusters K onward pull real Langfuse traces (tool <code>ac40dc6</code> added tracing); E-J relied on NDJSON telemetry (<code>ENABLE_AGENT_TELEMETRY=true</code>) instead, since Langfuse didn't exist yet at that point in the campaign.</li>
+  <li>The tool/SQL layer has been correct in every cluster this ledger tracks. Every closed defect lived in final-answer synthesis — a right number relabeled, silently rescoped, or misdated. Distrust the last sentence more than the JSON payload it was built from.</li>
+</ul>
+
+<h2>Hard constraints (non-negotiable)</h2>
+<ol class="constraints">
+  <li>Never relabel a substituted metric with the asked-for name — disclose the gap.</li>
+  <li>Never present partial coverage as complete — name what's missing.</li>
+  <li>Never resolve relative dates by reasoning — pin them in Python.</li>
+  <li>Never guess portfolio names — only use names that came from a tool result.</li>
+  <li>Never aggregate across banks silently — sum explicitly or disclose the skip.</li>
+  <li><code>PARCELA = 0</code> is the first installment. Never normalize to 1.</li>
+  <li><code>ID_REC_STATUS = 5</code> is "Exceção" in business terms, not 11.</li>
+  <li><code>STATUS_GERADOS = (1, 2, 3, 10, 12)</code> — never relabel this set.</li>
+  <li>The tool layer has been correct in every cluster to date. The failure is in synthesis. Act accordingly.</li>
+</ol>
+
+<footer>
+  Source: <a href="agecob-lens/docs/plans/agente-tools-handoff-pt5-live-testing.md">agecob-lens/docs/plans/agente-tools-handoff-pt5-live-testing.md</a> (pt1–pt4 base chain linked from there). Commit hashes above verified against <code>git log</code> at generation time, not transcribed from memory. Update this file, don't fork a new one, as each open task closes.
+</footer>
+
+</div>
+</body>
+</html>
