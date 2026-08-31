@@ -243,6 +243,8 @@ export interface TvAgenteRow {
 
 export interface TvModeViewModel {
   loading: boolean;
+  /** filtro global = COBwebRCBCONSUMER — libera os cards de "Pendente" no Placar do Dia */
+  isConsumer: boolean;
   valor: TvHeroValor;
   kpis: TvKpi[];
   bu: TvBu[];

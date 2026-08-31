@@ -74,6 +74,7 @@ def validate_produtividade_rows(
                 normalized[field] = 0 if field == "cpc_percentual" else 0.0
         normalized["CHAVE"] = str(normalized.get("CHAVE") or "")
         normalized["NOME"] = str(normalized.get("NOME") or "")
+        normalized["agente"] = str(normalized.get("agente") or "")
         validated_rows.append(normalized)
     metrics = {
         "required_fields_missing_count": required_fields_missing_count,

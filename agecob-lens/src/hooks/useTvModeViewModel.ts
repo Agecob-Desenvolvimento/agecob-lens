@@ -28,6 +28,9 @@ import {
   type TvTickerItem,
 } from "@/components/tv/tvShared";
 
+/** "Adriana Mattos Moura Silva" → "Adriana Mattos" (primeiro nome + primeiro sobrenome). */
+const primeiroNomeESobrenome = (s: string): string => s.trim().split(/\s+/).slice(0, 2).join(" ");
+
 const TV_PLACEHOLDERS = [
   "Meta da 1ª parcela = meta de CAIXA do mês (PDF trimestral, soma office de /dashboard/metas). Mensal e da carteira inteira, sem split por BU. Atingimento mais fiel com filtro “Todas”.",
   "Projeção de 1ª parcela = run-rate do período extrapolado por dias úteis ao fim do mês (não é um endpoint de projeção).",
@@ -248,7 +251,9 @@ export function useTvModeViewModel(): TvModeViewModel {
     // Agentes (Modo TV Operacional) — conversão via métrica canônica (acordos / CPC)
     const agentes: TvAgenteRow[] = agentesRows.map((r) => ({
       id: r.CHAVE,
-      nome: r.NOME,
+      // nome grande = USU_MASTER.AGENTE (nome operacional do COBweb), cortado no
+      // primeiro sobrenome; cai para NOME se o campo vier vazio.
+      nome: primeiroNomeESobrenome(r.agente || r.NOME),
       login: r.CHAVE,
       acion: r.qtd_acionamentos,
       cpc: r.qtd_contatos,
@@ -260,6 +265,7 @@ export function useTvModeViewModel(): TvModeViewModel {
 
     return {
       loading: home.loading,
+      isConsumer: selectedDatabase === "COBwebRCBCONSUMER",
       valor,
       kpis,
       bu,
@@ -271,5 +277,5 @@ export function useTvModeViewModel(): TvModeViewModel {
       agentes,
       placeholders: TV_PLACEHOLDERS,
     };
-  }, [home, ritmoResp, metaTotalMes, ppHojeEnv, ppOntemEnv, agentesHoje, agentesRows]);
+  }, [home, ritmoResp, metaTotalMes, ppHojeEnv, ppOntemEnv, agentesHoje, agentesRows, selectedDatabase]);
 }
