@@ -125,18 +125,19 @@
   <h1>AgDash Agent Reliability Ledger</h1>
   <div class="subtitle">Status board for the DeepSeek chat-agent reliability campaign. Derived in full from <code>agecob-lens/docs/plans/agente-tools-handoff-pt5-live-testing.md</code> — that document is the narrative source of truth; this page is the scannable index.</div>
   <div class="meta-row">
-    <span class="meta-pill">Generated: <b>2026-08-24</b></span>
-    <span class="meta-pill">HEAD: <b>baf3e96</b></span>
-    <span class="meta-pill">Baseline: <b>pytest tests/ -q → 234 passed, 0 failed, 0 exclusions</b> (re-verified live at generation time, not copied from doc)</span>
+    <span class="meta-pill">Generated: <b>2026-08-24</b> · Updated: <b>2026-08-31</b></span>
+    <span class="meta-pill">HEAD: <b>00555e4</b></span>
+    <span class="meta-pill">Baseline: <b>pytest tests/ -q → 246 passed, 0 failed, 0 exclusions</b> (re-verified live at reconciliation time, not copied from any agent's report)</span>
   </div>
 </header>
 
 <div class="stats">
-  <div class="stat closed"><div class="n">12 / 14</div><div class="l">Clusters closed</div></div>
-  <div class="stat open"><div class="n">6</div><div class="l">Tasks still open</div></div>
+  <div class="stat closed"><div class="n">16 / 18</div><div class="l">Clusters closed</div></div>
+  <div class="stat closed"><div class="n">0</div><div class="l">Tasks still open — every T-id in the plan is closed</div></div>
   <div class="stat sec"><div class="n">2 / 2</div><div class="l">Security gate (T12+T13)</div></div>
   <div class="stat closed"><div class="n">0</div><div class="l">Fabricated numbers, all batteries</div></div>
 </div>
+<div class="section-note" style="margin-top:-20px;">Reconciliation pass 2026-08-31: merged 4 parallel worktree branches (Clusters S/T/U/V) closing every remaining open task. 3 new landmines surfaced along the way — see that section below.</div>
 
 <h2>Closed clusters</h2>
 <div class="section-note">Every row live-reverified against the running dev server after its fix (not just unit-tested), per the doc's own verification method: ground truth always pulled via a direct Python call to the underlying builder, never trusted from the agent's own text.</div>
@@ -227,6 +228,34 @@
   <td class="evidence"><code>test_run_agent_ancora_inicio_do_trimestre_na_data_real_do_sistema</code> (dynamic). Live: 2 rewordings post-fix, exact ground-truth match (cross-checked against a <em>fresh</em> ground-truth pull — the doc notes the dataset itself drifts within a session). Full suite: 234/234. Doc: <code>baf3e96</code>.</td>
   <td class="evidence">"Esse mês" confirmed already correct 3/3, no fix needed — explicitly not anchored defensively since it wasn't broken.</td>
 </tr>
+<tr>
+  <td class="id-cell">S · T7 (rest)</td>
+  <td class="finding">Both remaining T7 phrases tested: "essa semana" (an ongoing period, needed the same to-today clamp "esse trimestre" used — disproved half the task's own starting hypothesis) and "mês/trimestre passado" + bonus "semana passada" (fully-past periods, no clamp relevant).</td>
+  <td class="evidence"><b>No fix needed</b> — Rule 11 (Cluster R) already generalizes correctly to both shapes. "Essa semana" 5/5 live exact matches; "mês passado" 3/3; "trimestre passado" 3/3; "semana passada" 2/2 (bonus, not originally scoped).</td>
+  <td class="evidence">One commit: <code>2315248</code> (docs only, nothing to fix). Quarter-boundary anchor (today = 1st of a quarter) verified correct by direct computation across every 2026 quarter start — context text reads coherently for a 1-day quarter-to-date window.</td>
+  <td class="evidence">Quarter-boundary case still <b>not live-fired</b> — no session date in this campaign has landed on one. The downstream LLM synthesis behavior on that exact date remains genuinely untested.</td>
+</tr>
+<tr>
+  <td class="id-cell">T · T8+T10</td>
+  <td class="finding">T8: 3 matched-pair cases got <code>confidence:"high"</code> on answers whose actual content was "X unavailable" — their structural twin correctly got medium/low. T10(c): a DB failure inside <code>build_portfolio_entries()</code> (runs unprotected, pre-loop, outside <code>RunState.dispatch()</code>) threw an uncaught <code>HTTPException</code> straight past the whole <code>AgentResponse</code> contract — a real 504, off-contract, unlike every other failure path in this system.</td>
+  <td class="evidence">T8: rule 12 — confidence measures whether the core question got direct data, not how well-argued the refusal is. T10(c): <code>try</code>/<code>except</code> short-circuit to the same low-confidence "dados não disponíveis" shape the rest of the system uses.</td>
+  <td class="evidence">Commits <code>4922a37</code>, <code>ae9bead</code>, <code>d687382</code>. T8 re-verified 2 fresh runs/case: 4/6 fully corrected, 2/6 improved not eliminated. T10(a) invalid db and T10(b) zero-row portfolio both confirmed already clean, no fix needed. T10(c) verified unit-level only (monkeypatched <code>run_query</code>), not live — by design, to protect the shared server.</td>
+  <td class="evidence">T8's residual overconfidence (~1-in-3 on hardest cases) — same "large improvement, not guarantee" ceiling as I/J/L/N. T8 sweep didn't cover <code>get_ritmo_acordos_dia</code>/<code>get_fase_negociacao</code>/<code>get_ranking_agentes_por_dimensao</code>/the 4 row-level drilldowns. Found + flagged (not fixed): a live, 6/6-reproduced "carteira X ontem" tool-choice bug — session-bound tool picked over the date-aware one, falsely reports active portfolios as empty. See Live landmines.</td>
+</tr>
+<tr>
+  <td class="id-cell">U · T9+T11</td>
+  <td class="finding">T9: genuine concurrency test (not the earlier serial-only retest) — 27 real overlapping <code>POST /agente/chat</code> calls, 3 distinct session dates, verified wall-clock overlap. T11: <code>dispatch()</code> checked <code>steps_exceeded()</code> (Cluster E) but never <code>wall_clock_exceeded()</code> — identical mid-batch blind spot, just the other guard, directly reproduced before fixing.</td>
+  <td class="evidence">T9: <b>no fix needed</b> — <code>_cache_key</code> already correctly includes <code>date_from</code>/<code>date_to</code>, 0 leaks across 6 rounds/peak 9-way simultaneous. T11: <code>ade6855</code> — same check-before-execute pattern as Cluster E, registered <code>wall_clock_exceeded</code> in <code>errors.py</code>'s taxonomy.</td>
+  <td class="evidence">T9: proved the new thread-concurrency test has real teeth by reproducing the pre-fix bug via monkeypatch first (6/12 deterministic mismatches), then confirming current code passes clean. T11: 2 new regression tests; fresh capped-run timing 20.6s–37.0s (mean ~25.5s), replacing the stale 17.8s/11-uncapped number. Doc: <code>94b2fff</code>.</td>
+  <td class="evidence">T11's fix is proven at code/unit-test level; <code>MAX_STEPS</code> was the binding constraint in all 5 live fan-out runs, so the wall-clock cutoff itself wasn't independently reproduced live under today's typical latencies — a real but currently-dormant edge case. Root-caused (not fixed — belongs to T2/eval-harness) a cross-cutting bug: a pre-existing <code>test_eval_harness.py</code> failure leaks a frozen <code>time.time()</code> into the rest of the pytest session. See Live landmines.</td>
+</tr>
+<tr>
+  <td class="id-cell">V · T3b</td>
+  <td class="finding">New build, closing Cluster L's residual gap: no aggregate-by-portfolio ranking existed for <em>generation</em> (<code>valor_acordos_gerados</code>/<code>qtd_acordos</code>) on an arbitrary day — only vencimentos (T3) had one. Caught a real bug pre-ship: copying T3's date boundary literally (<code>DT_VENCIMENTO</code>-style inclusive <code>&lt;=</code>) would've returned <b>zero rows for every single-day window</b>, since <code>DT_EMISSAO</code> carries real time-of-day, unlike <code>DT_VENCIMENTO</code>'s always-midnight.</td>
+  <td class="evidence"><code>13e55ef</code> — new <code>drilldown="geracao"</code> on <code>detalhar_portfolio</code>, mirrors T3's <code>_build_ef_resumo_por_portfolio_ranking_sql</code> shape exactly. Fixed date boundary to exclusive <code>&lt; DATEADD(DAY,1,...)</code>, matching <code>series.py</code>'s own pattern for that column. Uses <code>STATUS_GERADOS</code> (not approved-only) and agreement-grain <code>qtd_acordos</code> — cross-checked against <code>series.py</code>'s existing rollup rather than assumed.</td>
+  <td class="evidence">8 new tests (7 SQL-shape + 1 dispatch). 3-way check: ground truth cross-check (46/R$67.567,27 vs. <code>series.py</code>'s 47/R$67.787,27 — diff is exactly one no-portfolio agreement, same structural exclusion every <code>*-por-portfolio</code> tool has); live re-fire of Cluster L's exact repro (now a full 5-item ranking, <code>confidence:high</code>, was <code>low</code>); clean 3-call Langfuse trace. Doc: <code>da261bc</code>.</td>
+  <td class="evidence">Found + flagged (not fixed — out of scope): <code>ToolCache</code> (<code>guards.py</code>) is defined but never wired into live dispatch, causing real duplicate tool calls today. See Live landmines.</td>
+</tr>
 </tbody>
 </table>
 
@@ -250,33 +279,15 @@
 </tbody>
 </table>
 
-<h2>Open queue</h2>
-<div class="section-note">Per the doc's "Suggested order" (2026-08-21) — all Blocker items and the security gate are closed; this is what remains.</div>
-<div class="card-list">
-  <div class="queue-item">
-    <div class="qt">T7 — rest <span class="badge open">Agent-B</span></div>
-    <div class="qs">"Essa semana," "mês passado"/"trimestre passado" (a different anchor shape — start <em>and</em> end both in the past, no clamp-to-today needed, unlike "esse trimestre"). Also untested: the exact quarter-boundary edge (today being the 1st of a quarter) — no session date in this campaign has landed near one.</div>
-  </div>
-  <div class="queue-item">
-    <div class="qt">T8 — Confidence calibration sweep <span class="badge open">Agent-C</span></div>
-    <div class="qs">Full-data / partial-data / no-data battery, checked against <code>system_prompt.md</code>'s stated rule. Only the 3 original real-user questions have been verified this way so far.</div>
-  </div>
-  <div class="queue-item">
-    <div class="qt">T10 — Error-path handling <span class="badge open">Agent-C</span></div>
-    <div class="qs">Invalid <code>db</code> param, a portfolio with zero rows, a simulated DB timeout. Confirm honest "sem dado"/error reporting instead of a fabricated plausible-looking number.</div>
-  </div>
-  <div class="queue-item">
-    <div class="qt">T9 — Concurrency / cache isolation <span class="badge open">Agent-D</span></div>
-    <div class="qs">pt4's cross-session cache-key fix (missing <code>date_from</code>/<code>date_to</code>) was reportedly fixed but only serially retested. Needs genuine concurrent load — 2+ simultaneous sessions, different date filters — serial testing cannot reproduce a race.</div>
-  </div>
-  <div class="queue-item">
-    <div class="qt">T11 — Wall-clock budget remeasure <span class="badge open">Agent-D</span></div>
-    <div class="qs">Q1 took 17.8s for 11 <em>uncapped</em> calls, pre-Cluster-E. Needs remeasurement now that the step cap actually caps, to confirm <code>WALL_CLOCK_S</code> cuts off a run that would otherwise exceed it.</div>
-  </div>
-  <div class="queue-item">
-    <div class="qt">T3b — Arbitrary-day generation-ranking-by-portfolio tool <span class="badge open">Agent-E</span></div>
-    <div class="qs">New build, not a bug fix. Mirrors T3's <code>_build_ef_resumo_por_portfolio_ranking_sql</code> shape almost exactly, but for <code>valor_acordos_gerados</code>/<code>qtd_acordos</code> instead of vencimentos. Closes Cluster L's residual date-substitution gap completely — <code>filter_portfolios_by_value</code> only reflects the session's fixed window and has no per-call date override.</div>
-  </div>
+<h2>Open queue <span class="badge closed">empty</span></h2>
+<div class="section-note">Closed out 2026-08-31. All 6 items below (T7-rest, T8, T9, T10, T11, T3b) were dispatched to 4 parallel worktree agents (Clusters S/T/U/V) and merged into <code>main</code> the same day — see the Closed clusters table above. Every T-id in the "Prod-readiness test plan" (T1–T17 + T3b) is now closed. Kept here, struck through, as a record rather than deleted — the doc's own convention (dated updates, not silent removal).</div>
+<div class="card-list" style="opacity:0.6;">
+  <div class="queue-item"><div class="qt" style="text-decoration:line-through;">T7 — rest</div><div class="qs">Closed via Cluster S — no fix needed, already correct.</div></div>
+  <div class="queue-item"><div class="qt" style="text-decoration:line-through;">T8 — Confidence calibration sweep</div><div class="qs">Closed via Cluster T — real overconfidence pattern found and fixed.</div></div>
+  <div class="queue-item"><div class="qt" style="text-decoration:line-through;">T10 — Error-path handling</div><div class="qs">Closed via Cluster T — genuine DB-timeout crash found and fixed.</div></div>
+  <div class="queue-item"><div class="qt" style="text-decoration:line-through;">T9 — Concurrency / cache isolation</div><div class="qs">Closed via Cluster U — confirmed clean under genuine concurrent load, no fix needed.</div></div>
+  <div class="queue-item"><div class="qt" style="text-decoration:line-through;">T11 — Wall-clock budget remeasure</div><div class="qs">Closed via Cluster U — real dispatch-level bug found and fixed, same class as Cluster E.</div></div>
+  <div class="queue-item"><div class="qt" style="text-decoration:line-through;">T3b — Arbitrary-day generation-ranking-by-portfolio tool</div><div class="qs">Closed via Cluster V — built, mirrors T3's shape.</div></div>
 </div>
 
 <h2>Live landmines <span class="badge partial">flagged, not fixed</span></h2>
@@ -301,6 +312,18 @@
   <div class="risk-card">
     <div class="rt">Prose-only fixes are "large improvement," not guarantees</div>
     <div class="rd">Explicitly true of I, J, L, and N's cobrador-labeling fix per the doc's own repeated framing — none of these have a code-level backstop the way Q's <code>strict=False</code> does. Re-verify periodically, don't treat a clean live re-test as permanent.</div>
+  </div>
+  <div class="risk-card">
+    <div class="rt">New (2026-08-31) — freezegun leak poisons <code>time.time()</code> for the rest of a pytest session</div>
+    <div class="rd">Root-caused by Agent-D after 3 separate agents (B, C, D) independently hit the same mystery failure in their own worktrees: <code>test_eval_harness.py::test_run_case_camada5_pega_indisponibilidade_falsa_end_to_end</code> raises <em>inside</em> <code>freeze_time().__enter__()</code>, so <code>__exit__</code> never restores real time — <code>time.time()</code> gets stuck at exactly <code>1786838400.0</code> (2026-08-16 midnight) for every test that runs afterward in the same process. Explains why it looked worktree-specific (depends on collection order, which shifts with whatever tests each agent added) despite identical code. <code>main</code> itself stayed clean throughout (doesn't hit the trigger sequence). Not fixed — belongs to T2/eval-harness territory, flagged as a follow-up task by the user separately.</div>
+  </div>
+  <div class="risk-card">
+    <div class="rt">New (2026-08-31) — <code>ToolCache</code> defined but never wired into live dispatch</div>
+    <div class="rd"><code>dominios/agente/guards.py</code> has a <code>ToolCache</code> class that's never actually consulted by the live tool-dispatch loop — confirmed causing real, observable duplicate tool calls (same args, called twice) during Agent-E's live verification of Cluster V. Pre-existing, affects every tool, not caused by any cluster in this campaign. Not fixed — flagged separately by the user as its own follow-up task.</div>
+  </div>
+  <div class="risk-card">
+    <div class="rt">New (2026-08-31) — "carteira X ontem" sometimes picks the wrong tool</div>
+    <div class="rd">Found by Agent-C while building T8's battery: a named-portfolio + "ontem" question sometimes resolves via a session-bound tool instead of the date-aware one, falsely reporting real, active portfolios as having zero data. Reproduced 6/6. Distinct from Cluster M (which anchored the date itself correctly) — this is a tool-<em>choice</em> bug, not a date-anchoring bug. Not fixed — out of T8/T10 scope, belongs to T7 territory, flagged separately by the user as its own follow-up task.</div>
   </div>
 </div>
 
