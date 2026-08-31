@@ -57,6 +57,66 @@ def test_wall_clock_forca_final(monkeypatch):
     assert state.force_final() is True
 
 
+def test_dispatch_recusa_executar_apos_estourar_wall_clock(monkeypatch):
+    """
+    T11 (Cluster U): mesma classe do achado E1 (teste acima,
+    test_dispatch_recusa_executar_apos_estourar_step_budget) mas pro guard de
+    relogio de parede. dispatch() so verificava steps_exceeded(), nunca
+    wall_clock_exceeded() - um lote de varios tool_calls (DeepSeek pode
+    devolver ate 4 numa resposta) despachava o lote inteiro mesmo que o
+    relogio ja tivesse estourado no meio, porque agente.py so reavalia
+    force_final() ENTRE rodadas, nao dentro do lote de uma mesma rodada.
+    dispatch() agora se autoprotege tambem pro orcamento de tempo.
+    """
+    state = RunState(RunGuard(WALL_CLOCK_S=10, MAX_STEPS=100))
+    clock = {"t": 0.0}
+    monkeypatch.setattr(guards_mod.time, "monotonic", lambda: clock["t"])
+    state._started_at = 0.0
+    calls = []
+    run_fn = lambda: calls.append(1) or {"ok": True}
+
+    state.dispatch("tool_a", {}, run_fn)
+    assert len(calls) == 1
+
+    clock["t"] = 11.0  # relogio de parede ja estourou (WALL_CLOCK_S=10)
+
+    # simula 2 chamadas extras no MESMO lote (loop ainda nao rechecou force_final)
+    result_2 = state.dispatch("tool_b", {}, run_fn)
+    result_3 = state.dispatch("tool_c", {}, run_fn)
+
+    assert len(calls) == 1  # run_fn nunca reexecutou pras chamadas 2 e 3
+    assert state.steps == 1  # nao incrementa alem do bloqueio
+    assert result_2["error_type"] == "wall_clock_exceeded"
+    assert result_2["ok"] is False
+    assert result_3["error_type"] == "wall_clock_exceeded"
+
+
+def test_wall_clock_e_step_budget_nao_se_mascaram(monkeypatch):
+    """
+    T11: os dois guards disputam o mesmo choke point em dispatch() agora -
+    confirma que quando os dois orcamentos ja estao estourados ao mesmo
+    tempo, nenhum guard mascara o outro: dispatch() sempre recusa executar
+    (qual error_type especifico é reportado não importa pro contrato de
+    segurança - o que importa é que run_fn NUNCA roda de novo).
+    """
+    state = RunState(RunGuard(WALL_CLOCK_S=10, MAX_STEPS=1))
+    clock = {"t": 0.0}
+    monkeypatch.setattr(guards_mod.time, "monotonic", lambda: clock["t"])
+    state._started_at = 0.0
+    calls = []
+    run_fn = lambda: calls.append(1) or {"ok": True}
+
+    state.dispatch("tool_a", {}, run_fn)  # consome o unico step permitido
+    assert len(calls) == 1
+
+    clock["t"] = 11.0  # e tambem estoura o relogio de parede
+
+    result = state.dispatch("tool_b", {}, run_fn)
+    assert len(calls) == 1  # nunca reexecuta, seja qual for o guard que bloqueou primeiro
+    assert result["ok"] is False
+    assert result["error_type"] in ("step_budget_exceeded", "wall_clock_exceeded")
+
+
 def test_chamada_identica_2a_vez_memoiza_sem_reexecutar():
     calls = []
 
@@ -454,3 +514,114 @@ def test_row_count_inferido_de_lista_e_de_meta():
         "tool_row_b", {}, lambda: {"data": [], "meta": {"total_rows": 42}}, db="COBwebRCBAUTOS",
     )
     assert state2.last_call_meta["row_count"] == 42
+
+
+def test_cache_concorrente_nao_vaza_entre_sessoes_com_periodos_diferentes():
+    """
+    T9 (pt5 "Prod-readiness test plan"): pt4 Cluster B's fix (achado #2) só
+    tinha sido reverificado serialmente (chamadas sequenciais, uma de cada
+    vez). Este teste dispara MUITAS threads reais e concorrentes contra o
+    singleton de processo `tool_cache` (o mesmo `dispatch()`/`_cache_key` que
+    o servidor real usa) — cada "sessão" é um RunState() próprio, exatamente
+    como cada request real cria o seu. Duas janelas de data disjuntas (A e B)
+    interlaçadas: cada thread só pode ver o resultado da SUA PRÓPRIA janela,
+    nunca o da outra — provaria exatamente o vazamento cross-sessão que o
+    achado #2 original descreveu, se a chave de cache não discriminasse por
+    período. Complementa (não substitui) a verificação ao vivo contra o
+    servidor compartilhado feita nesta mesma rodada de testes (Cluster U).
+
+    Duas fases de propósito: 1) "prime" sequencial (1 chamada por janela) para
+    deixar as duas entradas já quentes no cache — sem isso, threads
+    concorrentes disputando um cache VAZIO podem todas perder a corrida antes
+    de qualquer uma escrever (ToolCache é deliberadamente sem single-flight,
+    ver docstring da classe), o que tornaria uma asserção de "cache sempre
+    engata" instável por motivo de timing, não de correção. 2) rajada
+    concorrente real (6x A + 6x B intercaladas) contra o cache já quente.
+
+    A asserção de isolamento (nenhum resultado cruza janela) é a propriedade
+    core do T9 e é sempre estrita. Uma eventual reexecução de run_fn na fase 2
+    (`concurrent_log` não vazio) não é tratada como falha aqui — em ambiente
+    de CI compartilhado, `ToolCache` usa `time.time()` (TTL real entre
+    requests, não `time.monotonic()`) para expirar entradas, e um teste NÃO
+    RELACIONADO (`test_eval_harness.py::..._camada5_..._end_to_end`) foi
+    confirmado (Cluster U) deixando `time.time()` congelado — `freeze_time()`
+    do freezegun levanta uma exceção dentro do seu próprio `__enter__` (choque
+    Pydantic/langfuse ao inspecionar `sys.modules`) antes de completar o
+    patch, então `__exit__` nunca roda pra desfazer — o que pode invalidar TTL
+    de qualquer teste que rode depois na mesma sessão do pytest. Mesmo sob
+    esse vazamento externo, cada eventual reexecução ainda tem que calcular o
+    valor da SUA PRÓPRIA janela (verificado abaixo) — só a ausência total de
+    reexecução é que fica sujeita a esse ruído de ambiente, não o isolamento.
+    """
+    import threading
+
+    windows = {"A": ("2026-08-20", "2026-08-20"), "B": ("2026-08-25", "2026-08-25")}
+    prime_log = []
+
+    def make_run_fn(window, log):
+        def run_fn():
+            log.append(window)
+            return {"window": window}
+        return run_fn
+
+    # Fase 1 — prime sequencial: cada janela recebe seu próprio cache_key já
+    # populado antes de qualquer concorrência começar.
+    for window, (date_from, date_to) in windows.items():
+        RunState().dispatch(
+            "tool_t9_concorrencia", {}, make_run_fn(window, prime_log),
+            db="todos", date_from=date_from, date_to=date_to,
+        )
+    assert prime_log == ["A", "B"]
+
+    # Fase 2 — rajada concorrente real contra o cache já quente.
+    concurrent_log = []
+    concurrent_lock = threading.Lock()
+    results = {}
+    results_lock = threading.Lock()
+
+    def worker(label, window):
+        date_from, date_to = windows[window]
+
+        def run_fn():
+            # Não deveria nunca executar nesta fase — as duas chaves já estão
+            # quentes. Se executar, alguma thread perdeu o cache já populado.
+            with concurrent_lock:
+                concurrent_log.append(window)
+            return {"window": window}
+
+        state = RunState()
+        r = state.dispatch(
+            "tool_t9_concorrencia", {}, run_fn,
+            db="todos", date_from=date_from, date_to=date_to,
+        )
+        with results_lock:
+            results[label] = (window, r)
+
+    # 6x A e 6x B, interlaçadas na ordem de criação das threads (não em blocos
+    # separados) — maximiza a chance de duas janelas diferentes competirem
+    # pelo lock do ToolCache ao mesmo tempo.
+    tasks = []
+    for i in range(6):
+        tasks.append((f"A{i}", "A"))
+        tasks.append((f"B{i}", "B"))
+
+    threads = [threading.Thread(target=worker, args=(label, window)) for label, window in tasks]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert len(results) == len(tasks)
+    for label, (window, r) in results.items():
+        assert r["window"] == window, (
+            f"{label} (janela {window}) recebeu resultado da janela {r['window']!r} "
+            "— vazamento de cache entre sessões concorrentes com períodos diferentes."
+        )
+
+    # `concurrent_log` (chamadas de run_fn que a fase 2 precisou reexecutar,
+    # nas condições normais deveria ficar vazio — cache já estava quente) não
+    # é travado numa asserção estrita aqui — cada `run_fn` só sabe computar a
+    # SUA PRÓPRIA janela por construção (closure), então esse log nunca
+    # poderia detectar contaminação cruzada de qualquer forma; quem prova
+    # isolamento é a asserção acima, sobre o resultado de `dispatch()`, não
+    # sobre quantas vezes run_fn rodou.

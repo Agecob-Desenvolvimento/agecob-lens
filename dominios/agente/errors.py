@@ -18,6 +18,7 @@ _ERROR_RETRYABLE_DEFAULT: Dict[str, bool] = {
     "empty_result": False,
     "tool_disabled": False,
     "step_budget_exceeded": False,  # RunGuard.MAX_STEPS — ver guards.py RunState.dispatch, achado E1 pt5-live-testing
+    "wall_clock_exceeded": False,  # RunGuard.WALL_CLOCK_S — ver guards.py RunState.dispatch, Cluster U pt5-live-testing (mesma classe do E1)
     "unknown_tool": False,
     "internal_error": False,  # bug de código (não upstream) — ver guards.py RunState.dispatch, achado #9
 }

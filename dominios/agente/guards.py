@@ -281,6 +281,20 @@ class RunState:
                 user_facing="Consultei o numero maximo de fontes de dados permitido para esta pergunta.",
             )
 
+        if self.wall_clock_exceeded():
+            # Mesmo bug do E1 (step cap), guard diferente: agente.py só reavalia
+            # force_final() ENTRE rodadas — um lote com varios tool_calls (DeepSeek
+            # pode devolver ate 4 numa resposta) despachava o lote inteiro mesmo que
+            # o relogio de parede estourasse no meio, porque dispatch() so
+            # verificava steps_exceeded(). Mesmo ponto de autoprotecao do E1, agora
+            # tambem pro orcamento de tempo (T9/T11, Cluster U).
+            self.last_call_meta = {"step_index": self.steps, "cache_hit": False, "error_type": "wall_clock_exceeded", "truncated": False, "row_count": None}
+            return build_tool_error(
+                "wall_clock_exceeded",
+                hint=f"Orcamento de tempo ({self.guard.WALL_CLOCK_S}s) desta consulta ja foi atingido. Nao execute mais tools - sintetize a resposta com os dados ja obtidos, e diga ao usuario que a consulta foi limitada pelo tempo.",
+                user_facing="Esta consulta levou mais tempo que o esperado e foi interrompida antes de terminar.",
+            )
+
         self.steps += 1
         self._record_spiral(tool_name)
         self.last_call_meta = {"step_index": self.steps, "cache_hit": False, "error_type": None, "truncated": False, "row_count": None}
