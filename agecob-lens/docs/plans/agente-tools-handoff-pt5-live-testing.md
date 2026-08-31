@@ -1441,6 +1441,169 @@ environmental (frontend not built in this backend-only worktree).
 
 ---
 
+## Cluster V — Aggregate-by-portfolio geração ranking for an arbitrary day (T3b)
+
+**Status: BUILT and confirmed live (2026-08-28).**
+
+Closes the residual gap Cluster L's re-check flagged and scoped as "T3b":
+`filter_portfolios_by_value` only reflects the session's fixed
+`date_from`/`date_to`, with no per-call override, so "ranking de geração por
+carteira" for a day other than the session's window had no direct tool — the
+agent had to fall back to a manual per-portfolio `query_kpi_historico` loop,
+honest but structurally incapable of a complete single-call answer.
+
+**Repro (before this fix, live, 2026-08-28):** "Ranking de geração de acordos
+por carteira ontem - quais as 5 que mais produziram?" (`db="todos"`, no
+session dates → today=28/08, ontem=27/08). Response: *"Não consigo montar o
+ranking de geração por carteira de ontem com as fontes disponíveis. As
+ferramentas de carteira operam no período filtrado da sessão (28/08)... a
+quebra por carteira desse dia não está disponível nas tools atuais."*
+`data_sources: ["get_time_series","filter_portfolios_by_risk","list_agents_performance"]`,
+`confidence: "low"`. Rule 9 (Cluster L's own fix) held — no crash, no name
+guessing — but the structural gap is exactly as documented: no tool can
+answer "geração ranking, arbitrary day" in one call.
+
+**Fix:** new `drilldown="geracao"` on the existing `detalhar_portfolio` tool,
+following T3's own precedent (a new drilldown value, not a new tool/schema).
+Mirrors `_build_ef_resumo_por_portfolio_ranking_sql` (T3/Cluster G)'s shape
+almost exactly — same OUTER APPLY + `DA.portfolio_name IS NOT NULL` portfolio
+resolution (ADR-004), same `GROUP BY portfolio_name` + `ORDER BY <value>
+DESC`, same `total_carteiras_no_periodo`/`carteiras_retornadas`/`truncated`
+completeness signals — via a new query builder
+`_build_geracao_por_portfolio_ranking_sql` (`dominios/efetividade/queries.py`)
+and dispatch function `_build_geracao_ranking`
+(`dominios/agente/detalhe_portfolio.py`).
+
+Design decisions, made explicit (not left implicit in the diff):
+
+- **Basis: `STATUS_GERADOS_SQL` (1,2,3,10,12)**, not the narrower
+  `STATUS_APROVADOS` (1,3,12) — matches `data-layer.md`'s "Generated
+  Agreements" rule and T3's own choice for its ranking. Verified in a
+  dedicated SQL-shape test
+  (`test_geracao_ranking_filtra_status_gerados_e_primeira_parcela`).
+- **Grain: agreement (`COUNT(DISTINCT NR_RECEBIMENTO)`), not contract.**
+  Matches `data-layer.md`'s "Two grains for acordos count" — contract grain
+  is scoped only to the Home global card. Also matches
+  `dominios/agente/series.py`'s `build_daily_rollup_query`, the existing
+  authoritative implementation of this exact metric
+  (`valor_acordos_gerados`/`qtd_acordos` as exposed by `query_kpi_historico`)
+  at a different grain (day, not portfolio) — reused its `COUNT(DISTINCT
+  R.NR_RECEBIMENTO)` and `PARCELA = 0` filter rather than inventing a new
+  definition.
+- **`PARCELA = 0`, hardcoded, no `parcela_tipo` parameter** (T3's ranking
+  takes one, for primeira/colchão). `valor_acordos_gerados`/`qtd_acordos`
+  never had a colchão variant anywhere else in the agent — `series.py`'s
+  rollup hardcodes `PARCELA = settings.PRIMEIRA_PARCELA` too. Adding an
+  unused mode parameter would be flexibility nobody asked for.
+- **Date column: `DT_EMISSAO`, not `DT_VENCIMENTO`** — geração is about when
+  the agreement was created, not when an installment falls due. This is the
+  one place the mirroring couldn't be literal: **verified live (ground truth
+  20/08) that `DT_VENCIMENTO` is always stored at midnight** (`T00:00:00`) so
+  T3's inclusive `<= CONVERT(DATE, ?, 112)` upper bound is safe there, **but
+  `DT_EMISSAO` carries a real time-of-day** (e.g. `T01:57:46`) — copying T3's
+  exact boundary literally returned **zero rows** for every single-day window
+  (caught during ground-truth verification, before this was ever shipped).
+  Fixed to an exclusive `< DATEADD(DAY, 1, CONVERT(DATE, ?, 112))` upper
+  bound, matching `series.py`'s own `DT_EMISSAO >= @Hoje AND DT_EMISSAO <
+  @Amanha` pattern for the same column, computed server-side from the same
+  string param `_ef_date_params` already produces (no new params helper
+  needed). Covered by
+  `test_geracao_ranking_filtra_por_dt_emissao_nao_dt_vencimento`.
+- **Agent filter: `settings.FILTRO_AGENTES_EXCLUIDOS_SQL` (the app-wide
+  standard), not this module's `_EF_AGENT_FILTER`** (=
+  `FILTRO_AGENTES_EFETIVIDADE_SQL`). The two diverge on purpose per
+  `config/settings.py`'s own comment ("decisão de negócio pendente...
+  unificar os dois muda os números da página Efetividade").
+  `valor_acordos_gerados`/`qtd_acordos` (via `series.py`) has always used the
+  standard filter, never the Efetividade one — using the wrong one here would
+  silently disagree with every other place these two field names appear.
+  Covered by
+  `test_geracao_ranking_usa_filtro_de_agentes_padrao_nao_o_de_efetividade`
+  (asserts `SISTEMA%` present, `SERASA` absent).
+- **Drilldown-only, no single-portfolio mode.** Unlike `vencimentos` (which
+  supports both a ranking and a single-`portfolio` mode), `geracao` only has
+  ranking — a single-portfolio geração lookup already exists
+  (`query_kpi_historico(kpi="valor_acordos_gerados"/"qtd_acordos",
+  portfolio=X)`), so building a second path would duplicate it.
+  `DetalharPortfolioInput`'s validator makes `portfolio`
+  **required-absent** for `drilldown="geracao"` (a validation error, not a
+  silent ignore or a crash) — the opposite direction from the other 4 status
+  drilldowns.
+- **`db` stays the existing 2-value `_DB_LITERAL`**
+  (`COBwebRCBCONSUMER`/`COBwebRCBAUTOS`, no `"todos"`) — inherited for free
+  by reusing `DetalharPortfolioInput`, consistent with Rule 8/T5's confirmed
+  finding that no per-call-`db` tool in this codebase accepts `"todos"`.
+
+**Verification, three ways:**
+
+1. **Direct Python call against ground truth (20/08, the same day Cluster K
+   independently verified).** My ranking's portfolio-resolvable totals for
+   `db="todos"` on 20/08: **46 acordos, R$67.567,27**. Cross-checked against
+   `dominios/agente/series.py`'s `build_daily_rollup_query` (the actual,
+   already-shipped implementation of `valor_acordos_gerados`/`qtd_acordos`)
+   computed **at the same moment**: **47 acordos, R$67.787,27**. The exact
+   1-record/R$220,00 difference is a single `COBwebRCBAUTOS` agreement
+   (`NR_RECEBIMENTO 75009783`) with **no resolvable portfolio** — confirmed by
+   a direct query — which every `*-por-portfolio` tool in this codebase
+   (including T3's own vencimentos ranking) structurally excludes, since
+   there is no group to place it in. `COBwebRCBCONSUMER` alone matched
+   **exactly** (16 acordos/R$2.528,58 both ways, zero orphans). The residual
+   difference from Cluster K's original week-old figures (45/R$66.628,91) is
+   explained by real data drift over the 7 days since that check — this
+   project's own documented rule (`data-layer.md`: "acordo gerado hoje conta
+   no valor gerado mesmo que depois quebre") means a STATUS_GERADOS-based
+   total can legitimately change after the fact, and `series.py`'s rollup
+   (the pre-existing, independent implementation) drifted by the identical
+   amount when re-run today, confirming this is data movement, not a bug in
+   the new code.
+2. **Live re-fire of Cluster L's exact repro question**, against a temporary
+   instance of this worktree's code (`--port 8001`, the shared port-8000
+   instance wasn't touched). *"As 5 carteiras que mais geraram acordos em
+   27/08 vieram todas da base COBwebRCBAUTOS: Yamaha II R$22.398 (6
+   acordos), Panamericano XV R$21.362 (4), BVFinanceira III R$14.105 (2),
+   Panamericano XI R$10.500 (1), BVFinanceira VII R$10.006 (1)... A maior
+   carteira da base COBwebRCBCONSUMER (não citada no top 5) foi Santander
+   XXIV, com R$907, bem abaixo do corte."* `data_sources:
+   ["detalhar_portfolio(geracao)", ...]`, `confidence: "high"` (was `"low"`
+   pre-fix). Cross-checked all 5 figures against a direct SQL call for 27/08
+   — byte-exact match.
+3. **Langfuse trace** (`traceId 14ed9cf5b73faf81ae02141297944b60`, pulled via
+   `npx langfuse-cli`): 3 `detalhar_portfolio` tool calls total — 1 for
+   `COBwebRCBCONSUMER`, 2 for `COBwebRCBAUTOS` with byte-identical arguments
+   (a genuine redundant duplicate call, not a name-guessing spiral: no
+   errors, both AUTOS calls returned the same correct 16 rows). Nowhere near
+   `MAX_STEPS=10`. The duplicate call is a pre-existing characteristic of the
+   whole tool-dispatch path, not something this change introduced —
+   `dominios/agente/guards.py` defines a `ToolCache` singleton that looks
+   designed to prevent exactly this, but it is never wired into the actual
+   dispatch loop in `dominios/agente/agente.py` (confirmed via `grep`).
+   Flagged separately as its own out-of-scope follow-up, not fixed here.
+
+**Regression:** `pytest tests/ -q`: **232 passed** (was 224 in this
+environment before this change — 8 new: 7 SQL-shape tests in
+`tests/test_efetividade_por_portfolio.py` mirroring T3's own 6, plus one
+extra covering the `DT_EMISSAO`-vs-`DT_VENCIMENTO` boundary bug found during
+verification; 1 dispatch test in `tests/test_agente.py` covering both the
+ranking dispatch and the portfolio-forbidden validation error), 9 skipped,
+same 1 pre-existing unrelated failure both before and after this change
+(`tests/test_eval_harness.py::test_run_case_camada5_pega_indisponibilidade_falsa_end_to_end`
+— a freezegun/langfuse/pydantic version interaction during `freeze_time`'s
+module-attribute scan, confirmed present before any of this change's edits,
+unrelated to `dominios/agente`/`dominios/efetividade`; this doc's own earlier
+"234 passed" baseline assumes a clean run this exact environment did not
+reproduce — see this cluster's own regression count above for the honest
+before/after in this environment).
+
+**Files:** `dominios/efetividade/queries.py`
+(`_build_geracao_por_portfolio_ranking_sql`),
+`dominios/agente/detalhe_portfolio.py` (`_build_geracao_ranking` +
+dispatch), `dominios/agente/schemas.py` (`DetalharPortfolioInput`),
+`dominios/agente/tools.py` (tool description),
+`dominios/agente/system_prompt.md` (tool listing + glossary row),
+`tests/test_efetividade_por_portfolio.py`, `tests/test_agente.py`.
+
+---
+
 ## Prod-readiness test plan
 
 Organized by priority. "Blocker" items produce wrong-but-confident answers or unbounded resource use — must be fixed and re-verified before real traffic. "High" items are correctness under normal, non-adversarial use. "Security" is non-negotiable regardless of priority label. "Process" is ongoing discipline, not a one-time test.
@@ -1488,8 +1651,8 @@ confirmed live or, for T2, via the harness's own self-test suite — see
 Cluster P). T12-T13 (the hard security gate) are also done — see Cluster N.
 T6 (High) is done too — see Cluster O.
 
-**Update 2026-08-28: T7-rest, T8, T9, T10, and T11 are all done too**, closed
-in four parallel worktrees the same day (Clusters S/T/U). T7-rest (Cluster S):
+**Update 2026-08-28: everything else is done too**, closed across five
+parallel worktrees the same day (Clusters S/T/U/V). T7-rest (Cluster S):
 "essa semana"/"mês passado"/"trimestre passado" all confirmed already correct
 against fresh ground truth, no fix needed — the quarter-boundary edge (today
 = 1st of a quarter) verified correct by inspection only, still not live-fired.
@@ -1501,14 +1664,19 @@ honestly, (c) a genuine code-level gap found and fixed — a DB failure on the
 very first, pre-loop call bypassed the `AgentResponse` contract entirely,
 unlike every other failure path in this system. T11 (Cluster U): found and
 fixed a genuine mid-batch wall-clock composition bug (same class as T1's E1
-finding), same session also surfaced a cross-cutting freezegun test-pollution
-bug (flagged, not fixed — belongs to T2/eval-harness territory) and a
-named-portfolio "ontem" tool-choice bug (flagged via `spawn_task`, not fixed —
-belongs to T7 territory). **What's actually left: T3b only** — an
-aggregate-by-portfolio ranking tool for `valor_acordos_gerados`/`qtd_acordos`
-on an arbitrary day, mirroring T3's vencimentos-ranking shape (scoped in
-Cluster L's re-check). T14 (regression discipline) applies throughout, not at
-the end — every fix above already carries one except where explicitly noted
+finding). T3b (Cluster V): built
+`detalhar_portfolio(drilldown="geracao")`, an aggregate-by-portfolio ranking
+tool for `valor_acordos_gerados`/`qtd_acordos` on an arbitrary day, mirroring
+T3's vencimentos-ranking shape — closes Cluster L's residual date-substitution
+gap. **Every Blocker, High, Medium, and Security item in this plan is now
+closed.** Three findings surfaced along the way remain open, flagged rather
+than fixed (out of scope for the clusters that found them): a cross-cutting
+freezegun test-pollution bug in `test_eval_harness.py` (belongs to T2/eval-
+harness territory), a named-portfolio "ontem" tool-choice bug (belongs to T7
+territory, flagged via `spawn_task`), and a `ToolCache` defined but never
+wired into live dispatch, causing real duplicate tool calls (flagged via
+`spawn_task`). T14 (regression discipline) applies throughout, not at the
+end — every fix above already carries one except where explicitly noted
 (Clusters I/J's system-prompt-only fixes, N's live-only security probes, T's
 rule-12 confidence fix for the same reason).
 

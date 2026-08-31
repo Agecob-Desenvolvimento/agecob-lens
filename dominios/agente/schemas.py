@@ -74,19 +74,30 @@ class CompararAgentesInput(_DateRangeValidatorMixin, BaseModel):
 class DetalharPortfolioInput(_DateRangeValidatorMixin, BaseModel):
     model_config = ConfigDict(extra="forbid")
     db: _DB_LITERAL
-    # Opcional só quando drilldown="vencimentos": omitido vira ranking de
-    # TODAS as carteiras da janela (T3, agente-tools-handoff-pt5-live-testing.md
-    # Cluster G) em vez de UMA carteira. Nos outros 5 drilldowns continua
-    # obrigatório — validado abaixo, não dá pra expressar isso só com o tipo.
+    # Opcional quando drilldown="vencimentos" (omitido vira ranking de TODAS
+    # as carteiras da janela — T3, agente-tools-handoff-pt5-live-testing.md
+    # Cluster G) ou drilldown="geracao" (idem para valor_acordos_gerados/
+    # qtd_acordos — T3b, Cluster L "residual gap"). Nos outros 4 drilldowns
+    # continua obrigatório; em "geracao" é sempre PROIBIDO (só existe em modo
+    # ranking — para UMA carteira já existe query_kpi_historico) — validado
+    # abaixo, não dá pra expressar isso só com o tipo.
     portfolio: Optional[str] = Field(None, max_length=80)
     date_from: date
     date_to: date
-    drilldown: Literal["aprovados", "excecao", "rejeitado", "quebrado", "resumo", "vencimentos"] = "resumo"
+    drilldown: Literal["aprovados", "excecao", "rejeitado", "quebrado", "resumo", "vencimentos", "geracao"] = "resumo"
     page: int = Field(1, ge=1, le=10)
     page_size: Literal[10, 25, 50] = 25
 
     @model_validator(mode="after")
     def _portfolio_obrigatorio_exceto_ranking_vencimentos(self):
+        if self.drilldown == "geracao":
+            if self.portfolio:
+                raise ValueError(
+                    "drilldown='geracao' só existe em modo ranking (todas as carteiras) — "
+                    "omita portfolio; para uma carteira específica use "
+                    "query_kpi_historico(kpi='valor_acordos_gerados', portfolio=X)."
+                )
+            return self
         if not self.portfolio and self.drilldown != "vencimentos":
             raise ValueError("portfolio é obrigatório para este drilldown.")
         return self

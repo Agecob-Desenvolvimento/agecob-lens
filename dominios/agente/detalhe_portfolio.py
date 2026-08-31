@@ -33,6 +33,7 @@ from dominios.efetividade.queries import (
     _build_ef_resumo_por_portfolio_params,
     _build_ef_resumo_por_portfolio_ranking_sql,
     _build_ef_resumo_por_portfolio_sql,
+    _build_geracao_por_portfolio_ranking_sql,
     _ef_date_params,
 )
 from dominios.graficos.queries import (
@@ -107,6 +108,48 @@ def _build_vencimentos_ranking(
     }
 
 
+def _build_geracao_ranking(
+    validated_db: str, date_from: str, date_to: str, limit: int, run_id: Optional[str],
+) -> Dict[str, Any]:
+    """T3b (pt5-live-testing.md, Cluster L, "residual gap"): geração
+    (valor_acordos_gerados/qtd_acordos) de TODAS as carteiras da janela numa
+    chamada só, ranqueada por valor gerado — mesmo padrão de
+    _build_vencimentos_ranking (T3/Cluster G) adaptado pra geração. Diferente
+    de 'vencimentos', 'geracao' só existe em modo ranking — não há modo de
+    UMA carteira aqui porque esse já existe
+    (query_kpi_historico(kpi='valor_acordos_gerados', portfolio=X)); esta
+    tool cobre só o buraco que faltava: ranking de um dia/janela arbitrários
+    fora da janela da sessão (filter_portfolios_by_value só reflete a janela
+    da sessão, sem override por chamada). `limit` reusa page_size do schema
+    (10/25/50), mesma razão de T3: ranking não se beneficia de paginação
+    "página 2"."""
+    conn_db = settings.ALLOWED_DATABASES[0] if validated_db == "todos" else validated_db
+    query = _build_geracao_por_portfolio_ranking_sql(validated_db)
+    params = _ef_date_params(validated_db, date_from.replace("-", ""), date_to.replace("-", ""))
+    rows = run_query(
+        query, conn_db, params=params, run_id=run_id,
+        context="agente/detalhe-portfolio/geracao-ranking",
+    )
+    ranking = [
+        {
+            "portfolio": row.get("portfolio_name"),
+            "qtd_acordos": int(row.get("qtd_acordos") or 0),
+            "valor_acordos_gerados": float(row.get("valor_acordos_gerados") or 0),
+        }
+        for row in rows[:limit]
+    ]
+    return {
+        "drilldown": "geracao_ranking",
+        "db": validated_db,
+        "date_from": date_from,
+        "date_to": date_to,
+        "total_carteiras_no_periodo": len(rows),
+        "carteiras_retornadas": len(ranking),
+        "ranking": ranking,
+        "truncated": len(rows) > limit,
+    }
+
+
 def build_detalhe_portfolio(
     db: str,
     portfolio: Optional[str],
@@ -121,6 +164,9 @@ def build_detalhe_portfolio(
 
     if drilldown == "vencimentos" and not portfolio:
         return _build_vencimentos_ranking(validated_db, date_from, date_to, page_size, run_id)
+
+    if drilldown == "geracao":
+        return _build_geracao_ranking(validated_db, date_from, date_to, page_size, run_id)
 
     entries = build_portfolio_entries(validated_db, date_from, date_to, run_id=run_id)
     resolved_name = _find_portfolio_name(portfolio, entries)
