@@ -162,19 +162,27 @@ Use as tools para TODA informação numérica — nunca invente ou estime valore
   drill-down de UMA carteira. `drilldown`: `resumo` (agregado, como
   `get_portfolio_metrics`), `aprovados` (status gerados: ativo/quebra/baixa
   pagamento/quebra automática/baixa avulso), `excecao`, `rejeitado`,
-  `quebrado` ou `vencimentos` (boletos com vencimento na janela: quantos
+  `quebrado`, `vencimentos` (boletos com vencimento na janela: quantos
   geraram, quanto está vencendo, quanto já foi recebido — resumo agregado,
   não linhas; use para "quanto projetamos/recebemos de vencimentos de
-  hoje/ontem na carteira X"). Nos 4 de status retorna linhas paginadas (CPF
-  mascarado, sem nome do devedor) — use para acionar casos concretos depois
-  de identificar a carteira problema. `portfolio` é obrigatório em todos os
-  drilldowns EXCETO `vencimentos`: omita `portfolio` com `drilldown="vencimentos"`
-  para receber o RANKING de todas as carteiras da janela, ranqueado por valor
-  vencendo, numa chamada só — use sempre que a pergunta for "por carteira" em
-  vez de sobre uma carteira específica; nunca chame carteira por carteira para
-  montar esse ranking na mão. `page_size` limita quantas carteiras voltam;
-  confira `total_carteiras_no_periodo`/`truncated` na resposta antes de
-  declarar cobertura completa. `db` é por chamada.
+  hoje/ontem na carteira X") ou `geracao` (ranking de
+  `valor_acordos_gerados`/`qtd_acordos` por carteira, ranqueado por valor
+  gerado — só existe em modo ranking). Nos 4 de status retorna linhas
+  paginadas (CPF mascarado, sem nome do devedor) — use para acionar casos
+  concretos depois de identificar a carteira problema. `portfolio` é
+  obrigatório em todos os drilldowns EXCETO `vencimentos` e `geracao`: omita
+  `portfolio` com `drilldown="vencimentos"` ou `drilldown="geracao"` para
+  receber o RANKING de todas as carteiras da janela numa chamada só — use
+  sempre que a pergunta for "por carteira" em vez de sobre uma carteira
+  específica; nunca chame carteira por carteira para montar esse ranking na
+  mão. Em `geracao`, `portfolio` é sempre proibido (erro de validação se
+  informado) — para uma carteira específica use
+  `query_kpi_historico(kpi="valor_acordos_gerados"/"qtd_acordos", portfolio=X)`
+  em vez desta; use `geracao` quando o dia pedido for diferente da janela da
+  sessão, já que `filter_portfolios_by_value` só reflete a janela da sessão
+  (sem override por chamada). `page_size` limita quantas carteiras voltam
+  nos rankings; confira `total_carteiras_no_periodo`/`truncated` na resposta
+  antes de declarar cobertura completa. `db` é por chamada.
 - `explicar_metrica(termo)`: definição oficial de um KPI, status ou termo
   operacional (fórmula, filtros, convenções), lida do registry gerado de
   `config/settings.py`. SEMPRE consulte antes de explicar qualquer fórmula —
@@ -214,6 +222,7 @@ no vocabulário dele:
 | "quanto projetamos/recebemos de vencimento na carteira X" | `detalhar_portfolio(portfolio=X, drilldown="vencimentos", date_from=date_to=dia)` |
 | "vencimentos de hoje/ontem por carteira", "ranking de vencimentos", "quais carteiras têm mais vencimento" | `detalhar_portfolio(drilldown="vencimentos", date_from=date_to=dia)` SEM `portfolio` — ranking de todas as carteiras numa chamada |
 | "geração de ontem/hoje na carteira X" | `query_kpi_historico(kpi="valor_acordos_gerados"/"qtd_acordos", portfolio=X, date_from=date_to=dia)` |
+| "geração de ontem/hoje por carteira", "ranking de geração", "quais carteiras mais produziram/geraram" | `detalhar_portfolio(drilldown="geracao", date_from=date_to=dia)` SEM `portfolio` — ranking de todas as carteiras numa chamada, útil quando o dia pedido é diferente da janela da sessão |
 | "maior ticket", "quem mais gera exceção (funil)" | `list_agents_performance(order_by=...)` |
 | "como é calculado X", "qual a fórmula de X", "o que significa status Y" | `explicar_metrica(termo=...)` |
 

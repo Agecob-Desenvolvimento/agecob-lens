@@ -363,6 +363,79 @@ ORDER BY amount_maturing DESC
 """
 
 
+def _build_geracao_por_portfolio_ranking_sql(db: str) -> str:
+    """Ranking de geração (valor_acordos_gerados/qtd_acordos) por carteira,
+    TODAS as carteiras da janela numa chamada só — T3b (pt5-live-testing.md,
+    Cluster L, "residual gap"), mesmo padrão de
+    _build_ef_resumo_por_portfolio_ranking_sql (T3/Cluster G) adaptado pra
+    geração em vez de vencimento. Diferenças de negócio, não só de forma:
+    (1) filtra DT_EMISSAO, não DT_VENCIMENTO — geração é sobre quando o
+    acordo nasceu. Verificado ao vivo (ground truth 20/08): DT_VENCIMENTO é
+    sempre gravado à meia-noite (T3 pode comparar `<= CONVERT(DATE, ?, 112)`
+    com segurança), mas DT_EMISSAO carrega hora real (ex.: T01:57:46) — um
+    `<=` inclusivo em cima da mesma data de início e fim zera o resultado
+    (só bateria em linhas exatamente à meia-noite). Por isso o limite
+    superior aqui é exclusivo (`< DATEADD(DAY, 1, ...)`), não `<=` como em
+    T3 — mesmo padrão de dominios/agente/series.py
+    (`DT_EMISSAO >= @Hoje AND DT_EMISSAO < @Amanha`), só com o "amanhã"
+    calculado no SQL a partir do param de string em vez de vir como bind
+    param `date` pronto. (2) só PARCELA = 0, sem parâmetro parcela_tipo — a
+    métrica valor_acordos_gerados/qtd_acordos (dominios/agente/series.py
+    build_daily_rollup_query, a MESMA métrica noutro grão) nunca teve
+    variante "colchão" em nenhum outro lugar do agente, então um parâmetro
+    pra um modo que não existe seria flexibilidade não pedida. Usa
+    STATUS_GERADOS_SQL (1,2,3,10,12) — base de valor por data-layer.md, não
+    o STATUS_APROVADOS mais estreito. Grão acordo (COUNT(DISTINCT
+    NR_RECEBIMENTO), igual a series.py) — não grão contrato (data-layer.md
+    "Two grains": grão contrato é só pro card global da Home). Filtro de
+    agentes é settings.FILTRO_AGENTES_EXCLUIDOS_SQL (o padrão do resto do
+    app, igual a series.py), não o _EF_AGENT_FILTER deste módulo —
+    valor_acordos_gerados/qtd_acordos nunca usou o filtro de efetividade
+    (settings.py: "diverge de propósito... decisão de negócio pendente");
+    usar o filtro errado desalinharia este ranking de todo outro lugar que
+    já reporta esses dois nomes. Mesmo OUTER APPLY + DA.portfolio_name IS
+    NOT NULL de T3 pra resolver carteira sem duplicar linha (ADR-004)."""
+
+    def _one(database: str) -> str:
+        return f"""
+    SELECT R.NR_RECEBIMENTO, R.VALOR, DA.portfolio_name
+    FROM {database}.dbo.REC_MASTER R (NOLOCK)
+    INNER JOIN {database}.dbo.USU_MASTER U (NOLOCK) ON R.ID_USUARIO = U.ID_USUARIO
+    OUTER APPLY (
+        SELECT TOP 1 DA2.{settings.PORTFOLIO_COLUMN} AS portfolio_name
+        FROM {database}.dbo.REC_DIVIDAS RD2 (NOLOCK)
+        JOIN {database}.dbo.DIV_AUX DA2 (NOLOCK) ON RD2.ID_DIVIDA = DA2.ID_DIVIDA
+        WHERE RD2.NR_RECEBIMENTO = R.NR_RECEBIMENTO
+          AND RD2.ID_CARTEIRA = R.ID_CARTEIRA
+          AND DA2.{settings.PORTFOLIO_COLUMN} IS NOT NULL
+    ) DA
+    WHERE R.DT_EMISSAO >= CONVERT(DATE, ?, 112)
+      AND R.DT_EMISSAO < DATEADD(DAY, 1, CONVERT(DATE, ?, 112))
+      AND R.ID_REC_STATUS IN {settings.STATUS_GERADOS_SQL}
+      AND R.PARCELA = 0
+      AND DA.portfolio_name IS NOT NULL
+      {settings.FILTRO_AGENTES_EXCLUIDOS_SQL}
+"""
+
+    inner = (
+        f"{_one(_EF_DB_A)}\n    UNION ALL\n{_one(_EF_DB_C)}"
+        if db == "todos"
+        else _one(db)
+    )
+
+    return f"""
+SELECT
+    portfolio_name,
+    COUNT(DISTINCT NR_RECEBIMENTO) AS qtd_acordos,
+    COALESCE(SUM(VALOR), 0) AS valor_acordos_gerados
+FROM (
+{inner}
+) AS T
+GROUP BY portfolio_name
+ORDER BY valor_acordos_gerados DESC
+"""
+
+
 def _build_ef_resumo_por_portfolio_params(
     db: str, date_from_lit: str, date_to_lit: str, portfolio_name: str,
 ) -> Tuple[Any, ...]:

@@ -15,6 +15,7 @@ from dominios.efetividade.queries import (
     _build_ef_resumo_por_portfolio_params,
     _build_ef_resumo_por_portfolio_ranking_sql,
     _build_ef_resumo_por_portfolio_sql,
+    _build_geracao_por_portfolio_ranking_sql,
     _ef_date_params,
 )
 
@@ -106,3 +107,67 @@ def test_ranking_usa_ef_date_params_sem_portfolio():
 
     todos = _ef_date_params("todos", "20260819", "20260819")
     assert todos == ("20260819", "20260819", "20260819", "20260819")
+
+
+# _build_geracao_por_portfolio_ranking_sql — T3b (pt5-live-testing.md, Cluster L,
+# "residual gap"): mesmo padrão de _build_ef_resumo_por_portfolio_ranking_sql
+# (T3/Cluster G) acima, mas pra geração (valor_acordos_gerados/qtd_acordos) em
+# vez de vencimento — ranking de TODAS as carteiras da janela numa chamada só.
+# Sem isso, "ranking de geração por carteira" pra um dia fora da janela da
+# sessão não tinha tool direta: filter_portfolios_by_value só reflete o
+# date_from/date_to da sessão.
+
+
+def test_geracao_ranking_agrupa_por_carteira_ordena_por_valor():
+    sql = _build_geracao_por_portfolio_ranking_sql("COBwebRCBAUTOS")
+    assert "GROUP BY portfolio_name" in sql
+    assert "ORDER BY valor_acordos_gerados DESC" in sql
+    assert "OUTER APPLY" in sql
+
+
+def test_geracao_ranking_exclui_linhas_sem_carteira_resolvida():
+    sql = _build_geracao_por_portfolio_ranking_sql("COBwebRCBAUTOS")
+    assert "DA.portfolio_name IS NOT NULL" in sql  # senão o grupo "sem carteira" entra no ranking
+
+
+def test_geracao_ranking_filtra_status_gerados_e_primeira_parcela():
+    sql = _build_geracao_por_portfolio_ranking_sql("COBwebRCBAUTOS")
+    # STATUS_GERADOS_SQL (1,2,3,10,12) — base de valor por data-layer.md, não o
+    # STATUS_APROVADOS mais estreito (1,3,12) — o erro mais provável desta tarefa.
+    assert "R.ID_REC_STATUS IN (1, 2, 3, 10, 12)" in sql
+    assert "R.PARCELA = 0" in sql
+
+
+def test_geracao_ranking_filtra_por_dt_emissao_nao_dt_vencimento():
+    sql = _build_geracao_por_portfolio_ranking_sql("COBwebRCBAUTOS")
+    assert "R.DT_EMISSAO >= CONVERT(DATE, ?, 112)" in sql
+    # limite superior EXCLUSIVO (dia seguinte), não <= como a ranking de
+    # vencimentos: DT_EMISSAO carrega hora real (DT_VENCIMENTO é sempre meia-
+    # noite) — um <= inclusivo bateria só em linhas exatamente à meia-noite e
+    # zeraria o resultado (achado ao vivo, verificação ground truth 20/08).
+    assert "R.DT_EMISSAO < DATEADD(DAY, 1, CONVERT(DATE, ?, 112))" in sql
+    assert "R.DT_EMISSAO <= CONVERT(DATE, ?, 112)" not in sql
+    assert "DT_VENCIMENTO" not in sql  # geração é sobre quando o acordo nasceu, não quando a parcela vence
+
+
+def test_geracao_ranking_usa_filtro_de_agentes_padrao_nao_o_de_efetividade():
+    sql = _build_geracao_por_portfolio_ranking_sql("COBwebRCBAUTOS")
+    assert "SISTEMA%" in sql  # FILTRO_AGENTES_EXCLUIDOS_SQL — o padrão que series.py usa pra este KPI
+    assert "SERASA" not in sql  # FILTRO_AGENTES_EFETIVIDADE_SQL — só a família Efetividade deste módulo usa
+
+
+def test_geracao_ranking_todos_bancos_gera_union_all():
+    sql_um_banco = _build_geracao_por_portfolio_ranking_sql("COBwebRCBAUTOS")
+    sql_todos = _build_geracao_por_portfolio_ranking_sql("todos")
+    assert "UNION ALL" in sql_todos
+    assert "UNION ALL" not in sql_um_banco
+
+
+def test_geracao_ranking_usa_ef_date_params_sem_portfolio():
+    # mesmo helper generico de data que a ranking de vencimentos reusa — sem
+    # parametro de nome de carteira, sem _params dedicado.
+    um_banco = _ef_date_params("COBwebRCBAUTOS", "20260820", "20260820")
+    assert um_banco == ("20260820", "20260820")
+
+    todos = _ef_date_params("todos", "20260820", "20260820")
+    assert todos == ("20260820", "20260820", "20260820", "20260820")

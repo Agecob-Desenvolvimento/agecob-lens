@@ -796,6 +796,39 @@ def test_tool_detalhar_portfolio_vencimentos_sem_portfolio_vira_ranking():
         assert sem_portfolio_ruim["error_type"] == "validation"
 
 
+def test_tool_detalhar_portfolio_geracao_e_sempre_ranking_portfolio_proibido():
+    """T3b (pt5-live-testing.md, Cluster L, "residual gap"): drilldown
+    'geracao' despacha em modo ranking (todas as carteiras) igual a
+    'vencimentos' sem portfolio - mas, diferente de 'vencimentos', 'geracao'
+    NÃO tem modo de uma carteira só (isso já existe via
+    query_kpi_historico(kpi='valor_acordos_gerados', portfolio=X)), então
+    informar portfolio com drilldown='geracao' é sempre erro de validação,
+    nunca despacha."""
+    seen = {}
+
+    def fake_detalhe(**kwargs):
+        seen.update(kwargs)
+        return {"ok": 1}
+
+    providers = {"detalhar_portfolio": fake_detalhe}
+    sem_portfolio = {k: v for k, v in _DETALHAR_ARGS.items() if k != "portfolio"}
+
+    ranking = dispatch_tool(
+        "detalhar_portfolio", {**sem_portfolio, "drilldown": "geracao"},
+        SAMPLE_ENTRIES, _NO_AGENTS, providers=providers,
+    )
+    assert ranking == {"ok": 1}
+    assert seen["portfolio"] is None
+    assert seen["drilldown"] == "geracao"
+
+    com_portfolio_ruim = dispatch_tool(
+        "detalhar_portfolio", {**_DETALHAR_ARGS, "drilldown": "geracao"},
+        SAMPLE_ENTRIES, _NO_AGENTS, providers=providers,
+    )
+    assert com_portfolio_ruim["ok"] is False
+    assert com_portfolio_ruim["error_type"] == "validation"
+
+
 def test_tool_list_agents_aceita_novas_metricas():
     por_ticket = dispatch_tool(
         "list_agents_performance", {"order_by": "ticket_medio", "limit": 1}, SAMPLE_ENTRIES, _AGENTS
