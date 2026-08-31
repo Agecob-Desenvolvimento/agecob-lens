@@ -12,7 +12,7 @@ import { Ticker } from "./TvAtoms";
 import { buildPercentileMap, classifyCell } from "@/components/detalhamento/PerformanceHeatmap";
 
 type ColKind = "brl" | "num" | "pct";
-type MetricKey = "parc1" | "acordos" | "cpc" | "conv" | "acion";
+type MetricKey = "parc1" | "acordos" | "cpc" | "conv" | "acion" | "pendQtd" | "pendP1";
 /** Coluna ordenável: métricas + Agente (alfabética) — mesmo contrato do Heatmap. */
 type SortKey = MetricKey | "nome";
 type SortDir = "desc" | "asc";
@@ -31,6 +31,15 @@ const COLS: Col[] = [
   { key: "cpc", label: "CPC", w: 5, kind: "num" },
   { key: "conv", label: "Conv. %", w: 6, kind: "pct" },
   { key: "acion", label: "Acionam.", w: 6.4, kind: "num" },
+];
+
+/**
+ * Colunas extras só no filtro CONSUMER: acordos pendentes (status 5) e a 1ª
+ * parcela desses acordos. Entram logo à direita de "Conv. %".
+ */
+const PEND_COLS: Col[] = [
+  { key: "pendQtd", label: "Pend.", w: 5, kind: "num" },
+  { key: "pendP1", label: "1ª Parc. Pend.", w: 9.4, kind: "brl" },
 ];
 
 /**
@@ -73,7 +82,7 @@ const HEAD_BTN = {
   whiteSpace: "nowrap",
 } as const;
 
-function ColHeader({ sortCol, sortDir, onSort }: { sortCol: SortKey | null; sortDir: SortDir; onSort: (k: SortKey) => void }) {
+function ColHeader({ cols, sortCol, sortDir, onSort }: { cols: Col[]; sortCol: SortKey | null; sortDir: SortDir; onSort: (k: SortKey) => void }) {
   const head = (key: SortKey, label: string, ativo: boolean) => (
     <button type="button" onClick={() => onSort(key)} style={HEAD_BTN} data-testid={`tv-sort-${key}`} aria-label={`Ordenar por ${label}`}>
       <span>{label}</span>
@@ -85,7 +94,7 @@ function ColHeader({ sortCol, sortDir, onSort }: { sortCol: SortKey | null; sort
       <div style={{ flex: "18 1 0", display: "flex", alignItems: "center", padding: `0 ${tvW(16)}`, fontSize: tvF(16), color: sortCol === "nome" ? TV.t1 : TV.t2, letterSpacing: "0.14em", fontWeight: 700 }}>
         {head("nome", "Agente", sortCol === "nome")}
       </div>
-      {COLS.map((c) => (
+      {cols.map((c) => (
         <div key={c.key} style={{ flex: `${c.w} 1 0`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: tvF(16), color: sortCol === c.key ? TV.t1 : TV.t2, letterSpacing: "0.08em", fontWeight: 700, textAlign: "center", whiteSpace: "nowrap" }}>
           {head(c.key, c.label, sortCol === c.key)}
         </div>
@@ -94,7 +103,7 @@ function ColHeader({ sortCol, sortDir, onSort }: { sortCol: SortKey | null; sort
   );
 }
 
-function AgentRowView({ a, rank, pctMaps, podio }: { a: TvAgenteRow; rank: number; pctMaps: Record<string, Map<number, number>>; podio: boolean }) {
+function AgentRowView({ a, cols, rank, pctMaps, podio }: { a: TvAgenteRow; cols: Col[]; rank: number; pctMaps: Record<string, Map<number, number>>; podio: boolean }) {
   // ouro só no ranking padrão: sob ordenação manual o número é posição na lista,
   // não colocação — dourar o topo de um "CPC crescente" premiaria os piores.
   const rankColor = podio && rank <= 3 ? TV.goldText : TV.t3small;
@@ -109,7 +118,7 @@ function AgentRowView({ a, rank, pctMaps, podio }: { a: TvAgenteRow; rank: numbe
           <div className="tv-op-login" style={{ fontSize: tvF(14), color: TV.t3small, letterSpacing: "0.04em" }}>{a.login}</div>
         </div>
       </div>
-      {COLS.map((c) => {
+      {cols.map((c) => {
         const raw = a[c.key];
         const pct = pctMaps[c.key].get(raw) ?? 0;
         const band = classifyCell(pct);
@@ -123,16 +132,16 @@ function AgentRowView({ a, rank, pctMaps, podio }: { a: TvAgenteRow; rank: numbe
   );
 }
 
-function Panel({ rows, tracks, startRank, pctMaps, divider = false, sortCol, sortDir, onSort }: { rows: TvAgenteRow[]; tracks: number; startRank: number; pctMaps: Record<string, Map<number, number>>; divider?: boolean; sortCol: SortKey | null; sortDir: SortDir; onSort: (k: SortKey) => void }) {
+function Panel({ rows, cols, tracks, startRank, pctMaps, divider = false, sortCol, sortDir, onSort }: { rows: TvAgenteRow[]; cols: Col[]; tracks: number; startRank: number; pctMaps: Record<string, Map<number, number>>; divider?: boolean; sortCol: SortKey | null; sortDir: SortDir; onSort: (k: SortKey) => void }) {
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, ...(divider ? { borderLeft: `1px solid ${TV.line}`, paddingLeft: tvW(32) } : {}) }}>
-      <ColHeader sortCol={sortCol} sortDir={sortDir} onSort={onSort} />
+      <ColHeader cols={cols} sortCol={sortCol} sortDir={sortDir} onSort={onSort} />
       {/* `tracks` × `1fr`: a altura de cada linha sai da altura disponível, nunca
           de px — a lista preenche a coluna inteira em qualquer resolução.
           `minmax(0,1fr)` impede que a trilha cresça além da fatia e vaze a tela. */}
       <div style={{ flex: 1, display: "grid", gridTemplateRows: `repeat(${tracks}, minmax(0, 1fr))`, gap: tvH(6), minHeight: 0 }}>
         {rows.map((a, i) => (
-          <AgentRowView key={a.id} a={a} rank={startRank + i} pctMaps={pctMaps} podio={sortCol == null} />
+          <AgentRowView key={a.id} a={a} cols={cols} rank={startRank + i} pctMaps={pctMaps} podio={sortCol == null} />
         ))}
       </div>
     </div>
@@ -159,9 +168,16 @@ function Legend() {
 }
 
 export default function TvOperacional() {
-  const { agentes } = useTvData();
+  const { agentes, isConsumer } = useTvData();
   const [sortCol, setSortCol] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+
+  // CONSUMER: 2 colunas extras (acordos pendentes + 1ª parcela pendente) logo à
+  // direita de "Conv. %". Outros bancos mantêm as 5 colunas originais.
+  const cols = useMemo(
+    () => (isConsumer ? [...COLS.slice(0, 4), ...PEND_COLS, ...COLS.slice(4)] : COLS),
+    [isConsumer],
+  );
 
   // Mesmo ciclo do Heatmap: 1º clique ordena, 2º inverte, 3º volta ao padrão.
   const onSort = (key: SortKey) => {
@@ -200,11 +216,11 @@ export default function TvOperacional() {
   // troca o conjunto e repinta os mesmos números — um CPC=0 viraria "TOP" verde.
   const pctMaps = useMemo(() => {
     const m: Record<string, Map<number, number>> = {};
-    COLS.forEach((c) => {
+    cols.forEach((c) => {
       m[c.key] = buildPercentileMap(agentes.map((r) => r[c.key]));
     });
     return m;
-  }, [agentes]);
+  }, [agentes, cols]);
 
   const rowsA = rows.slice(0, ROWS_PER_COL);
   const rowsB = rows.slice(ROWS_PER_COL);
@@ -220,9 +236,9 @@ export default function TvOperacional() {
       <div style={{ flex: 1, display: "flex", flexDirection: "column", padding: `${tvH(28)} ${tvW(80)} ${tvH(22)}`, minHeight: 0 }}>
         <Legend />
         <div style={{ flex: 1, display: "flex", gap: tvW(40), minHeight: 0 }}>
-          <Panel rows={rowsA} tracks={tracks} startRank={1} pctMaps={pctMaps} sortCol={sortCol} sortDir={sortDir} onSort={onSort} />
+          <Panel rows={rowsA} cols={cols} tracks={tracks} startRank={1} pctMaps={pctMaps} sortCol={sortCol} sortDir={sortDir} onSort={onSort} />
           {rowsB.length > 0 && (
-            <Panel rows={rowsB} tracks={tracks} startRank={ROWS_PER_COL + 1} pctMaps={pctMaps} divider sortCol={sortCol} sortDir={sortDir} onSort={onSort} />
+            <Panel rows={rowsB} cols={cols} tracks={tracks} startRank={ROWS_PER_COL + 1} pctMaps={pctMaps} divider sortCol={sortCol} sortDir={sortDir} onSort={onSort} />
           )}
         </div>
       </div>

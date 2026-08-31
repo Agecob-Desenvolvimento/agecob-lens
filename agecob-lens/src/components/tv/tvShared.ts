@@ -239,6 +239,10 @@ export interface TvAgenteRow {
   vlrAcordos: number;
   /** 1ª parcela */
   parc1: number;
+  /** acordos pendentes (status 5 / exceção) — só exibido no filtro CONSUMER */
+  pendQtd: number;
+  /** 1ª parcela dos acordos pendentes — só exibido no filtro CONSUMER */
+  pendP1: number;
 }
 
 export interface TvModeViewModel {

@@ -261,6 +261,8 @@ export function useTvModeViewModel(): TvModeViewModel {
       acordos: r.qtd_acordos,
       vlrAcordos: Number(r.valor_acordos || 0),
       parc1: Number(r.valor_primeira_parcela || 0),
+      pendQtd: r.qtd_excecoes,
+      pendP1: Number(r.valor_primeira_parcela_excecoes || 0),
     }));
 
     return {
