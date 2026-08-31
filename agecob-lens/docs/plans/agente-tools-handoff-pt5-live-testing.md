@@ -713,6 +713,278 @@ isn't near a quarter boundary).
 
 ---
 
+## Cluster T — Confidence calibration sweep (T8) + error-path handling (T10)
+
+**Status: T8 fix applied and live re-verified (substantial improvement, residual
+nondeterminism documented, not a hard guarantee — same class of outcome as
+Clusters J/L/N). T10(a)/(b) confirmed clean, no fix needed. T10(c) — a genuine
+code-level gap — found, fixed, and verified. All work in this cluster done
+2026-08-28, in a separate worktree, against a fresh copy of the dev server
+(port 8000) started for this pass.**
+
+Ground truth throughout this cluster: direct calls to `build_portfolio_entries()`
+(`dominios/agente/risco.py`), `build_kpi_historico()` (`dominios/agente/kpi_historico.py`)
+and `build_agent_entries()` (`dominios/agente/agentes.py`), re-pulled immediately
+before each comparison — Cluster R's own methodological warning held again here:
+the "hoje" total moved from R$0,00 (zero-activity day, checked early in this
+session) to R$10.998,83 (checked ~40 minutes later, mid-session) for the exact
+same date (2026-08-28) as the dataset kept generating rows. Every number quoted
+below was re-verified fresh, not carried over from an earlier check in this doc.
+
+### T8 — Confidence calibration sweep
+
+**Battery design.** Five buckets, 2 phrasings each, fired live via `POST
+/agente/chat` against a running dev server, `db="todos"`: full-data (a real
+portfolio with a plain, single-focus question), zero-but-real (a real R$0,00
+or real positive total — the tool answered directly either way), partial-data
+(one sub-ask has real direct data, the other is a metric confirmed unavailable
+at that grain — the exact shape `f44bfac` fixed for confidence), no-data-at-all
+(a fabricated portfolio/agent name, so the core ask has zero data), and a
+negative-existence-disclosure bucket (a metric confirmed not to exist at the
+requested grain, with or without other real data attached) added specifically
+to probe the boundary the rule's plain text leaves ambiguous.
+
+**First attempt invalidated a whole sub-battery — worth recording.** The first
+run used relative "ontem" phrasing with no `dateFrom`/`dateTo` override (session
+defaults to "hoje"). Every portfolio-scoped "ontem" question in that run
+(6 different phrasings) came back `confidence: "low"`, "carteira não
+encontrada" — for **real** portfolios (Yamaha II, BVFinanceira III,
+Panamericano XV) with substantial real data the actual previous day
+(confirmed: Yamaha II R$22.398,18/6 acordos on 2026-08-27). Root cause:
+`get_portfolio_metrics` (`dominios/agente/tools.py`) has no per-call date
+argument — it reads the `entries` list built once, session-bound, in
+`_run_agent_impl` (`dominios/agente/agente.py`). The model called this
+session-bound tool instead of the date-aware `query_kpi_historico(portfolio=X,
+date_from=date_to=ontem_real)` that `system_prompt.md`'s own glossary already
+names for this exact phrase. This is a genuine bug, but a **T7** one (tool
+choice for a relative date + named portfolio), not a T8 confidence bug — the
+confidence label was actually well-calibrated *given the (wrong) evidence the
+agent believed it had gathered* (consistently honest "low" for what it
+concluded was a real absence). Flagged out-of-scope via the task queue
+(`task_eafc7d40`, "Fix portfolio+ontem tool-choice bug in chat agent") rather
+than fixed here — outside this pass's `T8`/`T10` mandate and outside the
+`dominios/agente/`, `core/`, `tests/` edit scope for anything not genuinely a
+T10 error-path gap. Redesigned the battery to use explicit `dateFrom`/`dateTo`
++ "no período" phrasing instead of "ontem", isolating confidence calibration
+as the only variable under test. All results below are from that redesigned
+battery (also caught and discarded a second false lead: the very first server
+instance for this pass had a WatchFiles reload that silently got stuck after
+a large multi-file merge — pid never rotated, `agent_tool_call` telemetry
+never appeared despite `ENABLE_AGENT_TELEMETRY=true` — so the first 10-question
+run was unknowingly firing against a stale pre-merge worker. Killed and
+restarted clean via `preview_start`; confirmed via a smoke-test question whose
+answer only exists in current code (`query_kpi_historico`'s portfolio filter)
+before trusting any further result).
+
+**Results, redesigned battery (`dateFrom=dateTo` set explicitly per case,
+`db="todos"`):**
+
+| Case | Question (grain) | Ground truth | `confidence` | Expected per rule | Verdict |
+|---|---|---|---|---|---|
+| 1a/1b full-data | Yamaha II, 27/08 | R$22.398,18 / 6 acordos | `high` / `high` | `high` | correct |
+| 2a/2b zero-but-real | "hoje" total, both banks | R$10.998,83 (R$10.007,42 AUTOS + R$991,41 CONSUMER) | `high` / `high` | `high` | correct |
+| 3a partial | BVFinanceira III valor + conversão | R$14.105,18/2 acordos (real) + conversão n/a at carteira grain | **`high`** | `medium` | **miscalibrated (overconfidence)** |
+| 3b partial | Panamericano XV valor + conversão | R$21.362,19/4 acordos (real) + conversão n/a | `medium` | `medium` | correct |
+| 4a no-data | fabricated portfolio name | zero data, core ask unanswerable | `low` | `low` | correct |
+| 4b no-data | fabricated agent name | zero data, core ask unanswerable | **`high`** | `low` | **miscalibrated (overconfidence)** |
+| 5a negexist-disclosure | Yamaha II conversão (n/a at grain) + real portfolio data offered | conversão n/a; real data offered | `medium` | `medium` | correct |
+| 5b negexist-disclosure | BVFinanceira III conversão (n/a at grain), disclosure only | conversão n/a; no other real data in the text | **`high`** | `low`/`medium` | **miscalibrated (overconfidence)** |
+
+Three confirmed misses, all in the same direction (**overconfidence**, never
+needless hedging) and all the same shape: a response whose actual content is
+"this isn't available" got `confidence: "high"` because the *explanation* of
+the unavailability was itself correct and complete — the rule's existing text
+("`high` quando os dados das tools respondem diretamente") doesn't say this
+explicitly doesn't count, and the model was reading "I'm 100% sure this
+doesn't exist" as equivalent to "the tools answered directly." Confirmed not
+random noise: 3a/3b are the *same question shape* (portfolio value + portfolio
+conversão) with different portfolios, one right one wrong; 4a/4b are the *same
+question shape* (named entity not found) for portfolio vs. agent, one right
+one wrong — a real inconsistency, not an isolated fluke, matching this
+campaign's established pattern (Cluster O's "bv" vs "santander 24") of a real
+rule gap hiding behind inconsistent LLM behavior.
+
+**Fix applied**, `dominios/agente/system_prompt.md`: new rule 12 in "Regras de
+negócio (invioláveis)" — confidence is about whether the tools answered the
+core of the question with data, not about how well-argued the refusal is; a
+response whose content is "X is unavailable" is never `high` regardless of
+explanation quality; `medium` when real data from another part of the same
+question is also reported, `low` when nothing else is. New checklist item 10
+mirrors this. No code changed — same class of fix as every other confidence
+fix in this doc chain (Cluster I/J's rule additions).
+
+**Live re-verification**, same 3 miscalibrated cases refired 2x each after the
+prompt edit (hot-reloaded via `_load_system_prompt`, which re-reads the file
+on every request — no server restart needed), plus the 3 already-correct
+cases refired once as regression controls:
+
+| Case | Before | After (2 fresh runs) | Verdict |
+|---|---|---|---|
+| 3a partial (BVFinanceira III) | `high` (wrong) | `medium`, `medium` | fixed, 2/2 |
+| 3b partial (control) | `medium` (correct) | `medium` | stable, no regression |
+| 4a no-data (control) | `low` (correct) | `low` | stable, no regression |
+| 4b no-data (Ricardo ...) | `high` (wrong) | `low`, `medium` | **improved, not fully fixed** — no longer `high` either run, but run 2 landed on `medium` where rule 12(b) calls for `low` (no real data was reported in either run) |
+| 5a negexist (control) | `medium` (correct) | `medium` | stable, no regression |
+| 5b negexist (BVFinanceira III) | `high` (wrong) | `medium`, **`high`** | **mixed** — run 1 fixed (and this time also attached real portfolio data, landing correctly in the `medium` bucket), run 2 reproduced the exact original defect: text explicitly says "tenho... métricas de risco e valor, não de conversão" but never states them, then reports `confidence: "high"` anyway |
+
+Net: 4 of 6 re-fires moved fully into the correct bucket, the other 2 moved
+away from the wrong answer (`high`) without landing exactly right. This is
+the same "large improvement, not a hard guarantee" ceiling this whole
+campaign has hit on every other prompt-only fix (Clusters J, L, N say this
+explicitly) — documented honestly rather than claimed as 100% fixed. A second,
+independent data point for the same residual gap turned up during T10(b)
+below (a `"Teve geração...?"` yes/no phrasing got `high` for a confirmed-empty
+window) — same family, not a new bug.
+
+**Regression test**: none added for the prompt-only rule 12 — same reasoning
+as every other prompt-only confidence/disclosure fix in this doc chain
+(Clusters I/J): nothing in the runnable suite touches `system_prompt.md`
+prose, and the eval harness's own faithfulness check (Cluster P, camada 5)
+tests a different, code-level property (a false "unavailable" claim over data
+that *did* come back), not confidence-label calibration.
+
+**Scope note**: 5 buckets × 2 phrasings covers more ground than the 3
+original cases, but is not exhaustive — only `db="todos"`, only `get_portfolio_metrics`/
+`query_kpi_historico`/`get_agent_performance` grains were exercised. Confidence
+calibration for other tools (`get_ritmo_acordos_dia`, `get_fase_negociacao`,
+`get_ranking_agentes_por_dimensao`, `detalhar_portfolio`'s 4 row-level
+drilldowns) was not swept. The residual overconfidence gap (roughly 1-in-3 on
+the hardest edge cases in this sweep) is real and now documented, not silently
+left implicit.
+
+### T10 — Error-path handling
+
+**(a) Invalid `db` param — confirmed clean, no fix needed.** Fired
+`POST /agente/chat` with `database: "BancoInventado"` and `database: "xyz123"`.
+Both: HTTP 400, `{"detail": "Banco inválido. Use um destes: COBwebRCBAUTOS,
+COBwebRCBCONSUMER"}`. Root cause of why this is clean: `validate_database_or_todos()`
+(`core/utils/validation.py`, called from `api/routers/agente.py` before
+`run_agent()` is ever invoked) rejects the request at the HTTP boundary — the
+LLM never runs, no tool call is ever attempted, nothing is fabricated, and the
+error is a structured 400 with a clear, actionable message. Already correct;
+nothing to fix.
+
+**(b) Portfolio with zero rows in the requested window — confirmed clean at
+the tool/wording layer, surfaced the same T8 residual gap in a new context.**
+Ground truth: **Itau IV** is a real, valid portfolio (present in `entries` on
+2026-08-25 and 2026-08-27) that is genuinely absent — zero rows, not a lookup
+failure — from 2026-08-26, a day with 21 *other* real active portfolios
+(confirmed via direct `build_portfolio_entries("todos", "2026-08-26",
+"2026-08-26")` — not a system-wide zero-activity day, so this is a true
+"real entity, zero data this specific window" case, distinct from Cluster R's
+whole-database zero-activity-day case). Every portfolio-scoped tool
+(`get_portfolio_metrics`, `detalhar_portfolio`, `query_kpi_historico` with a
+`portfolio` filter) resolves this identically to a misspelled/nonexistent
+name — none of them distinguish "confirmed real zero this window" from "not
+found" — but the shared error message (`"Carteira não encontrada no
+período."`, `dominios/agente/tools.py` and `detalhe_portfolio.py`) is already
+precisely scoped to the period, not phrased as a global nonexistence claim,
+so this is not itself a bug.
+
+Fired 2 phrasings, `dateFrom=dateTo="2026-08-26"`: *"Quanto foi gerado pela
+carteira Itau IV no período?"* → `confidence: "low"`, correctly says "não foi
+encontrada no período (2026-08-26)" and lists the 21 real alternatives — no
+fabrication, honest, correctly `low`. *"Teve geração da carteira Itau IV no
+dia 26/08/2026?"* → `confidence: "high"` — same honest "não consta... não há
+dado de geração" conclusion (still no fabrication), but the confidence label
+is wrong for the same reason as T8's residual cases above: a confirmed-absence
+answer, no real data attached, reported as `high`. Both fires happened *after*
+system_prompt.md rule 12 was already live, so this is direct evidence the
+same residual gap generalizes beyond the T8 battery's own phrasings, not a
+second distinct bug — not fixed separately here.
+
+**(c) Simulated DB timeout — genuine code-level gap found and fixed.** Per
+the task's own safety instruction, did **not** simulate this against the live
+port-8000 server (shared with Agents B/D/E's concurrent testing). Instead,
+a standalone Python process imported `run_agent()` directly (the real
+function, not reimplemented) and monkeypatched `dominios.agente.risco.run_query`
+to raise the exact `HTTPException(504, "Consulta excedeu o tempo limite no
+banco de dados.")` that `core/database/query_executor.py`'s real pyodbc
+timeout branch (SQLSTATE `HYT00`/`HYT01`) raises — same technique
+`tests/test_agente.py`'s existing `_stub_dataset` helper already uses to stub
+this exact function, just raising instead of returning fixture rows. This is
+a unit-level verification of the real code path, not a live end-to-end fire —
+stated plainly per the task instructions, not skipped silently.
+
+**Root cause**: `entries = build_portfolio_entries(db, date_from, date_to,
+run_id=run_id)` (`dominios/agente/agente.py`, top of `_run_agent_impl`) runs
+**before** the LLM loop starts and **outside** `RunState.dispatch()`'s
+protection (`guards.py`) — the same protection that already gives every tool
+call the LLM makes *during* the loop a clean retry + `build_tool_error()`
+degradation. This one call had no `try`/`except` at all: confirmed live that
+an `HTTPException` raised here propagates uncaught through `_run_agent_impl` →
+`run_agent()` → `post_agente_chat()` (`api/routers/agente.py`, no `try` around
+its `run_agent()` call either) straight to FastAPI's default `HTTPException`
+handler — a real HTTP 504 with a clear `detail` message (not a raw 500/stack
+trace, and not a fabricated number), but one that completely bypasses the
+`AgentResponse` JSON contract (`text`/`highlights`/`confidence`/etc.) and
+`build_response_envelope()` that every other response on this route,
+including every other *tool-level* failure, goes through. Every other
+provider closure that can fail this way (`get_ritmo`, and every tool called
+via `dispatch_tool`) is either already wrapped in its own try/except or runs
+lazily inside `RunState.dispatch()`; this one eager, pre-loop call was the
+sole exception to that pattern.
+
+**Fix applied**, `dominios/agente/agente.py`: wrapped the `build_portfolio_entries()`
+call in `_run_agent_impl` in `try`/`except HTTPException`/`except Exception`,
+logging via `_agent_ndjson`/`_sentry_log` (same call shape the file already
+uses for provider API failures) and returning a new `_dataset_unavailable_response()`
+— the same `"Dados não disponíveis para esta consulta no momento."` /
+`confidence: "low"` shape `system_prompt.md`'s own "Estilo" section already
+instructs the model to use for insufficient data, short-circuiting **before**
+any LLM call (no wasted tokens synthesizing around a dataset that isn't
+there). 20-line diff, no other call site touched — `_load_system_prompt`'s
+existing `HTTPException(503)` for a missing prompt file was deliberately left
+alone (a different failure class — a broken deploy, not a transient DB issue
+— where a hard error is arguably the more honest signal, and out of this
+pass's DB-timeout scope).
+
+**Verification**: re-ran the same monkeypatched `run_agent()` call after the
+fix — returns normally (no exception escapes) with `{"confidence": "low",
+"text": "Dados não disponíveis para esta consulta no momento. Tente novamente
+em instantes.", "data_sources": [], "highlights": [], "suggested_actions":
+[], "data_referencia": "2026-08-28"}`, and the fake OpenAI client's `create()`
+(which asserts it's never called) confirms the LLM is never invoked — the
+failure is caught and degraded before any tool-calling round starts.
+
+**Regression test**: `tests/test_agente.py::test_run_agent_degrada_para_low_quando_dataset_de_carteiras_falha`
+— offline, monkeypatches `risco_mod.run_query` to raise the real timeout
+`HTTPException` shape and a fake OpenAI client whose `create()` raises
+`AssertionError` if ever called (proves the short-circuit, not just the
+output shape); asserts `confidence == "low"`, the exact `text`, empty
+`data_sources`, and `data_referencia` round-tripping the input `date_to`.
+`pytest tests/ -q`: passes together with the rest of the suite (see Regression
+below).
+
+**Scope note**: only the one confirmed-eager, confirmed-unprotected call
+(`build_portfolio_entries`) was in scope and fixed. `get_agents()` (the other
+dataset-loading closure) is *not* eager — it only runs lazily inside a real
+tool call already protected by `RunState.dispatch()` — confirmed by reading
+`_build_providers`/`dispatch_tool`, not assumed. Concurrent-request behavior
+under a real, sustained DB outage (vs. this single simulated failure) is
+T9's territory, not tested here.
+
+### Regression (both T8 and T10)
+
+`pytest tests/ -q` (whole suite, no `--ignore`, run 3x for stability): 225
+passed, 9 skipped, 1 failed every time — the failure is
+`tests/test_eval_harness.py::test_run_case_camada5_pega_indisponibilidade_falsa_end_to_end`
+on 2 of 3 runs and `tests/test_golden_set.py::test_golden_case[gs001]` on the
+3rd, both the identical pre-existing `pydantic.errors.PydanticSchemaGenerationError`
+(`datetime.datetime` schema generation, a freezegun/pydantic version
+interaction in the shared `.venv`) — confirmed **not** caused by this
+cluster's changes: the failing test rotates between runs with no code change
+in between (a shared-environment/import-order flake, not a deterministic
+regression), neither failing test touches anything this cluster edited
+(`dominios/agente/agente.py`, `system_prompt.md`, or the new test in
+`tests/test_agente.py`), `tests/test_agente.py` alone is 58/58 green on every
+run, and this exact failure shape was independently confirmed by another
+concurrent agent in a different worktree against unmodified `main` (234/234
+clean). 225 + 9 + 1 = 235 = the 234-test baseline this task started from + 1
+new test added in this cluster. Baseline unaffected by this cluster's work.
+
+---
+
 ## Prod-readiness test plan
 
 Organized by priority. "Blocker" items produce wrong-but-confident answers or unbounded resource use — must be fixed and re-verified before real traffic. "High" items are correctness under normal, non-adversarial use. "Security" is non-negotiable regardless of priority label. "Process" is ongoing discipline, not a one-time test.
@@ -733,13 +1005,13 @@ Organized by priority. "Blocker" items produce wrong-but-confident answers or un
 
 - ~~**T6 — Fuzzy portfolio name resolution.**~~ **DONE.** See Cluster O above. Battery run: "santander 24" (roman numeral) and "bvfinanceira 3" resolved correctly/unambiguously; "bv" and bare "santander"-family prefixes exposed a real silent-first-match gap, now fixed for `get_portfolio_metrics`/`get_cruzamento_agente_carteira` (`aviso_ambiguidade` field + prompt rule). Not extended to `compare_portfolios` or the `detalhe_portfolio.py` copy of the resolver — flagged as a follow-up boundary, not a live-confirmed gap in those two paths.
 - **T7 — Date-range edge cases.** "hoje", "ontem", "esse mês", explicit `YYYY-MM-DD`, month/quarter boundaries, and days with zero activity (weekends/holidays). Confirm the agent doesn't fabricate a number for a day with no rows. **Mostly done:** "hoje"/"ontem" anchored (Cluster M); "esse mês" confirmed correct 3/3 live, no fix needed; "esse trimestre" reproduced the same bug 2/2 and is now fixed and anchored (Cluster R); explicit `YYYY-MM-DD` and a zero-activity weekend day both confirmed correct live (zero-activity got a small tone fix, also Cluster R). Still open: "essa semana", "mês/trimestre passado" (a different anchor shape, no clamp-to-today needed), and the exact-quarter-boundary edge (today being the 1st of a quarter) — untested, this session's real date isn't near one.
-- **T8 — Confidence calibration sweep.** A battery spanning full-data, partial-data (the case `f44bfac` just fixed), and no-data-at-all questions. Confirm `low`/`medium`/`high` match the rule in `system_prompt.md`, not just the 3 cases already tested.
+- ~~**T8 — Confidence calibration sweep.**~~ **DONE (2026-08-28), fix applied, residual gap documented.** See Cluster T above. 5-bucket battery (full-data, zero-but-real, partial-data, no-data-at-all, negative-existence-disclosure), 2 phrasings each. Found and fixed a real, reproducible overconfidence pattern (a response whose content is "X unavailable" reported as `confidence: "high"`) via new rule 12 in `system_prompt.md`. Live re-verification: 4/6 re-fires fully corrected, 2/6 improved but not fully fixed (residual nondeterminism, same "large improvement not hard guarantee" ceiling as Clusters J/L/N) — not claimed as 100% fixed.
 - ~~**T17 — Final-answer JSON parse robustness.**~~ **DONE (2026-08-21).** Not in the original plan — found while investigating T7. See Cluster Q above: `_parse_agent_final_text` now uses `json.loads(..., strict=False)`, so a literal raw newline inside the model's JSON `"text"` field (a real, observed DeepSeek slip) no longer nukes the entire structured response down to a broken low-confidence text dump.
 
 ### Medium
 
 - **T9 — Concurrency / cache isolation.** pt4 Cluster B finding #2 (cross-session cache-key missing `date_from`/`date_to`) was reportedly fixed — retest under genuine concurrent load (2+ simultaneous sessions with different date filters), not serially. Serial testing won't reproduce a race.
-- **T10 — Error-path handling.** Invalid `db` param, a portfolio with zero rows, a simulated DB timeout. Confirm the agent reports "sem dado"/error honestly instead of fabricating a plausible-looking number.
+- ~~**T10 — Error-path handling.**~~ **DONE (2026-08-28).** See Cluster T above. (a) Invalid `db` param: confirmed clean, rejected with HTTP 400 before `run_agent()` ever runs — no fix needed. (b) Real portfolio, zero rows in window (Itau IV, 2026-08-26): confirmed clean at the tool/wording layer (no fabrication, precisely-scoped "não encontrada no período" message) — one of 2 fires surfaced the same T8 residual confidence gap in a new context, not a separate bug. (c) Simulated DB timeout: found and fixed a genuine code-level gap — `build_portfolio_entries()` ran unprotected before the LLM loop and outside `RunState.dispatch()`, so a DB timeout there bypassed the `AgentResponse`/`build_response_envelope` contract entirely (a real 504, not a fabrication or raw crash, but off-contract). Fixed with a `try`/`except` short-circuit to the same low-confidence "dados não disponíveis" shape the rest of the system already uses. Tested via a direct unit-level `run_agent()` call with a monkeypatched `run_query`, not a live end-to-end fire against the shared port-8000 instance (per the task's safety instruction) — stated plainly, not skipped silently.
 - **T11 — Wall-clock budget under a real step cap.** Once T1 lands, re-measure `WALL_CLOCK_S` behavior — Q1 took 17.8s for 11 (uncapped) calls; confirm the guard actually cuts off a run that would otherwise exceed it once the cap is enforced correctly.
 
 ### Security (non-negotiable)
@@ -760,14 +1032,23 @@ confirmed live or, for T2, via the harness's own self-test suite — see
 Cluster P). T12-T13 (the hard security gate) are also done — see Cluster N.
 T6 (High) is done too — see Cluster O. What's actually left: the rest of T7
 (month/quarter boundaries, "esse mês" and other relative-date phrases beyond
-"ontem" — Cluster M only covered "ontem"), T8 (confidence calibration sweep,
-untested beyond the 3 original cases), T9-T11 (Medium — concurrency, error
-paths, wall-clock remeasure under the now-enforced step cap), and T3b (scoped
-in Cluster L's re-check — an aggregate-by-portfolio ranking tool for
-`valor_acordos_gerados`/`qtd_acordos` on an arbitrary day, mirroring T3's
-vencimentos-ranking shape). T14 (regression discipline) applies throughout,
-not at the end — every fix above already carries one except where explicitly
-noted (Clusters I/J's system-prompt-only fixes, N's live-only security probes).
+"ontem" — Cluster M only covered "ontem" — plus a newly-found "ontem" +
+named-portfolio tool-choice bug, flagged out-of-scope, see Cluster T), T9/T11
+(Medium — concurrency, wall-clock remeasure under the now-enforced step cap),
+and T3b (scoped in Cluster L's re-check — an aggregate-by-portfolio ranking
+tool for `valor_acordos_gerados`/`qtd_acordos` on an arbitrary day, mirroring
+T3's vencimentos-ranking shape). T14 (regression discipline) applies
+throughout, not at the end — every fix above already carries one except where
+explicitly noted (Clusters I/J's system-prompt-only fixes, N's live-only
+security probes, T's rule-12 confidence fix for the same reason).
+
+**Update 2026-08-28: T8 and T10 are done too** — see Cluster T. T8 found and
+fixed a real overconfidence pattern (not a hard guarantee — 4/6 re-fires
+fully corrected, residual documented). T10 confirmed (a) and (b) already
+handled honestly and found + fixed a genuine code-level gap for (c) — a DB
+failure on the very first, pre-loop call bypassed the `AgentResponse`
+contract entirely, unlike every other failure path in this system. What's
+left of the original Medium bucket: T9 and T11 (concurrency, wall-clock).
 
 Original ordering rationale, for history: T1 done first because an unenforced
 step cap invalidated every other budget's sizing assumption. T2-T5/T15-T16
