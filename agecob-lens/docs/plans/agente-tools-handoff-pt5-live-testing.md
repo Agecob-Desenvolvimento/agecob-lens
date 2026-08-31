@@ -713,6 +713,275 @@ isn't near a quarter boundary).
 
 ---
 
+## Cluster U — T9 concurrency confirmed clean, T11 wall-clock composition bug found and fixed, cross-cutting freezegun leak discovered (T9/T11)
+
+**Status: T9 CONFIRMED CLEAN (no code fix needed to the cache-key mechanism
+itself — pt4's fix holds under genuine concurrency), new regression test
+added. T11 FIXED — a real bug, not just a remeasurement: `dispatch()` had the
+exact same class of gap Cluster E (T1) fixed for `MAX_STEPS`, but for
+`WALL_CLOCK_S`. A third, cross-cutting finding: a pre-existing, unrelated test
+failure leaks corrupted global `time.time()` state into the rest of the
+pytest session — flagged, not fixed (out of T9/T11 scope; root cause lives in
+`test_eval_harness.py`/`harness.py`, T2/Cluster-P territory).**
+
+### T9 — Concurrency / cache isolation
+
+**Read first (root-cause-before-fixing, per this cluster's own rule):**
+`_cache_key(tool_name, db, date_from, date_to, args)` (`guards.py:58`) already
+includes `date_from`/`date_to` explicitly — pt4 Cluster B's fix (achado #2)
+is present in the code, not just claimed. Traced the full wiring:
+`_tool_result_json` (`agente.py:314`) computes `call_date_from`/`call_date_to`
+from the session's own `date_from`/`date_to` (falling back from `args` only
+for tools that don't carry a date, exactly the legacy-tool class the original
+bug was about) and passes them into `RunState.dispatch()` explicitly. `_cache_key`
+is one of two cache layers — `ToolCache` (`guards.py`) is a **process-level
+singleton** (`tool_cache = ToolCache()`, module scope) shared across every
+request the server handles, thread-safe via `threading.Lock()`. This is the
+right layer to race-test: a bug here is a real cross-session leak, not a
+per-request memoization artifact.
+
+**Live test, real HTTP concurrency against the shared port-8000 backend** (not
+serial — pt5's own prior instruction: "serial testing won't reproduce a
+race"). Target: `get_acordo_status_breakdown` — a genuinely zero-argument tool
+(`input_schema: {"type": "object", "properties": {}}`), the exact "legacy
+tool with no date in its own args" class achado #2 was about; its provider
+closure (`_build_providers`) pulls `db`/`date_from`/`date_to` purely from the
+session, so the LLM cannot influence which period gets queried — only whether
+it calls the tool at all. Fired via `POST /agente/chat` with a question
+("distribuição de acordos do período por status... total geral, quantidade e
+valor") crafted to reliably trigger this exact tool (confirmed via
+`data_sources` on every response).
+
+Ground truth per date, via direct `build_status_breakdown("todos", d, d)`
+calls (bypassing the agent entirely):
+
+| Date | total_qtd | total_valor |
+|---|---|---|
+| 2026-08-20 | 59 | R$ 95.628,95 |
+| 2026-08-25 | 41 | R$ 60.425,72 |
+| 2026-08-27 | 90 | R$ 206.780,35 |
+
+Fired via `concurrent.futures.ThreadPoolExecutor`, genuinely overlapping
+requests (verified: every multi-request round showed 100% overlapping
+wall-clock windows between requests, not "fired close together" — start/end
+timestamps captured per call and checked pairwise), 6 rounds across 2 waves,
+peak concurrency 9 simultaneous requests, 3 distinct dates:
+
+| Wave | Rounds | Calls | Peak concurrency | Overlap | Leaks |
+|---|---|---|---|---|---|
+| 1 (2 dates) | 3 | 10 | 4 | 6/6, 1/1, 6/6 pairs | 0 |
+| 2 (3 dates) | 3 | 17 | 9 | 15/15, 36/36, 1/1 pairs | 0 |
+
+27 total real concurrent calls, 0 leaks — every response's reported
+`total_valor`/`total_qtd` matched **its own** session's `dateFrom`/`dateTo`,
+never the concurrently-running other session's date. Re-verified ground truth
+for all 3 dates immediately after the test (Cluster R's own methodological
+note: "dataset isn't static, re-verify immediately") — all 3 identical to the
+pre-test values, no drift, confirming the MATCH verdicts are valid and not an
+artifact of the underlying data having coincidentally shifted to overlap.
+
+**Regression test added** (real thread concurrency, not mocked):
+`tests/test_guards.py::test_cache_concorrente_nao_vaza_entre_sessoes_com_periodos_diferentes`
+— fires 12 real `threading.Thread`s (6× a 2026-08-20 session, 6× a 2026-08-25
+session, interleaved) against the actual `tool_cache` singleton via fresh
+`RunState()` instances (matching how each real request gets its own
+`RunState`), after a deterministic sequential "prime" phase populates both
+cache keys first (avoids a check-then-act race against an *empty* cache —
+`ToolCache` is deliberately single-flight-free per its own docstring, so
+racing an empty cache is a timing artifact, not the correctness property
+under test). Asserts every thread's result matches its own window, never the
+other. **Verified the test has real teeth**, not just passing trivially:
+monkeypatched `guards._cache_key` back to the pre-pt4-fix shape
+(`sha1(tool|db|args)`, no date) in a throwaway script and re-ran the identical
+logic — the prime phase alone immediately showed contamination ("prime B:
+requested=B got=A"), and all 6 concurrent B-workers inherited A's cached
+result: 6/12 deterministic mismatches, exactly the achado #2 failure shape
+("sessão A filtrando julho podia servir o número de julho pra sessão B
+filtrando agosto"). Confirms this test would have caught the original bug.
+
+**No code fix needed for T9 itself** — the cache-key mechanism is correctly
+built and holds under genuine concurrent load. Per this cluster's own
+discipline (see T11 below and pt5's standing instruction not to invent a fix
+to have something to report): this is a confirmed-clean remeasurement, not a
+fix.
+
+**Cross-cutting finding, discovered while hardening the T9 regression test —
+not a T9/T11 bug, flagging for whoever owns T2/eval-harness territory:**
+the new T9 test flaked (`concurrent_log` showed 2 unexpected cache misses)
+specifically when run in the full suite, immediately after
+`tests/test_eval_harness.py::test_run_case_camada5_pega_indisponibilidade_falsa_end_to_end`
+(alphabetically earlier, so it always runs first in a plain `pytest tests/ -q`).
+That test is a **pre-existing** failure, confirmed unrelated to this session's
+changes (fails standalone, before any edit made this pass): `freeze_time()`
+(`harness.py:185`) raises `pydantic.errors.PydanticSchemaGenerationError`
+**inside its own `__enter__`**, while walking `sys.modules` and hitting a
+lazily-imported Langfuse SDK Pydantic model that can't generate a schema for
+a `datetime.datetime` field under the installed `pydantic`/`langfuse`
+versions. Root-caused, not just observed: because the exception happens
+*inside* `__enter__` (freezegun's `_setup_module_cache`/
+`_get_cached_module_attributes`, `freezegun/api.py`), the `with freeze_time(...)`
+block's `__exit__` **never runs** — freezegun never gets the chance to
+restore the real time functions it had already started patching for
+already-imported modules (confirmed directly: `dominios.agente.guards`, in
+particular, is imported well before the harness test runs). Direct proof, not
+inference: ran the real failing test via `monkeypatch` exactly as pytest
+would, then in the same process measured `time.time()` immediately after —
+returned exactly `1786838400.0` (midnight UTC 2026-08-16, the exact
+`frozen_today` the failing test case uses) with **zero elapsed delta**
+across operations that took real, measurable wall-clock time (both a
+sequential "prime" phase and a 12-thread concurrent burst read back
+`0.0000s`). `time.time is <original function object>` still held true
+(object identity unchanged), yet the *value* returned was frozen — consistent
+with freezegun patching per-module `time` references for already-imported
+modules like `guards.py` (not a single global swap), so the corruption is
+real but doesn't announce itself via a changed function identity, only a
+frozen value. `time.monotonic()` — what `RunGuard.WALL_CLOCK_S` actually uses
+in production — was not conclusively re-verified for this leak in this pass
+(a follow-up diagnostic script failed to write to disk before time ran out on
+this investigation); not claiming it's clean, just not re-confirmed. Since
+`ToolCache` uses `time.time()` (real wall-clock TTL semantics, correctly —
+`time.monotonic()` isn't meaningful for a cache that must survive across
+requests) for its 60s success-TTL, a frozen `time.time()` can make entries
+look non-expired forever or expired unpredictably depending on which
+already-patched module's `time` reference gets read, corrupting *any* test
+anywhere in the suite that depends on real TTL/elapsed-time behavior and runs
+after this one in the same pytest process. This class of bug — a fixture that
+partially mutates process-global state then raises before its own cleanup
+runs — would explain a failure appearing "isolated to one worktree" and not
+reproducing against a fresh `main` checkout with the identical code and
+shared venv: it depends on **what ran earlier in that specific pytest
+process**, not on the code or dependencies being different. **Not fixed** —
+`harness.py`/`freeze_time` usage is outside `dominios/agente/{guards,errors}.py`
+and this cluster's T9/T11 scope; flagging precisely so whoever fixes the
+freezegun/langfuse/pydantic version incompatibility (or wraps `freeze_time()`
+in a try/finally-safe helper) also understands the blast radius extends past
+that one test. **Own regression test hardened against it regardless of when
+it gets fixed**: dropped the strict "zero cache misses" secondary assertion
+(fragile to this external TTL corruption) and kept only the deterministic
+correctness assertion (no thread ever receives the *other* window's result) —
+verified this holds even when deliberately run in the exact polluting
+sequence (`test_eval_harness.py`'s failing test immediately followed by the
+T9 test, same pytest invocation): the correctness property held throughout
+every reproduction, including the polluted ones — only the informational
+miss-count assertion was ever the fragile part, never the actual isolation
+guarantee.
+
+### T11 — Wall-clock budget under a real step cap
+
+**Read first:** `RunState.dispatch()` (`guards.py:258`) checked
+`self.steps_exceeded()` before executing anything (Cluster E's fix), but
+**never checked `self.wall_clock_exceeded()`** — the wall-clock guard was
+still only evaluated by the outer per-round loop's `force_final()`
+(`agente.py:518`/`617`), once **between** rounds, exactly the same blind spot
+Cluster E fixed for the step counter. Since a single round can dispatch
+several tool_calls back-to-back (DeepSeek returned up to 4 in one response
+per Cluster E's own finding), a round whose dispatch loop happens to straddle
+the `WALL_CLOCK_S` threshold would let every remaining call in that batch
+execute anyway — the guard would only catch up on the *next* round.
+
+**Confirmed as a real, reproducible bug before writing any fix** (per this
+campaign's "verify-don't-assume" rule): `RunState(RunGuard(WALL_CLOCK_S=10,
+MAX_STEPS=100))`, clock monkeypatched past the 10s threshold,
+`force_final()` correctly returned `True` — but `dispatch()` still executed
+`run_fn` for real (`real run_fn executions: 1`, `state.steps: 1`) on the very
+next call. Not theoretical — directly reproduced with the real function,
+same technique as Cluster E's own E1 finding.
+
+**Fix applied**, `dominios/agente/guards.py`, `RunState.dispatch()`: added a
+`wall_clock_exceeded()` check immediately after the existing
+`steps_exceeded()` check, same pattern exactly — refuses to run `run_fn`,
+returns a structured `build_tool_error("wall_clock_exceeded", ...)`, does
+**not** increment `self.steps` (mirrors the step-budget branch: a refused
+call was never executed). New error type registered in
+`dominios/agente/errors.py`'s `_ERROR_RETRYABLE_DEFAULT` taxonomy
+(`"wall_clock_exceeded": False`, same non-retryable semantics as
+`step_budget_exceeded` — retrying within the same request doesn't help, the
+request is about to force-final anyway).
+
+**Regression tests**, `tests/test_guards.py`:
+- `test_dispatch_recusa_executar_apos_estourar_wall_clock` — mirrors
+  `test_dispatch_recusa_executar_apos_estourar_step_budget` (Cluster E's own
+  test) exactly, same structure, for the wall-clock guard: one call succeeds,
+  clock advances past `WALL_CLOCK_S`, two more calls in the "same batch" are
+  both refused with `error_type == "wall_clock_exceeded"`, `run_fn` never
+  re-executes, `state.steps` never increments past the point of refusal.
+- `test_wall_clock_e_step_budget_nao_se_mascaram` — composition test: both
+  budgets exhausted simultaneously (`MAX_STEPS=1` already consumed, clock
+  also past `WALL_CLOCK_S`), confirms `dispatch()` still refuses correctly
+  (whichever `error_type` fires doesn't matter — what matters is `run_fn`
+  never executes again). Directly answers this task's own "make sure the two
+  guards compose correctly and don't mask each other" requirement.
+
+**Live re-verification — fresh timing number, replacing the stale
+"17.8s for 11 (uncapped) calls" baseline.** Reproduced the Cluster L/S1
+fan-out shape live: a portfolio "geração" ranking has no aggregate tool (T3b
+— confirmed still unbuilt, grepped `tools.py` for a portfolio ranking sql
+builder, zero hits), so it forces a manual per-portfolio
+`query_kpi_historico` loop. First attempt (session date == question date)
+didn't fan out — the agent correctly used the single-call
+`filter_portfolios_by_value` shortcut instead, which only exists because the
+session's own window happened to match. Matched Cluster L's exact repro
+shape instead: session date left at "hoje" (2026-08-28), question asked for
+a **different**, specific past date (20/08/2026) — this mismatch forces the
+agent off the session-scoped shortcut tool and into the real per-portfolio
+fan-out, since `filter_portfolios_by_value` can't answer for an arbitrary day
+outside the session's window.
+
+5 live runs against the shared backend, `db="todos"`:
+
+| Run | Time | Result |
+|---|---|---|
+| 1 | 36.96s | Step budget hit; 3 carteiras confirmed (COBwebRCBCONSUMER only), honestly disclosed as partial |
+| 2 | 27.55s | Step budget hit; 5 carteiras across both banks, "orçamento de consultas... esgotou-se", flagged CONSUMER coverage gap |
+| 3 | 20.63s | Step budget hit; 2 carteiras, explicit "carteira não encontrada" for others (real names only, Rule 9 holding) |
+| 4 | 21.2s | Step budget hit; 4 carteiras, explicit list of the ones not reached |
+| 5 | 21.01s | Step budget hit; "5 das 14 carteiras ativas", explicit remaining-9 list |
+
+Range 20.6s–37.0s, mean ≈25.5s. **In every one of the 5 runs, `MAX_STEPS`
+(not `WALL_CLOCK_S`) was the binding constraint** — every response disclosed
+"orçamento de consultas/ferramentas esgotou," matching `step_budget_exceeded`'s
+`user_facing` text, and none came close to the 90s wall-clock budget. This
+answers this task's "get a fresh timing number for a capped run" requirement
+directly: **~20–37s (mean ~25s) is the real cost of a properly step-capped
+fan-out run today**, replacing the stale uncapped 17.8s/11-calls number with
+a number from an actually-capped run under the fix that made the cap
+enforce for real (Cluster E).
+
+**Honest limits of the live re-verification:** the specific mid-batch
+wall-clock composition bug this cluster fixed in code (a round's *later*
+calls executing after the clock already tripped, but before the *next*
+round's `force_final()` check) was **not** independently reproduced live —
+under today's typical latencies (SQL queries fast, `MAX_STEPS=10` calls
+finishing in the 20-37s range measured above), the step cap trips first,
+long before wall-clock ever approaches 90s, so there was no natural live
+scenario where a round's dispatch loop straddled the 90s mark. This mirrors
+Cluster E's own evidentiary shape (the E1 mid-batch overrun needed a specific
+DeepSeek multi-tool-call response to manifest, and wasn't independently
+re-derived from first principles live either) — the code-level fix + the two
+new deterministic unit tests are the primary proof for T11's composition
+question; the live runs are supporting evidence that the fix didn't change
+observable behavior for the common case (still correctly discloses partial
+coverage, still no crash, same shape as the already-confirmed Cluster L fix).
+If SQL latency or `WALL_CLOCK_S` sizing ever changes such that a round's
+batch can plausibly straddle the wall-clock threshold before `MAX_STEPS`
+trips, this fix is what prevents that specific batch from overrunning the
+budget — today it's a real, closed structural gap, not yet an observed live
+failure mode.
+
+**Regression:** `pytest tests/ -q` (full suite, zero exclusions, run 3× for
+stability given the cross-cutting flake discovered in the same pass): **227
+passed, 1 failed, 9 skipped** — 237 collected (234 baseline + 3 new tests:
+the T9 concurrency test + the 2 T11 wall-clock tests). The 1 failure is the
+pre-existing, unrelated `test_eval_harness.py` freezegun/langfuse/pydantic
+issue documented above — confirmed failing identically *before* this
+session's first edit (i.e., immediately after catching this worktree's branch
+up to `main`, before touching any code), and unaffected by whether it runs
+before or after this cluster's changes. The 9 skips are all
+`test_static_traversal.py` ("requer agecob-lens/dist buildado") — unrelated,
+environmental (frontend not built in this backend-only worktree).
+
+---
+
 ## Prod-readiness test plan
 
 Organized by priority. "Blocker" items produce wrong-but-confident answers or unbounded resource use — must be fixed and re-verified before real traffic. "High" items are correctness under normal, non-adversarial use. "Security" is non-negotiable regardless of priority label. "Process" is ongoing discipline, not a one-time test.
@@ -738,9 +1007,9 @@ Organized by priority. "Blocker" items produce wrong-but-confident answers or un
 
 ### Medium
 
-- **T9 — Concurrency / cache isolation.** pt4 Cluster B finding #2 (cross-session cache-key missing `date_from`/`date_to`) was reportedly fixed — retest under genuine concurrent load (2+ simultaneous sessions with different date filters), not serially. Serial testing won't reproduce a race.
+- ~~**T9 — Concurrency / cache isolation.**~~ **DONE, confirmed clean (2026-08-28).** See Cluster U above: 27 real concurrent HTTP calls against the shared backend (2 waves, 6 rounds, peak 9-way simultaneous, 3 distinct dates), targeting the exact zero-arg legacy-tool class achado #2 was about — 0 leaks. `_cache_key` already correctly includes `date_from`/`date_to`, confirmed live under genuine overlap, not just serially. No code fix needed to the cache mechanism itself; new deterministic thread-concurrency regression test added (`test_cache_concorrente_nao_vaza_entre_sessoes_com_periodos_diferentes`), verified to have real teeth against the pre-fix key shape. Found and flagged (not fixed — out of scope) a cross-cutting test-pollution bug: a pre-existing, unrelated `test_eval_harness.py` failure leaks a frozen `time.time()` into the rest of the pytest session, which can destabilize any other TTL-dependent test that runs afterward.
 - **T10 — Error-path handling.** Invalid `db` param, a portfolio with zero rows, a simulated DB timeout. Confirm the agent reports "sem dado"/error honestly instead of fabricating a plausible-looking number.
-- **T11 — Wall-clock budget under a real step cap.** Once T1 lands, re-measure `WALL_CLOCK_S` behavior — Q1 took 17.8s for 11 (uncapped) calls; confirm the guard actually cuts off a run that would otherwise exceed it once the cap is enforced correctly.
+- ~~**T11 — Wall-clock budget under a real step cap.**~~ **DONE (2026-08-28).** See Cluster U above: found and fixed a real bug, not just a remeasurement — `dispatch()` checked `steps_exceeded()` but never `wall_clock_exceeded()`, the same class of mid-batch blind spot Cluster E (T1) fixed for the step counter, directly reproduced before fixing. Fixed with the same pattern (check-before-execute in `dispatch()`), 2 new regression tests (one mirroring E1's own test, one confirming the two guards don't mask each other when both are exhausted simultaneously). Fresh capped-run timing from 5 live fan-out runs (Cluster L/S1 shape): 20.6s–37.0s, mean ~25.5s, replacing the stale 17.8s/11-uncapped-calls number — `MAX_STEPS` was the binding constraint in all 5 live runs, `WALL_CLOCK_S` never came close; the specific mid-batch composition bug is proven fixed at the code/unit-test level, not independently reproduced live (same evidentiary shape as Cluster E's own E1 finding).
 
 ### Security (non-negotiable)
 
@@ -758,11 +1027,15 @@ Organized by priority. "Blocker" items produce wrong-but-confident answers or un
 **Update 2026-08-21: every Blocker item is done** (T1-T5, T15-T16 all
 confirmed live or, for T2, via the harness's own self-test suite — see
 Cluster P). T12-T13 (the hard security gate) are also done — see Cluster N.
-T6 (High) is done too — see Cluster O. What's actually left: the rest of T7
-(month/quarter boundaries, "esse mês" and other relative-date phrases beyond
-"ontem" — Cluster M only covered "ontem"), T8 (confidence calibration sweep,
-untested beyond the 3 original cases), T9-T11 (Medium — concurrency, error
-paths, wall-clock remeasure under the now-enforced step cap), and T3b (scoped
+T6 (High) is done too — see Cluster O. **Update 2026-08-28: T9 and T11 (Medium)
+are also done — see Cluster U.** T9 confirmed the concurrent cache-isolation
+fix holds under real overlapping load (no code fix needed); T11 found and
+fixed a genuine mid-batch wall-clock composition bug (same class as T1's E1
+finding) and produced a fresh capped-run timing number. What's actually left:
+the rest of T7 (month/quarter boundaries, "esse mês" and other relative-date
+phrases beyond "ontem" — Cluster M only covered "ontem"), T8 (confidence
+calibration sweep, untested beyond the 3 original cases), T10 (Medium — error
+paths, still open), and T3b (scoped
 in Cluster L's re-check — an aggregate-by-portfolio ranking tool for
 `valor_acordos_gerados`/`qtd_acordos` on an arbitrary day, mirroring T3's
 vencimentos-ranking shape). T14 (regression discipline) applies throughout,
