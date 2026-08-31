@@ -670,6 +670,23 @@ def _loop_deepseek(
     return (message.content or "") if message else ""
 
 
+def _dataset_unavailable_response(date_to: str) -> Dict[str, Any]:
+    """
+    AgentResponse honesto quando o dataset base de carteiras (`entries`) não
+    pôde ser carregado (T10, pt5-live-testing.md Cluster T) — mesma frase que
+    o system_prompt.md já instrui o modelo a usar para "dados insuficientes",
+    pra a UX ficar igual não importa se quem degradou foi o LLM ou o código.
+    """
+    return {
+        "text": "Dados não disponíveis para esta consulta no momento. Tente novamente em instantes.",
+        "highlights": [],
+        "suggested_actions": [],
+        "data_sources": [],
+        "confidence": "low",
+        "data_referencia": date_to,
+    }
+
+
 def _run_agent_impl(
     messages: List[Dict[str, str]],
     db: str,
@@ -681,7 +698,34 @@ def _run_agent_impl(
     Loop de tool-calling completo. Levanta HTTPException 502 em falha do
     provedor; nunca falha por formato de resposta (degrada para low).
     """
-    entries = build_portfolio_entries(db, date_from, date_to, run_id=run_id)
+    # build_portfolio_entries roda ANTES do loop de tools, fora da proteção
+    # de RunState.dispatch() (guards.py) — ao contrário de toda chamada que a
+    # LLM faz depois, uma falha de DB aqui (timeout, conexão) não tinha catch
+    # nenhum: subia HTTPException crua até post_agente_chat e quebrava o
+    # contrato AgentResponse/build_response_envelope pro cliente (T10,
+    # pt5-live-testing.md Cluster T — achado ao vivo, não só teórico).
+    try:
+        entries = build_portfolio_entries(db, date_from, date_to, run_id=run_id)
+    except HTTPException as exc:
+        _agent_ndjson(
+            "OBS",
+            "dominios/agente/agente.py:_run_agent_impl:dataset_error",
+            "agent_dataset_error",
+            {"database": db, "status_code": exc.status_code, "error": str(exc.detail)},
+            run_id=run_id,
+        )
+        _sentry_log("error", "Falha ao carregar dataset de carteiras (agente).", database=db, error=str(exc.detail))
+        return _dataset_unavailable_response(date_to)
+    except Exception as exc:
+        _agent_ndjson(
+            "OBS",
+            "dominios/agente/agente.py:_run_agent_impl:dataset_error",
+            "agent_dataset_error",
+            {"database": db, "error": str(exc)},
+            run_id=run_id,
+        )
+        _sentry_log("error", "Falha inesperada ao carregar dataset de carteiras (agente).", database=db, error=str(exc))
+        return _dataset_unavailable_response(date_to)
 
     def get_agents() -> List[Dict[str, Any]]:
         return build_agent_entries(db, date_from, date_to, run_id=run_id)

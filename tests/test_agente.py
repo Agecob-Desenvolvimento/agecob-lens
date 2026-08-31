@@ -1390,3 +1390,54 @@ def test_compact_anthropic_convo_resume_grupos_antigos_mantem_recente():
     assert compactado[2] is convo[5]
     assert compactado[3] is convo[6]
     assert len(compactado) == 4
+
+
+def test_run_agent_degrada_para_low_quando_dataset_de_carteiras_falha(monkeypatch):
+    """
+    Regressão de achado ao vivo (T10, pt5-live-testing.md Cluster T):
+    build_portfolio_entries() roda ANTES do loop de tools, fora da proteção
+    de RunState.dispatch() (guards.py) - uma falha de DB nessa chamada
+    (timeout, conexão) não tinha nenhum try/except: subia HTTPException crua
+    até post_agente_chat e quebrava o contrato AgentResponse/
+    build_response_envelope pro cliente, ao contrário de toda falha de tool
+    DEPOIS do loop começar (essas já degradam bem via guards.py). Confirmado
+    ao vivo com uma chamada direta a run_agent() simulando o mesmo
+    HTTPException que core/database/query_executor.py levanta num timeout
+    real de pyodbc (SQLSTATE HYT00/HYT01 -> 504).
+    """
+    from fastapi import HTTPException
+
+    def _raise_timeout(*args, **kwargs):
+        raise HTTPException(status_code=504, detail="Consulta excedeu o tempo limite no banco de dados.")
+
+    monkeypatch.setattr(risco_mod, "run_query", _raise_timeout)
+    monkeypatch.setattr(risco_mod.cache_manager, "_ttl", 0)
+
+    llm_called = []
+
+    class _FakeCompletions:
+        def create(self, **kwargs):
+            llm_called.append(True)
+            raise AssertionError("LLM não deveria ser chamado - falha no dataset deve curto-circuitar antes do loop")
+
+    class _FakeOpenAIClient:
+        def __init__(self, api_key, base_url, **kwargs):
+            self.chat = _Block(completions=_FakeCompletions())
+
+    fake_sdk = types.ModuleType("openai")
+    fake_sdk.OpenAI = _FakeOpenAIClient
+    fake_sdk.OpenAIError = type("OpenAIError", (Exception,), {})
+    monkeypatch.setitem(sys.modules, "openai", fake_sdk)
+    monkeypatch.setattr(settings, "AGENT_PROVIDER", "deepseek")
+    monkeypatch.setattr(settings, "AGENT_MODEL", "deepseek-chat")
+
+    result = run_agent(
+        [{"role": "user", "content": "Quanto foi gerado hoje, no total?"}],
+        "todos", "2026-08-28", "2026-08-28",
+    )
+
+    assert not llm_called
+    assert result["confidence"] == "low"
+    assert result["text"] == "Dados não disponíveis para esta consulta no momento. Tente novamente em instantes."
+    assert result["data_sources"] == []
+    assert result["data_referencia"] == "2026-08-28"
