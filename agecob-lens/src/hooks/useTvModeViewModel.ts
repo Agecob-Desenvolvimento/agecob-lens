@@ -251,8 +251,8 @@ export function useTvModeViewModel(): TvModeViewModel {
     // Agentes (Modo TV Operacional) — conversão via métrica canônica (acordos / CPC)
     const agentes: TvAgenteRow[] = agentesRows.map((r) => ({
       id: r.CHAVE,
-      // nome grande = USU_MASTER.AGENTE (nome operacional do COBweb), cortado no
-      // primeiro sobrenome; cai para NOME se o campo vier vazio.
+      // nome grande = USU_MASTER.NOME, cortado no primeiro sobrenome. `agente` é
+      // alias de NOME no backend; o `|| r.NOME` cobre respostas antigas em cache.
       nome: primeiroNomeESobrenome(r.agente || r.NOME),
       login: r.CHAVE,
       acion: r.qtd_acionamentos,

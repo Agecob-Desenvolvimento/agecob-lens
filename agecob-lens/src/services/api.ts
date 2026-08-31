@@ -46,7 +46,7 @@ export interface AcordoRow {
 export interface ProdutividadeRow {
   CHAVE: string;
   NOME: string;
-  /** Nome operacional do agente no COBweb (USU_MASTER.AGENTE) — usado no Modo TV Operacional. */
+  /** Nome do agente (alias de USU_MASTER.NOME) — usado no Modo TV Operacional. */
   agente: string;
   qtd_acionamentos: number;
   qtd_alo: number;
