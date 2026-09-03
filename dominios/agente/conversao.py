@@ -1,9 +1,10 @@
 """
-Visão de conversão de boletos (efetividade) para o agente de chat (/agente/chat).
+Visão de efetividade de boletos para o agente de chat (/agente/chat).
 
 Fonte: ETL de efetividade em memória (dominios/efetividade), chaves
-`*-primeira` — a conversão oficial do dicionário (boleto de 1ª parcela pago
-no prazo ≤ 5 dias do vencimento / boleto emitido, base 2026+). O ETL roda em
+`*-primeira` — efetividade de boleto (1ª parcela paga no prazo ≤ 5 dias do
+vencimento / boleto emitido, base 2026+). NÃO é a Conversão do dicionário
+(qtd_acordos / qtd_contatos) — ver docs/data-layer.md. O ETL roda em
 background; antes da primeira carga a tool degrada para um error dict.
 
 Trim client-side para caber no contexto do modelo: mensal = últimos 12 meses,
@@ -29,12 +30,13 @@ _MESES_POR_AGENTE = 3
 _TOP_AGENTES = 15
 
 _CRITERIO = (
-    "Conversão oficial: boletos de 1ª parcela pagos no prazo (até 5 dias do "
-    "vencimento) / boletos emitidos. Base do ETL: emissões 2026+."
+    "Efetividade de boleto: boletos de 1ª parcela pagos no prazo (até 5 dias "
+    "do vencimento) / boletos emitidos. Base do ETL: emissões 2026+. NÃO é a "
+    "Conversão do dicionário (qtd_acordos / qtd_contatos)."
 )
 
 
-def _conv_pct(pagos: float, gerados: float) -> float:
+def _efetividade_pct(pagos: float, gerados: float) -> float:
     if gerados <= 0:
         return 0.0
     return round(pagos * 100.0 / gerados, 2)
@@ -52,14 +54,14 @@ def _trim_mensal(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
                 "mes": int(r.get("Mes") or 0),
                 "boletos_gerados": int(r.get("Boletos_Gerados") or 0),
                 "pagos_no_prazo": int(r.get("Pagos_No_Prazo") or 0),
-                "conversao_pct": float(r.get("Conversao_Prazo_5d") or 0),
+                "efetividade_boleto_pct": float(r.get("Conversao_Prazo_5d") or 0),
             }
             for r in janela
         ],
         "total": {
             "boletos_gerados": gerados,
             "pagos_no_prazo": pagos,
-            "conversao_pct": _conv_pct(pagos, gerados),
+            "efetividade_boleto_pct": _efetividade_pct(pagos, gerados),
         },
     }
 
@@ -75,14 +77,14 @@ def _trim_diaria(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
                 "dia": str(r.get("Dia_Emissao") or "")[:10],
                 "boletos_gerados": int(r.get("Boletos_Gerados") or 0),
                 "pagos_no_prazo": int(r.get("Pagos_No_Prazo") or 0),
-                "conversao_pct": float(r.get("Conversao_Prazo_5d") or 0),
+                "efetividade_boleto_pct": float(r.get("Conversao_Prazo_5d") or 0),
             }
             for r in janela
         ],
         "total": {
             "boletos_gerados": gerados,
             "pagos_no_prazo": pagos,
-            "conversao_pct": _conv_pct(pagos, gerados),
+            "efetividade_boleto_pct": _efetividade_pct(pagos, gerados),
         },
     }
 
@@ -121,7 +123,7 @@ def _trim_por_agente(rows: List[Dict[str, Any]], agente: Optional[str]) -> Dict[
             "agente": nome,
             "boletos_gerados": b["boletos_gerados"],
             "pagos_no_prazo": b["pagos_no_prazo"],
-            "conversao_pct": _conv_pct(b["pagos_no_prazo"], b["boletos_gerados"]),
+            "efetividade_boleto_pct": _efetividade_pct(b["pagos_no_prazo"], b["boletos_gerados"]),
         }
         for nome, b in acc.items()
     ]
