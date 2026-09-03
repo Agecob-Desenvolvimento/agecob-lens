@@ -2,7 +2,7 @@
 title: Agecob — Regras de Negócio COBweb
 tags: [agecob, backend, regras-de-negocio, cobweb]
 created: 2026-04-27
-updated: 2026-04-27
+updated: 2026-08-19
 ---
 
 # Regras de Negócio COBweb

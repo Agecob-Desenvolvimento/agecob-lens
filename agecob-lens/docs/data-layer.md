@@ -121,8 +121,12 @@ ID_REC_STATUS = 2
 ## Pre-filter CTE
 
 ```sql
-ID_REC_STATUS IN (1, 3, 5, 12)
+ID_REC_STATUS IN (1, 2, 3, 5, 10, 12)
 ```
+
+`STATUS_UNIVERSO_ACORDOS` = gerados + exceção. Derivado em `config/settings.py`,
+nunca literal — as quebras (2, 10) precisam sobreviver ao pré-filtro ou os KPIs de
+valor gerado as perdem.
 
 ## Funil de contato — Alô vs Contato (RPC) — ADR-006
 
