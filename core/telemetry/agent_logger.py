@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import threading
 import time
@@ -17,13 +18,21 @@ def _init_sentry() -> None:
         return
     import sentry_sdk
 
-    sentry_sdk.init(
-        dsn=settings.SENTRY_DSN,
-        environment=settings.APP_ENV,
-        traces_sample_rate=settings.SENTRY_TRACES_SAMPLE_RATE,
-        enable_logs=settings.SENTRY_ENABLE_LOGS,
-    )
-    _SENTRY_INITIALIZED = True
+    # Frame locals and request bodies carry the DB password, debtor CPF and the
+    # API token; none of it should leave for Sentry. try/except: a malformed DSN
+    # must not take down API boot (audit 2026-09-03, ranks 1/5/6).
+    try:
+        sentry_sdk.init(
+            dsn=settings.SENTRY_DSN,
+            environment=settings.APP_ENV,
+            traces_sample_rate=settings.SENTRY_TRACES_SAMPLE_RATE,
+            enable_logs=settings.SENTRY_ENABLE_LOGS,
+            include_local_variables=False,
+            max_request_body_size="never",
+        )
+        _SENTRY_INITIALIZED = True
+    except Exception:
+        logging.getLogger(__name__).exception("Sentry init failed; telemetry disabled")
 
 
 def _sentry_log(level: str, message: str, **attributes: Any) -> None:
