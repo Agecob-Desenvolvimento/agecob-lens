@@ -4,6 +4,12 @@ Persistent project context for **dash relatorio** (AgDash). Read auto each sessi
 
 ---
 
+## File Editing Rules
+
+**Read before Write.** NEVER use Write on an existing file without Reading it first. For config/test-infra files (`conftest.py`, `settings.json`, `.env`, `robo.js`) always Read, then Edit surgically — never overwrite wholesale. After any file copy/deploy, verify the destination is non-empty and matches the source (`Get-Item <file>` / `wc -c`).
+
+---
+
 ## Project
 
 Monorepo: executive collections dashboard for AgeCob. Consumes SQL Server (databases `COBwebRCBAUTOS` and `COBwebRCBCONSUMER`), serves FastAPI API + built SPA React.
@@ -11,6 +17,27 @@ Monorepo: executive collections dashboard for AgeCob. Consumes SQL Server (datab
 - **Backend:** Python 3.8+, FastAPI, pyodbc, SQL Server (ODBC Driver 17). Historic monolith in `main.py` + modules `api/`, `core/`, `dominios/`, `config/` (ADR-001).
 - **Frontend:** `agecob-lens/` — Vite + React 18 + TypeScript + Tailwind + shadcn/ui + Recharts + TanStack Query + React Router.
 - **Deploy:** Windows Server via NSSM (`AgecobAPI`), port 8000, `atualizar.bat` does pull + build + restart.
+
+---
+
+## Data / SQL
+
+### Data Analysis Ground Rules
+
+Before reporting any numbers from the DB:
+
+1. Confirm every column exists via schema introspection — never guess column names.
+2. State which portfolio/product the code map applies to (AUTOS vs CONSUMER maps are NOT interchangeable).
+3. Re-apply standard filters (excluded agents, dedup by contract via `ROW_NUMBER`, status filters) to every query, including ad-hoc counts.
+4. Show the query alongside the result so it can be audited.
+
+---
+
+## Deliverables
+
+Any report, audit, handoff, or analysis longer than ~20 lines must be written to a file under `docs/` (or the project's docs path) and the path reported back — never pasted only into chat.
+
+---
 
 ## Required reading at session start
 
@@ -40,6 +67,7 @@ npm run test:watch
 Backend:
 python -m pip install -r requirements.txt
 python -m uvicorn main:app --host 0.0.0.0 --port 8000
+```
 
 Server (production C:\agecob): atualizar.bat does git pull + pip + npm build + restart NSSM.
 
@@ -146,3 +174,17 @@ If graphify-out/wiki/index.md exists, navigate it instead of raw files
 For cross-module "how does X relate to Y" questions, prefer graphify query "<question>", graphify path "<A>" "<B>", or graphify explain "<concept>" over grep — these traverse graph's EXTRACTED + INFERRED edges instead of scanning files
 
 After modifying code files this session, run graphify update . to keep graph current (AST-only, no API cost)
+
+---
+
+## Ops / Infrastructure
+
+### Infrastructure Changes
+
+Never run network-mutating commands (`netsh`, static IP assignment, NIC aliasing, firewall rules) without first printing the current state, the exact revert command, and getting explicit confirmation. Assume remote access (AnyDesk/RDP) is the only way into the box.
+
+---
+
+## Definition of Done
+
+A task is not done until: tests pass (`pytest` / `npm test`), typecheck passes, the change is verified against live data or the browser, and the work is committed AND pushed. Report the commit SHA.
