@@ -130,10 +130,14 @@ CROSS APPLY TOP 1 para portfólio (ADR-004), janela
 `DT_EMISSAO >= @Hoje AND < @Amanha` via `wrap_todos_or_single`
 (`todos` = UNION ALL dos dois bancos com agregação externa).
 
-Conversão oficial: boleto de 1ª parcela pago em ≤ 5 dias do vencimento /
-boleto emitido. A `conversao_pct` do AgentEntry no grão de 1 dia tende a 0%
-(boleto de hoje não venceu) — o prompt direciona "boletos estão sendo pagos?"
-para `query_kpi_historico(kpi="efetividade")`.
+Conversão oficial = `qtd_acordos / qtd_contatos` (acordos gerados sobre CPC):
+só existe no grão agente (campo `conversao_pct` do AgentEntry) — sem série
+diária nem agregado por banco/carteira (regra 7 do system prompt). Não
+confundir com `pagos_por_cpc_pct` (boleto de 1ª parcela pago em ≤ 5 dias do
+vencimento / CPC), métrica diferente que no grão de 1 dia tende a baixo
+(boleto de hoje não venceu) e não é alarme. "Boletos estão sendo pagos?"
+direciona para `query_kpi_historico(kpi="efetividade")` (pagos no prazo /
+emitidos).
 
 Fase de plano (premissa documentada, ajustável): progresso de pagamento por
 acordo (`VR_PAGO > 0` = parcela paga) → `quitado` (tudo pago), `inicio`

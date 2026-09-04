@@ -398,12 +398,20 @@ def build_tabela_performance_periodo_query(
             qtd_acordos,
             qtd_boletos_emitidos,
             qtd_boletos_pagos,
+            -- Conversao oficial: acordos gerados sobre CPC (docs/data-layer.md).
+            CAST(
+                CASE WHEN qtd_contatos > 0
+                     THEN qtd_acordos * 100.0 / qtd_contatos
+                     ELSE 0.0
+                END AS DECIMAL(6,1)
+            ) AS conversao_pct,
+            -- Metrica distinta que antes ocupava o nome conversao_pct.
             CAST(
                 CASE WHEN qtd_contatos > 0
                      THEN qtd_boletos_pagos * 100.0 / qtd_contatos
                      ELSE 0.0
                 END AS DECIMAL(6,1)
-            ) AS conversao_pct,
+            ) AS pagos_por_cpc_pct,
             CAST(valor_total           AS DECIMAL(18,2)) AS valor_total,
             CAST(soma_primeira_parcela AS DECIMAL(18,2)) AS soma_primeira_parcela,
             qtd_reprovados,

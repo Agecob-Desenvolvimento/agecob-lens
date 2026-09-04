@@ -541,10 +541,10 @@ def test_trim_mensal_janela_12_meses_e_total():
     ]
     out = _trim_mensal(rows)
     assert len(out["data"]) == 12
-    assert out["data"][0] == {"ano": 2025, "mes": 3, "boletos_gerados": 100, "pagos_no_prazo": 50, "conversao_pct": 50.0}
+    assert out["data"][0] == {"ano": 2025, "mes": 3, "boletos_gerados": 100, "pagos_no_prazo": 50, "efetividade_boleto_pct": 50.0}
     assert out["data"][-1]["mes"] == 2
     # total recalculado sobre a janela, não média das taxas
-    assert out["total"] == {"boletos_gerados": 1300, "pagos_no_prazo": 680, "conversao_pct": 52.31}
+    assert out["total"] == {"boletos_gerados": 1300, "pagos_no_prazo": 680, "efetividade_boleto_pct": 52.31}
 
 
 def test_trim_diaria_janela_30_dias():
@@ -554,7 +554,7 @@ def test_trim_diaria_janela_30_dias():
     ]
     out = _trim_diaria(rows)
     assert len(out["data"]) == 30
-    assert out["data"][-1] == {"dia": "2026-06-01", "boletos_gerados": 20, "pagos_no_prazo": 20, "conversao_pct": 100.0}
+    assert out["data"][-1] == {"dia": "2026-06-01", "boletos_gerados": 20, "pagos_no_prazo": 20, "efetividade_boleto_pct": 100.0}
     assert out["data"][0]["dia"] == "2026-05-03"
 
 
@@ -570,7 +570,7 @@ def test_trim_por_agente_top_por_volume_e_filtro():
     assert geral["meses_considerados"] == ["2026-03", "2026-04", "2026-05"]
     assert [a["agente"] for a in geral["data"]] == ["ANTIGO", "RONIE VON", "ADRIANNA SILVA"]
     adri = next(a for a in geral["data"] if a["agente"] == "ADRIANNA SILVA")
-    assert adri == {"agente": "ADRIANNA SILVA", "boletos_gerados": 80, "pagos_no_prazo": 25, "conversao_pct": 31.25}
+    assert adri == {"agente": "ADRIANNA SILVA", "boletos_gerados": 80, "pagos_no_prazo": 25, "efetividade_boleto_pct": 31.25}
 
     um = _trim_por_agente(rows, agente="adrianna silva")
     assert um["agente"] == "ADRIANNA SILVA"

@@ -256,6 +256,11 @@ tem `agent_key`, `login`, `name`, `by_database`, `total`.
 > `todos`; `pagos/contatos` com banco individual (que também não devolve
 > `pagos_por_cpc_pct`). Trocar o banco muda a **definição** da métrica.
 >
+> ℹ Corrigido no upstream em `dominios/acordos/queries.py`: o branch de banco
+> único passa a usar `qtd_acordos / qtd_contatos` e a devolver também
+> `pagos_por_cpc_pct`, alinhando os dois branches. Esta entrega mantém o
+> comportamento descrito acima — a correção chega na próxima entrega.
+>
 > ⚠ `qtd_reprovados` casa por `LIKE` na descrição do status, não por
 > `ID_REC_STATUS = 7`.
 

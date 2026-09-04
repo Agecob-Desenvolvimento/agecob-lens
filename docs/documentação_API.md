@@ -402,13 +402,6 @@ dead API helper.
 
 ### 7.2 — Stale docs (do not use as source of truth)
 
-- `agecob-lens/docs/regras/regras-de-negocio.md` (2026-04-27, never updated) —
-  still states `STATUS_UNIVERSO_ACORDOS = (1, 3, 5, 12)`, which contradicts
-  current code. Its CPC via `CTO_COMPLEMENTO.CONTATO=1` claim is now
-  directionally correct again as of 2026-08-19 but still stale — missing the
-  `ALO=1` guard current code requires. `agecob-lens/docs/regras/id-rec-status.md`
-  is the current, code-matching sibling for the status question — use that one
-  instead.
 - `decisoes-tecnicas.md` ADR-006/012's CPC claim — see §6.
 
 ### 7.3 — Backlog gaps (already tracked in `api-contract.md`)
