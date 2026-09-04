@@ -42,8 +42,9 @@ export function useTvModeViewModel(): TvModeViewModel {
   const { selectedDatabase, dateFrom, dateTo } = useGlobalFilters();
   const home = useHomeViewModel();
 
-  // Agentes do período — mesma fonte do "Heatmap de Performance" (detalhamento),
-  // consumido pelo Modo TV Operacional.
+  // Agentes do período — mesma fonte do "Heatmap de Performance" (detalhamento).
+  // Usado só no ticket médio do ticker (Gerencial); a tabela do Operacional usa
+  // `agentesHoje` abaixo, dia fixo, mesmo raciocínio do placar do Gerencial.
   const { rows: agentesRows } = useProdutividadeData(selectedDatabase, { dateFrom, dateTo });
 
   const { data: ritmoResp } = useQuery({
@@ -248,8 +249,10 @@ export function useTvModeViewModel(): TvModeViewModel {
     }
     if (ticker.length === 0) ticker.push({ kind: "info", chip: "Aguardando", frase: "sem dados do dia até agora" });
 
-    // Agentes (Modo TV Operacional) — conversão via métrica canônica (acordos / CPC)
-    const agentes: TvAgenteRow[] = agentesRows.map((r) => ({
+    // Agentes (Modo TV Operacional) — SEMPRE hoje, independente do filtro de
+    // período (mesmo raciocínio do placar do Gerencial: `agentesHoje` já é dia
+    // fixo). Conversão via métrica canônica (acordos / CPC).
+    const agentes: TvAgenteRow[] = agentesHoje.map((r) => ({
       id: r.CHAVE,
       // nome grande = USU_MASTER.NOME, cortado no primeiro sobrenome. `agente` é
       // alias de NOME no backend; o `|| r.NOME` cobre respostas antigas em cache.
