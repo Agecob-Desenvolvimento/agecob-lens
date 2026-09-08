@@ -119,9 +119,9 @@ CTE_Financeiro_Agente AS (
         COUNT(CASE WHEN A.ID_REC_STATUS IN {settings.STATUS_EXCECAO_SQL} THEN 1 END)                                     AS qtd_excecoes,
         SUM(CASE WHEN A.ID_REC_STATUS IN {settings.STATUS_EXCECAO_SQL} THEN A.VALOR_TOTAL_ACORDO ELSE 0 END)             AS valor_excecoes,
         SUM(CASE WHEN A.ID_REC_STATUS IN {settings.STATUS_EXCECAO_SQL} THEN A.VALOR_P1 ELSE 0 END)                       AS valor_primeira_parcela_excecoes,
-        COUNT(CASE WHEN A.ID_REC_STATUS IN {settings.STATUS_REJEITADO_SQL} THEN 1 END)                                   AS qtd_rejeitados,
-        SUM(CASE WHEN A.ID_REC_STATUS IN {settings.STATUS_REJEITADO_SQL} THEN A.VALOR_TOTAL_ACORDO ELSE 0 END)           AS valor_rejeitados,
-        SUM(CASE WHEN A.ID_REC_STATUS IN {settings.STATUS_REJEITADO_SQL} THEN A.VALOR_P1 ELSE 0 END)                     AS valor_primeira_parcela_rejeitados,
+        -- rejeitados saíram daqui: contam por dívida (CTE_Rejeitados_Agente), não
+        -- por NR_RECEBIMENTO — dívida ressubmetida e rejeitada de novo gera um
+        -- NR_RECEBIMENTO novo e inflava a contagem.
         AVG(CASE WHEN A.ID_REC_STATUS IN {settings.STATUS_GERADOS_SQL}
             THEN DATEDIFF(DAY, S.DT_VENC_DIV, @Hoje) END)                                                       AS idade_media_acordos
     FROM CTE_Acordos A
@@ -214,6 +214,82 @@ CTE_Contratos_Agente AS (
       AND RD.ID_CARTEIRA = RM.ID_CARTEIRA
      WHERE RM.rn = 1
      GROUP BY RM.ID_USUARIO
+),
+-- Rejeitados (ID_REC_STATUS = 7) contados por DÍVIDA, não por NR_RECEBIMENTO.
+-- Uma dívida rejeitada, ressubmetida e rejeitada de novo, gera 2 NR_RECEBIMENTO
+-- distintos: o dedup de regravação (chave NR_RECEBIMENTO/ID_CARTEIRA/PARCELA) não
+-- pega — não é regravação da mesma linha. Junta REC_DIVIDAS e, por (ID_CARTEIRA,
+-- ID_DIVIDA), mantém só o acordo rejeitado mais recente.
+CTE_Rej_Acordo AS (
+    -- 1 linha por acordo rejeitado (NR_RECEBIMENTO, ID_CARTEIRA): valor total, 1ª
+    -- parcela e emissão mais recente. Mesmo dedup de regravação das CTEs irmãs,
+    -- filtro de status DENTRO do derived table.
+    SELECT
+        RM.ID_USUARIO,
+        RM.NR_RECEBIMENTO,
+        RM.ID_CARTEIRA,
+        SUM(RM.VALOR) AS VALOR_TOTAL_ACORDO,
+        MAX(CASE WHEN RM.PARCELA = {settings.PRIMEIRA_PARCELA} THEN RM.VALOR ELSE 0 END) AS VALOR_P1,
+        MAX(RM.DT_EMISSAO) AS DT_EMISSAO_MAX
+     FROM (
+        SELECT RM.*,
+               ROW_NUMBER() OVER (
+                   PARTITION BY RM.NR_RECEBIMENTO, RM.ID_CARTEIRA, RM.PARCELA
+                   ORDER BY RM.DT_EMISSAO DESC, RM.ID_REC DESC
+               ) AS rn
+        FROM REC_MASTER RM (NOLOCK)
+        WHERE RM.DT_EMISSAO >= @Hoje AND RM.DT_EMISSAO < @Amanha
+          AND RM.ID_REC_STATUS IN {settings.STATUS_REJEITADO_SQL}
+          {cart_filter}
+     ) RM
+     WHERE RM.rn = 1
+     GROUP BY RM.ID_USUARIO, RM.NR_RECEBIMENTO, RM.ID_CARTEIRA
+),
+CTE_Rej_Divida AS (
+    -- explode o acordo às suas dívidas; por (ID_CARTEIRA, ID_DIVIDA) mantém só o
+    -- acordo mais recente (a ressubmissão vence a tentativa anterior). Acordo sem
+    -- vínculo em REC_DIVIDAS não entra — não há dívida a contar.
+    SELECT ID_USUARIO, NR_RECEBIMENTO, ID_CARTEIRA, ID_DIVIDA
+     FROM (
+        SELECT
+            A.ID_USUARIO, A.NR_RECEBIMENTO, A.ID_CARTEIRA, RD.ID_DIVIDA,
+            ROW_NUMBER() OVER (
+                PARTITION BY A.ID_CARTEIRA, RD.ID_DIVIDA
+                ORDER BY A.DT_EMISSAO_MAX DESC, A.NR_RECEBIMENTO DESC
+            ) AS rk
+        FROM CTE_Rej_Acordo A
+        JOIN REC_DIVIDAS RD (NOLOCK)
+          ON RD.NR_RECEBIMENTO = A.NR_RECEBIMENTO
+         AND RD.ID_CARTEIRA = A.ID_CARTEIRA
+     ) z
+     WHERE z.rk = 1
+),
+CTE_Rejeitados_Agente AS (
+    -- qtd = dívidas rejeitadas distintas (acordo de N dívidas conta N). valor =
+    -- uma vez por acordo que sobreviveu em ao menos uma dívida (não soma N vezes).
+    SELECT
+        q.ID_USUARIO,
+        q.qtd_rejeitados,
+        v.valor_rejeitados,
+        v.valor_primeira_parcela_rejeitados
+     FROM (
+        SELECT ID_USUARIO, COUNT(*) AS qtd_rejeitados
+        FROM CTE_Rej_Divida
+        GROUP BY ID_USUARIO
+     ) q
+     LEFT JOIN (
+        SELECT
+            A.ID_USUARIO,
+            SUM(A.VALOR_TOTAL_ACORDO) AS valor_rejeitados,
+            SUM(A.VALOR_P1) AS valor_primeira_parcela_rejeitados
+        FROM CTE_Rej_Acordo A
+        WHERE EXISTS (
+            SELECT 1 FROM CTE_Rej_Divida D
+            WHERE D.NR_RECEBIMENTO = A.NR_RECEBIMENTO
+              AND D.ID_CARTEIRA = A.ID_CARTEIRA
+        )
+        GROUP BY A.ID_USUARIO
+     ) v ON v.ID_USUARIO = q.ID_USUARIO
 )
 SELECT
     U.CHAVE,
@@ -247,9 +323,9 @@ SELECT
     ISNULL(F.qtd_excecoes, 0) AS qtd_excecoes,
     CAST(ISNULL(F.valor_excecoes, 0) AS DECIMAL(18,2)) AS valor_excecoes,
     CAST(ISNULL(F.valor_primeira_parcela_excecoes, 0) AS DECIMAL(18,2)) AS valor_primeira_parcela_excecoes,
-    ISNULL(F.qtd_rejeitados, 0) AS qtd_rejeitados,
-    CAST(ISNULL(F.valor_rejeitados, 0) AS DECIMAL(18,2)) AS valor_rejeitados,
-    CAST(ISNULL(F.valor_primeira_parcela_rejeitados, 0) AS DECIMAL(18,2)) AS valor_primeira_parcela_rejeitados,
+    ISNULL(RJ.qtd_rejeitados, 0) AS qtd_rejeitados,
+    CAST(ISNULL(RJ.valor_rejeitados, 0) AS DECIMAL(18,2)) AS valor_rejeitados,
+    CAST(ISNULL(RJ.valor_primeira_parcela_rejeitados, 0) AS DECIMAL(18,2)) AS valor_primeira_parcela_rejeitados,
     CAST(ISNULL(F.idade_media_acordos, 0) AS DECIMAL(10,1)) AS idade_media_acordos,
     CAST(ISNULL(H.horas_trabalhadas, 0) AS DECIMAL(10,2)) AS horas_trabalhadas
 FROM USU_MASTER U (NOLOCK)
@@ -263,6 +339,8 @@ LEFT JOIN CTE_Boletos_Agente BA
     ON U.ID_USUARIO = BA.ID_USUARIO
 LEFT JOIN CTE_Contratos_Agente CT
     ON U.ID_USUARIO = CT.ID_USUARIO
+LEFT JOIN CTE_Rejeitados_Agente RJ
+    ON U.ID_USUARIO = RJ.ID_USUARIO
 WHERE
     (E.ID_USUARIO IS NOT NULL OR F.ID_USUARIO IS NOT NULL)
     {settings.FILTRO_AGENTES_EXCLUIDOS_SQL}
@@ -467,8 +545,10 @@ OPTION (USE HINT('ENABLE_PARALLEL_PLAN_PREFERENCE'), MAXDOP 0);
 def build_produtividade_hoje_params(portfolio: Optional[str]) -> Optional[Tuple[Any, ...]]:
     """Params tuple for build_produtividade_query with use_distinct_esforco=True."""
     if portfolio:
-        # One `?` per REC_MASTER reference → 5 placeholders
-        return (portfolio, portfolio, portfolio, portfolio, portfolio)
+        # One `?` per REC_MASTER reference (CTE_Acordos, CTE_Saldo_Original,
+        # CTE_Horas_Agente, CTE_Boletos_Agente, CTE_Contratos_Agente,
+        # CTE_Rej_Acordo) → 6 placeholders
+        return (portfolio,) * 6
     return None
 
 
