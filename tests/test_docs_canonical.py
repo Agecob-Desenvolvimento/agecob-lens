@@ -23,3 +23,8 @@ def _auto_findings(rel_path: str):
 def test_refactor_main_py_has_no_auto_drift():
     hits = _auto_findings("agecob-lens/docs/specs/refactor-main-py.md")
     assert not hits, [f"{h.def_key} L{h.line}: {h.found}" for h in hits]
+
+
+def test_mapa_kpis_dashboard_has_no_auto_drift():
+    hits = _auto_findings("agecob-lens/docs/specs/mapa-kpis-dashboard.md")
+    assert not hits, [f"{h.def_key} L{h.line}: {h.found}" for h in hits]

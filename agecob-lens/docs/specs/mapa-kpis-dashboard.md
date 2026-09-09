@@ -1,6 +1,10 @@
-# Mapa de KPIs do Dashboard (fonte oficial em `main.py`)
+# Mapa de KPIs do Dashboard
 
-Este documento consolida a regra de negócio que alimenta os números exibidos no dashboard hoje, com base nas queries e endpoints do backend (`../main.py`).
+Este documento consolida a regra de negócio que alimenta os números exibidos no
+dashboard. **Fonte de verdade dos valores literais: `config/settings.py`**
+(tuplas de status), `agecob-lens/docs/data-layer.md` (regras) e
+`docs/data-dictionary.md` (schema). Quando este mapa e essas fontes divergirem,
+elas ganham — `python -m scripts.drift` cruza as duas.
 
 ## Regras globais aplicadas
 
@@ -10,8 +14,8 @@ Este documento consolida a regra de negócio que alimenta os números exibidos n
   - Aprovados: `ID_REC_STATUS IN (1, 3, 12)`.
   - Exceção: `ID_REC_STATUS IN (5)` — enum chama PENDENTE; negócio chama "Exceção".
   - Rejeitado: `ID_REC_STATUS IN (7)`.
-  - Universo de acordos: `(1, 3, 5, 12)`.
-- CPC (contato com pessoa certa): `ID_COMPLEMENTO IN (252,130,110,111,253,144,151,216,140,108,90)`.
+  - Universo de acordos (pré-filtro CTE): `(1, 2, 3, 5, 10, 12)` — gerados + exceção.
+- CPC (contato com pessoa certa): `CTO_COMPLEMENTO.ALO = 1 AND CTO_COMPLEMENTO.CONTATO = 1`, join `CTO_MASTER.ID_COMPLEMENTO = CTO_COMPLEMENTO.ID_COMPLEMENTO` (ADR-013, 2026-08-19).
 - Primeira parcela: `PARCELA = 0`.
 - Expurgo de agentes (backend): `COBDESANTOS`, `NEMBUSUSER`, prefixos `ANTLIA%` e `INTERNA%`.
 
@@ -29,11 +33,11 @@ Este documento consolida a regra de negócio que alimenta os números exibidos n
 | KPI / Campo | Fórmula (como está implementado hoje) | Endpoint(s) | Origem principal |
 |---|---|---|---|
 | `qtd_acionamentos` | `COUNT(DISTINCT CM.ID_CTO_MASTER)` (produtividade) / `COUNT(CM.ID_CTO_MASTER)` (comparação) | `/dashboard/produtividade-hoje/{db}`, `/dashboard/comparacao-agentes/{db}`, `/dashboard/detalhamento-agentes/{db}`, `/dashboard/produtividade/{db}` | `CTO_MASTER` |
-| `qtd_contatos` | `COUNT(DISTINCT CASE WHEN ID_COMPLEMENTO IN CPC_IDS THEN ID_CTO_MASTER END)` (produtividade) / `COUNT(CASE WHEN ... THEN 1 END)` (comparação) | mesmos acima | `CTO_MASTER` |
+| `qtd_contatos` | `COUNT(DISTINCT CASE WHEN CC.ALO = 1 AND CC.CONTATO = 1 THEN ID_CTO_MASTER END)` (produtividade) / `COUNT(CASE WHEN ... THEN 1 END)` (comparação) | mesmos acima | `CTO_MASTER` + `CTO_COMPLEMENTO` |
 | `cpc_percentual` | `CEILING((qtd_contatos / qtd_acionamentos) * 10000) / 100` | mesmos acima | derivado de `CTO_MASTER` |
 | `qtd_acordos` | `COUNT(DISTINCT NR_RECEBIMENTO)` com status aprovados | produtividade/comparação/status-carga | `REC_MASTER` (agregado por acordo) |
 | `acordos_percentual` | `(qtd_acordos / qtd_acionamentos) * 100` | `/dashboard/produtividade-hoje/{db}` | derivado de `CTO_MASTER` + `REC_MASTER` |
-| `taxa_conversao` | `(qtd_acordos / qtd_acionamentos) * 100` | comparação/detalhamento/produtividade agregada | derivado de `CTO_MASTER` + `REC_MASTER` |
+| `taxa_conversao` | `(qtd_acordos / qtd_contatos) * 100` — acordos gerados sobre CPC (Σ `qtd_contatos`), nunca sobre `qtd_acionamentos` nem boletos emitidos | comparação/detalhamento/produtividade agregada | derivado de `CTO_MASTER` + `REC_MASTER` |
 | `valor_acordos` / `valor_total_acordos` | `SUM(valor_total_acordo)` para status aprovados | produtividade/comparação/status-carga | `REC_MASTER` (soma de parcelas por `NR_RECEBIMENTO`) |
 | `acordo_medio` | `AVG(valor_total_acordo)` para aprovados | produtividade/comparação | `REC_MASTER` |
 | `parcelamento_medio` | `AVG(PLANO)` para aprovados | produtividade/comparação | `REC_MASTER.PLANO` |
