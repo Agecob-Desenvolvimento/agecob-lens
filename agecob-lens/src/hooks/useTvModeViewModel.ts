@@ -39,13 +39,12 @@ const TV_PLACEHOLDERS = [
 ];
 
 export function useTvModeViewModel(): TvModeViewModel {
-  const { selectedDatabase, dateFrom, dateTo } = useGlobalFilters();
-  const home = useHomeViewModel();
-
-  // Agentes do período — mesma fonte do "Heatmap de Performance" (detalhamento).
-  // Usado só no ticket médio do ticker (Gerencial); a tabela do Operacional usa
-  // `agentesHoje` abaixo, dia fixo, mesmo raciocínio do placar do Gerencial.
-  const { rows: agentesRows } = useProdutividadeData(selectedDatabase, { dateFrom, dateTo });
+  const { selectedDatabase } = useGlobalFilters();
+  // Modo TV é o painel do dia — a tela inteira é hoje. O filtro de período global
+  // não alcança esta rota (não há barra de filtros aqui), então o dia é fixado na
+  // fonte: o Home VM roda com a janela de hoje e todo o resto já usa `agentesHoje`.
+  const hoje = todayStr();
+  const home = useHomeViewModel({ dateFrom: hoje, dateTo: hoje });
 
   const { data: ritmoResp } = useQuery({
     queryKey: ["tv", "ritmo-dia", selectedDatabase] as const,
@@ -57,8 +56,7 @@ export function useTvModeViewModel(): TvModeViewModel {
   // então o atingimento é mais fiel com o filtro "Todas".
   const { mediaRow: metaTotalMes } = useMetasData(null, currentMonthKey());
 
-  // 1ª parcela gerada HOJE (sempre o dia, independe do filtro global período) —
-  // numerador da meta do dia. O `realizado` do hero é do período (mês-até-hoje).
+  // 1ª parcela gerada HOJE — numerador da meta do dia e o `realizado` do hero.
   const { data: ppHojeEnv } = useQuery({
     queryKey: ["tv", "pp-dia-hoje", selectedDatabase, todayStr()] as const,
     queryFn: () => fetchPrimeiraParcelaDia(selectedDatabase, undefined, todayStr(), todayStr()),
@@ -144,25 +142,20 @@ export function useTvModeViewModel(): TvModeViewModel {
       pctEsperado,
     };
 
-    // KPIs do rodapé do placar (Acordos/CPC/Conversão/Ticket) são do DIA, como o
-    // hero — o Modo TV é o painel do dia e uma tile do período ao lado de um hero
-    // do dia lia como se fossem a mesma janela. Período segue alimentando só o
-    // ticker, que diz "no período" na própria frase.
+    // Placar e ticker são ambos do DIA — o Home VM já roda na janela de hoje.
     const totaisHoje = aggregateTotals(agentesHoje);
     const acordosHoje = agentesHoje.length ? totaisHoje.qtd_acordos_por_contrato : null;
     const cpcHoje = agentesHoje.length ? totaisHoje.qtd_contatos : null;
     const convHoje = agentesHoje.length ? calcConversao(totaisHoje) : null;
+    // Ticket médio fica no grão do ACORDO: "Qtd Acordos" conta por contrato (1 por
+    // dívida) e dividir valor por contratos daria um ticket menor que o real.
     const ticketHoje = totaisHoje.qtd_acordos > 0 ? calcTicketMedio(totaisHoje) : null;
 
-    // Totais do período — CPC = contatos (count, dicionário oficial)
+    // KPIs do ticker (do Home VM, agora na janela de hoje) — CPC = contatos
+    // (count, dicionário oficial).
     const qtdAcordos = kpiVal("Qtd Acordos");
     const cpcCount = kpiVal("CPC");
     const conv = kpiVal("Conversão %");
-    // Ticket médio fica no grão do ACORDO: o KPI "Qtd Acordos" da Home passou a
-    // contar por contrato (1 por dívida), e dividir valor por contratos daria um
-    // ticket menor que o do acordo real. Mesmas linhas/filtros do KPI da Home.
-    const ticketTotals = aggregateTotals(agentesRows);
-    const ticket = ticketTotals.qtd_acordos > 0 ? calcTicketMedio(ticketTotals) : null;
     // Referência do KPI — reaproveita o baseline que a Home já calcula (média do
     // escritório / período anterior). Sem baseline no payload, a tile omite a linha
     // em vez de mostrar placeholder.
@@ -232,14 +225,13 @@ export function useTvModeViewModel(): TvModeViewModel {
     const ticker: TvTickerItem[] = [];
     const top = home.top10PrimeiraParcela[0];
     if (top) ticker.push({ kind: "win", chip: "Líder do dia", frase: `${top.label} na 1ª parcela`, valor: tvBRLk(top.value) });
-    if (conv != null) ticker.push({ kind: "info", chip: "Conversão", frase: "acordos sobre CPC no período", valor: tvPct(conv) });
+    if (conv != null) ticker.push({ kind: "info", chip: "Conversão", frase: "acordos sobre CPC hoje", valor: tvPct(conv) });
     if (buTotal && bu[0]) {
       const share = Math.round(((bu[0].valor ?? 0) / buTotal) * 100);
-      // `bu` vem de home.financeiroData — escopo do filtro global, não do dia
-      ticker.push({ kind: "info", chip: bu[0].bu, frase: "da 1ª parcela do período", valor: `${share}%` });
+      ticker.push({ kind: "info", chip: bu[0].bu, frase: "da 1ª parcela do dia", valor: `${share}%` });
     }
     if (cpcCount != null) ticker.push({ kind: "info", chip: "CPC", frase: "contatos com a pessoa certa", valor: tvNum(cpcCount) });
-    if (qtdAcordos != null) ticker.push({ kind: "win", chip: "Acordos", frase: `${tvNum(qtdAcordos)} no período · ticket médio`, valor: tvBRLk(ticket) });
+    if (qtdAcordos != null) ticker.push({ kind: "win", chip: "Acordos", frase: `${tvNum(qtdAcordos)} hoje · ticket médio`, valor: tvBRLk(ticketHoje) });
     if (typeof home.insight?.description === "string" && home.insight.description.trim()) {
       const positivo = home.insight.variant === "positive";
       // teto no builder, não com ellipsis no CSS: o rodapé pagina uma frase por vez
@@ -249,9 +241,8 @@ export function useTvModeViewModel(): TvModeViewModel {
     }
     if (ticker.length === 0) ticker.push({ kind: "info", chip: "Aguardando", frase: "sem dados do dia até agora" });
 
-    // Agentes (Modo TV Operacional) — SEMPRE hoje, independente do filtro de
-    // período (mesmo raciocínio do placar do Gerencial: `agentesHoje` já é dia
-    // fixo). Conversão via métrica canônica (acordos / CPC).
+    // Agentes (Modo TV Operacional) — hoje, como o resto do painel.
+    // Conversão via métrica canônica (acordos / CPC).
     const agentes: TvAgenteRow[] = agentesHoje.map((r) => ({
       id: r.CHAVE,
       // nome grande = USU_MASTER.NOME, cortado no primeiro sobrenome. `agente` é
@@ -282,5 +273,5 @@ export function useTvModeViewModel(): TvModeViewModel {
       agentes,
       placeholders: TV_PLACEHOLDERS,
     };
-  }, [home, ritmoResp, metaTotalMes, ppHojeEnv, ppOntemEnv, agentesHoje, agentesRows, selectedDatabase]);
+  }, [home, ritmoResp, metaTotalMes, ppHojeEnv, ppOntemEnv, agentesHoje, selectedDatabase]);
 }

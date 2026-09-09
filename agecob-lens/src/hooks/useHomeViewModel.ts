@@ -46,8 +46,15 @@ import {
 } from "@/selectors/homeSelectors";
 import type { HomeViewModel, PortfolioRiskEntry } from "@/types/viewModels";
 
-export function useHomeViewModel(): HomeViewModel {
-  const { selectedDatabase, dateFrom, dateTo } = useGlobalFilters();
+/**
+ * @param windowOverride força a janela de datas, ignorando o filtro global de
+ * período. Usado pelo Modo TV, que não tem barra de filtros e é sempre o dia.
+ */
+export function useHomeViewModel(windowOverride?: { dateFrom: string; dateTo: string }): HomeViewModel {
+  const globalFilters = useGlobalFilters();
+  const selectedDatabase = globalFilters.selectedDatabase;
+  const dateFrom = windowOverride?.dateFrom ?? globalFilters.dateFrom;
+  const dateTo = windowOverride?.dateTo ?? globalFilters.dateTo;
   const { rows, loading, error: loadError, warnings, refresh } = useProdutividadeData(
     selectedDatabase,
     { dateFrom, dateTo },
