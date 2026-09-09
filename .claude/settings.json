@@ -43,6 +43,18 @@
             "command": "git diff --name-only | grep -E 'agecob-lens/.*\\.(ts|tsx|css)$' && (COUNT=$(cat .claude/loop_count.txt 2>/dev/null || echo 0); COUNT=$((COUNT+1)); echo $COUNT > .claude/loop_count.txt; if [ $COUNT -gt 4 ]; then echo 'ERRO CRÍTICO: Limite de 4 tentativas de auto-correção atingido no Loop Engineering. Parada forçada para análise humana.' && rm -f .claude/loop_count.txt && exit 1; fi; cd agecob-lens && npm run lint && npm run build) || echo 'Fix simples ou fora do front detectado. Pulando build pesado.'"
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "bash",
+            "command": "bash .claude/drift-after-graphify.sh",
+            "timeout": 90,
+            "statusMessage": "Drift sweep pos-graphify..."
+          }
+        ]
       }
     ],
     "Stop": [
