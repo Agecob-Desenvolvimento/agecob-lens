@@ -33,3 +33,8 @@ def test_mapa_kpis_dashboard_has_no_auto_drift():
 def test_regras_de_negocio_has_no_auto_drift():
     hits = _auto_findings("agecob-lens/docs/regras/regras-de-negocio.md")
     assert not hits, [f"{h.def_key} L{h.line}: {h.found}" for h in hits]
+
+
+def test_agecob_lens_claude_md_has_no_auto_drift():
+    hits = _auto_findings("agecob-lens/docs/CLAUDE.md")
+    assert not hits, [f"{h.def_key} L{h.line}: {h.found}" for h in hits]
