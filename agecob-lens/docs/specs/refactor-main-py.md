@@ -1,5 +1,13 @@
 # Refactor `main.py` — Agecob COBweb Dashboard API
 
+> **SUPERSEDED (2026-09-09).** This refactor was completed; `main.py` is now split
+> across `api/`, `core/`, `dominios/`, `config/` (ADR-001). Kept for the record.
+> The constant values below were stale — **the source of truth is
+> `config/settings.py`** (literal tuples), `agecob-lens/docs/data-layer.md`
+> (business rules), and `docs/data-dictionary.md` (schema). Do not treat this file
+> as a live contract; `docs/audits/` and `python -m scripts.drift` cross-check the
+> current values.
+
 ## Role
 
 You are a senior backend engineer working on the Agecob COBweb dashboard API (`main.py`, FastAPI + SQL Server via pyodbc). The codebase serves a real production dashboard that reads from two SQL Server databases (`COBwebRCBCONSUMER` and `COBwebRCBAUTOS`) and exposes aggregated KPIs about debt collection agents.
@@ -14,8 +22,8 @@ Before touching anything, read these constraints and treat them as hard limits. 
 
 - `STATUS_APROVADOS = (1, 3, 12)` — approved agreements (ATIVO + BAIXA POR PAGAMENTO + BAIXA POR PAGAMENTO AVULSO).
 - `STATUS_EXCECAO = (5,)` — business "Exception" maps to enum PENDENTE (5), NOT enum EXCEÇÃO (11). Source of truth: `docs/regras/id-rec-status.md`.
-- `STATUS_UNIVERSO_ACORDOS = (1, 3, 5, 12)` — universe of considered agreements.
-- `CPC_COMPLEMENTO_IDS = (252, 130, 110, 111, 253, 144, 151, 216, 140, 108, 90)` — hardcoded, manually managed by the data scientist. Do not change, do not move to DB config, do not make dynamic.
+- `STATUS_UNIVERSO_ACORDOS = (1, 2, 3, 5, 10, 12)` — CTE pre-filter (generated + exception). Derived in `config/settings.py`, never a literal — QUEBRA (2) / QUEBRA AUTOMÁTICA (10) must survive the pre-filter.
+- CPC (contato com a pessoa certa) = `CTO_COMPLEMENTO.ALO = 1 AND CTO_COMPLEMENTO.CONTATO = 1`, joined on `CTO_MASTER.ID_COMPLEMENTO = CTO_COMPLEMENTO.ID_COMPLEMENTO` (ADR-013, 2026-08-19 — the earlier curated `COD_COMPLEMENTO` allowlist is retired).
 - `PRIMEIRA_PARCELA = 0` — the first installment in COBweb is `PARCELA = 0`, not 1. Do not "normalize" this.
 - `PORTFOLIO_COLUMN = "CAMPO010"` — portfolio/bank name lives in `DIV_AUX.CAMPO010`, not in `CART_MASTER`. This is an integrator decision, do not change it.
 - Excluded agents: exact names `COBDESANTOS`, `NEMBUSUSER` and prefixes `ANTLIA%`, `INTERNA%`. The SQL-side filter (`FILTRO_AGENTES_EXCLUIDOS_SQL`) is the source of truth.
@@ -23,7 +31,7 @@ Before touching anything, read these constraints and treat them as hard limits. 
 - KPI formulas in `mapa-kpis-dashboard.md` are the contract. Every formula there must still hold after the refactor. In particular:
   - `desconto_medio_percentual = AVG(VALOR_ACORDO / VR_SALDO_ORIGINAL * 100)` with `VR_ORIGINAL > 0` guard.
   - `qtd_acionamentos` uses `COUNT(DISTINCT ID_CTO_MASTER)` in the produtividade-hoje query and `COUNT(ID_CTO_MASTER)` in the comparacao-agentes query. This granularity difference is **intentional** — preserve both behaviors.
-  - `taxa_conversao = qtd_acordos / qtd_acionamentos * 100`.
+  - `taxa_conversao = qtd_acordos / qtd_contatos * 100` — acordos gerados sobre CPC (Σ `qtd_contatos`), never over `qtd_acionamentos` or boletos emitted (2026-07-15, ADR / `data-layer.md`).
 
 ### Endpoints that MUST keep their paths and response shapes
 
@@ -166,6 +174,6 @@ After the refactor, produce a short markdown report containing:
 - Line count before / after.
 - The endpoint-by-endpoint diff verification results (pass / fail per endpoint).
 - Any query where `FILTRO_AGENTES_EXCLUIDOS_SQL` had to be added during Change 2, with the commit/line reference.
-- An explicit confirmation that `STATUS_APROVADOS`, `STATUS_EXCECAO`, `CPC_COMPLEMENTO_IDS`, `PRIMEIRA_PARCELA`, and `PORTFOLIO_COLUMN` were not modified.
+- An explicit confirmation that `STATUS_APROVADOS`, `STATUS_EXCECAO`, `STATUS_UNIVERSO_ACORDOS`, `PRIMEIRA_PARCELA`, and `PORTFOLIO_COLUMN` were not modified.
 
 If any change would require touching something in the "NOT allowed to change" or "Out of scope" list, stop and surface the conflict instead of working around it.

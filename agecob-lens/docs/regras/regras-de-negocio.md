@@ -88,8 +88,8 @@ O mesmo agente pode existir em `COBwebRCBCONSUMER` e `COBwebRCBAUTOS`. Regra:
 | KPI | Fórmula | Nota |
 |---|---|---|
 | CPC | `Σ qtd_contatos` (contagem) | CPC = Contatos, só que com outro nome. Unidade: count, **não** %. |
-| Taxa de contato % | `CEILING((qtd_contatos / qtd_acionamentos) × 10000) / 100` | a razão. Rotular sempre "Taxa de contato", nunca "CPC". |
-| Taxa de conversão | `qtd_acordos / qtd_acionamentos × 100` | |
+| Taxa de contato % | `CEILING((qtd_alo / qtd_acionamentos) × 10000) / 100` | a razão. Rotular sempre "Taxa de contato", nunca "CPC". Numerador é `qtd_alo` (atendeu), não `qtd_contatos` (CPC). |
+| Taxa de conversão | `qtd_acordos / qtd_contatos × 100` | acordos gerados sobre CPC (Σ `qtd_contatos`), nunca sobre `qtd_acionamentos` nem boletos emitidos |
 | Desconto médio % | `AVG(valor_total_acordo / VR_SALDO × 100)` | guarda `VR_ORIGINAL > 0` |
 | Valor primeira parcela | produtividade: `AVG(VALOR_P1)` · comparação: `SUM(VALOR_P1)` | granularidade intencional |
 | qtd_acionamentos | produtividade: `COUNT(DISTINCT)` · comparação: `COUNT` sem DISTINCT | diferença intencional |
