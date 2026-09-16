@@ -81,8 +81,16 @@ documented exceptions (§4.7).
 - Sets `conn.timeout = DB_QUERY_TIMEOUT_SECONDS` (default 60s) per query — the
   connect-time timeout only covers login.
 - `pyodbc.Error` with SQLSTATE `HYT*` → HTTP `504` (distinguishable "slow" from
-  "broken"); any other DB error → `500`. Both wrapped in the response envelope's
-  `errors[]`, never a bare stack trace.
+  "broken"); any other DB error → `500`. Both surface as FastAPI's **default
+  `HTTPException` body** — `{"detail": "..."}` with no `meta`/`data`/`errors` keys.
+
+> **Corrected 2026-09-16.** This used to claim both are "wrapped in the response
+> envelope's `errors[]`". They are not. `run_query` raises `fastapi.HTTPException`
+> (`core/database/query_executor.py:85-92`, `:104-107`), and `main.py:71` registers
+> **only** `@app.exception_handler(Exception)`. FastAPI's built-in `HTTPException`
+> handler wins, so the envelope never runs for DB errors — nor for `401` or `429`.
+> The envelope applies **only** to unhandled non-HTTP exceptions (`main.py:71-91`).
+> A client parsing `errors[]` on a timeout will find nothing there.
 
 ### Cache (`core/cache/cache_manager.py`)
 
@@ -120,12 +128,21 @@ Option B: Lovable hosts production and calls this API over the public internet).
 
 ### What requires auth (`api/middleware.py:22`, `security_middleware`)
 
-Only `/` is open. Every other prefix — `/dashboard/`, `/efetividade/`,
-`/regressao/`, `/health/`, `/admin/`, `/agente/` — requires auth *when
-`REQUIRE_API_AUTH=true`*. `/health/*` is gated too (monitoring tools need the
+Auth is an explicit prefix **allowlist**, not deny-by-default. Six prefixes require
+auth *when `REQUIRE_API_AUTH=true`*: `/dashboard/`, `/efetividade/`, `/regressao/`,
+`/health/`, `/admin/`, `/agente/`. `/health/*` is gated too (monitoring tools need the
 credential in prod).
 
-### Rate limiting (`api/dependencias.py:41`, `rate_limit_dashboard`)
+> **Corrected 2026-09-16.** This used to read "Only `/` is open. Every other prefix …".
+> That inverts the logic. `api/middleware.py:23` computes `open_paths = {"/"}` into the
+> log field `in_open`, but **never consults it for gating** — the only gate is the
+> six-prefix `startswith` check at `:27-34`. Any path outside those six bypasses auth
+> entirely, including the `/assets` static mount and the SPA catch-all
+> (`api/static.py:33`, `:42`). Today nothing sensitive lives outside the six prefixes,
+> but a new router added without its prefix being listed here would be unauthenticated
+> by default rather than protected by default.
+
+### Rate limiting (`api/dependencias.py:44`, `rate_limit_dashboard`; prefixes at `:41`)
 
 - `75` requests / `60`s window, bucketed by `(client_ip, api_key)`.
 - Applies only to `/dashboard/`, `/agente/`, `/admin/`, `/regressao/` — `/health/`
@@ -149,7 +166,7 @@ production.
 
 `CORS_ALLOW_ORIGINS` env (default `http://127.0.0.1:5173,http://localhost:5173`).
 `CORS_ALLOW_CREDENTIALS` forced `false` if `*` is in the origin list
-(`config/settings.py:263-273`).
+(`config/settings.py:245-259`).
 
 ---
 
@@ -159,7 +176,7 @@ Beyond what's already in `README.md`'s table:
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `RATE_LIMIT_REQUESTS` / `RATE_LIMIT_WINDOW_SECONDS` | `75` / `60` | Hardcoded, not env-driven (`config/settings.py:281-282`) |
+| `RATE_LIMIT_REQUESTS` / `RATE_LIMIT_WINDOW_SECONDS` | `75` / `60` | Hardcoded, not env-driven (`config/settings.py:267-268`) |
 | `ENABLE_VALIDATED_ROUTES` | `true` | Kill switch for all `/dashboard/*` |
 | `DASHBOARD_CACHE_MAX_ENTRIES` | `500` | Cache eviction ceiling |
 | `DB_QUERY_TIMEOUT` | `60` | Per-query timeout (seconds), maps to `conn.timeout` |
@@ -230,7 +247,7 @@ except where noted.
 | GET | `/excecoes-detalhe-agente/{db}/{agente}` |
 | GET | `/rejeitados-detalhe-agente/{db}/{agente}` |
 | GET | `/quebrados-detalhe-agente/{db}/{agente}` |
-| GET | `/benchmarks/{db}` (`?lookback_months=9`) |
+| GET | `/benchmarks/{db}` (`?lookback_months=3`, `ge=1 le=12`) |
 | GET | `/metas` |
 | POST | `/metas/upload` (`multipart/form-data`, field `file`) |
 | GET | `/real-por-portfolio/{db}` |
@@ -308,7 +325,7 @@ for two sibling docs that are **stale** and contradict this.
 | 11 | EXCEÇÃO | Off-standard negotiation awaiting bank approval — **not** what the dashboard calls "Exceção" (that's ID 5) |
 | 12 | BAIXA PAGTO AVULSO | Client paid a different amount than billed |
 
-### Derived constants (`config/settings.py:45-65`)
+### Derived constants (`config/settings.py:45-66`)
 
 ```python
 STATUS_APROVADOS        = (1, 3, 12)
@@ -318,6 +335,7 @@ STATUS_QUEBRADO         = (2,)
 STATUS_QUEBRA_AUTOMATICA = (10,)
 STATUS_GERADOS          = (1, 2, 3, 10, 12)        # approved + both break types
 STATUS_UNIVERSO_ACORDOS = (1, 2, 3, 5, 10, 12)     # generated + exception
+STATUS_PORTFOLIO_ROLLUP = (1, 2, 3, 5, 7, 10, 12)  # + rejeitado (7) — base de /portfolio-rollup
 ```
 
 `STATUS_GERADOS` is the base for every "generated value" KPI: `valor_acordos`,
@@ -347,7 +365,7 @@ The `AND ALO=1` guard keeps the funnel monotonic:
 |---|---|
 | First installment | `PARCELA = 0` (never normalize to 1) |
 | Portfolio | `DIV_AUX.CAMPO010`, resolved via `CROSS APPLY TOP 1` (never a plain `JOIN` — row multiplication) |
-| Excluded agents | `COBDESANTOS`, `ANTLIA%`, `INTERNA%`, `suporte%`, `SISTEMA%` — filtered **only** in SQL (`FILTRO_AGENTES_EXCLUIDOS_SQL`), never post-processed in Python |
+| Excluded agents | by `NOME`: `COBDESANTOS`, `FT5SYSTEM`, `NEMBUSUSER`, `ANTLIA%`, `INTERNA%`; by `CHAVE`: `NEMBUSUSER`, `INTERNA%`, `SUPORTE%`, `SISTEMA%` — 9 clauses, all `UPPER(LTRIM(RTRIM(...)))`, filtered **only** in SQL (`FILTRO_AGENTES_EXCLUIDOS_SQL`, `config/settings.py:196-206`), never post-processed in Python. **`/efetividade/*` uses a different, deliberately divergent list** (`FILTRO_AGENTES_EFETIVIDADE_SQL`, `:212-227` — substring match, also excludes `SERASA`/`NEMBUS`); unifying them is a pending business decision. |
 | Agent key | `USU_MASTER.CHAVE`, not `COD_USUARIO` |
 | Cross-database agents | Separate entities per database by default; consolidated only via `CHAVE` match in `/produtividade-agentes` |
 | Two grains of `qtd_acordos` | `qtd_acordos` (per-agreement) drives ticket médio and Conversão %; `qtd_acordos_por_contrato` (per-contract) is **only** the Home global KPI card — never use as a denominator |
@@ -374,7 +392,7 @@ The `AND ALO=1` guard keeps the funnel monotonic:
 **Why §5 overrides ADR-006 here:** `decisoes-tecnicas.md` was last updated
 2026-05-29. `data-layer.md` documents CPC events through 2026-07-27 (the
 `COD_COMPLEMENTO` code curation) and is the mandatory-read source of truth for
-data work. Verified directly against `config/settings.py:82` — the code matches
+data work. Verified directly against `config/settings.py:71-73` — the code matches
 `data-layer.md`, not the ADR file.
 
 ---
@@ -408,8 +426,18 @@ dead API helper.
 
 Listed there in full; summarized here for visibility: no per-BU/per-day meta
 breakdown (PDF is quarterly/per-portfolio only), no multi-metric `/ritmo-dia`
-heatmap (only acordos + valor), no server-side team median (frontend-computed
-from `/produtividade-hoje` rows).
+heatmap (only acordos + valor).
+
+> **Corrected 2026-09-16.** The "no server-side team median" item is closed:
+> `/dashboard/benchmarks/{db}` returns `q1`/`median`/`q3`/`top10_mean`/`mean` per metric
+> (`api/routers/dashboard.py:1042-1053`), consumed at
+> `agecob-lens/src/services/api.ts:440`. The only frontend-computed median left is the
+> scatter decision boundary in `ImprovedScatterPlot.tsx`.
+>
+> Also note the **backend default is `lookback_months=3`** (`dashboard.py:1018`), but
+> the frontend always passes **9** (`api.ts:770`) and the KPI tooltip advertises a
+> 9-month window. Neither number is wrong — they are different layers — but
+> `benchmark-plan.md` documented the frontend default as 3, which was.
 
 ---
 

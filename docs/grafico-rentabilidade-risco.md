@@ -1,5 +1,24 @@
 # Gráfico: 1ª Parcela por Portfólio · Rentabilidade & Risco
 
+> **Nota de auditoria (2026-09-16).** O componente evoluiu depois deste documento:
+>
+> - **Denominador do risco** é o universo do período — `valor_primeira_parcela +
+>   valor_excecoes + valor_rejeitados` — e não só `valor_primeira_parcela`. A mudança foi
+>   feita justamente porque dividir só pelo valor gerado estourava 100%.
+> - **Não há mais clamp por dimensão nem `console.warn`.** O único `Math.min(..., 100)`
+>   restante é a largura CSS da barra empilhada. O bloco de troubleshooting que manda
+>   procurar `[HandoffPortfolioRentabilidade] Risco >100%` no console está obsoleto —
+>   esse aviso não existe mais, e o estouro que ele descrevia é estruturalmente
+>   impossível para exceções/rejeitados agora que entram no denominador.
+> - **Ordenação é valor → risco → qtd** (valor de 1ª parcela primeiro), não
+>   risco → qtd → valor.
+> - **Top 15 é só a primeira página:** um botão "Mostrar mais" revela +10 por vez
+>   (`PAGE_SIZE = 10`) até a lista inteira, e `maxBar` recalcula sobre a fatia visível.
+> - As tabelas de referência de arquivo/linha ao final estão defasadas (backend,
+>   `api.ts`, `useHomeViewModel.ts`, `viewModels.ts`, componente e página mudaram de
+>   linha). Prefira buscar pelo nome do símbolo.
+
+
 > Documento técnico para análise — 2026-06-08
 
 ---

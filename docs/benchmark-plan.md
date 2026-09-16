@@ -1,5 +1,39 @@
 # Benchmark Interno — Plano de Implementação
 
+> **Nota de auditoria (2026-09-16).** Este plano foi escrito antes da implementação e o
+> que shipou diverge dele em pontos que mudam números. Confira contra o código antes de
+> reusar qualquer SQL ou snippet daqui:
+>
+> - **CPC** no CTE de esforço é `CC.ALO = 1 AND CC.CONTATO = 1` (definição pós-2026-08,
+>   ADR-013). A forma antiga sem o guard de `ALO = 1` foi **retired** e é larga demais.
+>   O CTE também emite `teve_alo`, que vira o denominador de `taxa_contato`.
+> - **`avg_taxa_contato`** = `qtd_contatos / qtd_alo`, **não** sobre `qtd_acionamentos`
+>   (`dominios/produtividade/queries.py:643`).
+> - **`avg_efetividade_caixa`** = 1ª parcela **recebida** (`VR_PAGO`) / 1ª parcela
+>   emitida (`VALOR`) — razão de conversão em caixa, não fatia do valor do acordo
+>   (`queries.py:646-647`).
+> - **Universo de status** é `STATUS_UNIVERSO_ACORDOS` = (1, 2, 3, 5, 10, 12), não
+>   `(1,3,5,12)`: quebra (2) e quebra automática (10) precisam sobreviver ao pré-filtro.
+>   `qtd_acordos` e `valor_p1` são contados sobre `STATUS_GERADOS` = (1, 2, 3, 10, 12).
+> - **`lookbackMonths`**: o backend tem default `3` (`api/routers/dashboard.py:1018`),
+>   mas o frontend sempre envia **9** (`agecob-lens/src/services/api.ts:770`), e o
+>   tooltip do KPI anuncia 9 meses. O `= 3` no snippet deste plano está errado para a
+>   camada de frontend.
+> - **O endpoint devolve `mean`** além de q1/median/q3/top10_mean — e é `mean` que a
+>   faixa de KPIs da Home renderiza.
+> - **O benchmark exibido é a média do escritório** ("Média do escritório"), não
+>   "Top 10". `top10_mean` só alimenta os cards de diagnóstico por BU.
+> - **`benchmark` virou `benchmarks`** (array) nas duas interfaces, e o card itera
+>   sobre ele; o memo chama-se `bench` e é ciente de banco (só faz média dos dois no
+>   modo "todos").
+> - **Filtro de agentes**: use a constante `FILTRO_AGENTES_EXCLUIDOS_SQL` — a lista
+>   inline deste plano omite `FT5SYSTEM` e não normaliza caixa/espaços.
+> - **Latência**: medida em produção a p50 9,5s (AUTOS) e 5,0s (CONSUMER), pico 27s —
+>   por isso o frontend desativou o poll global de 120s e usa `staleTime` de 1h nessas
+>   duas queries. O plano estimava 2–5s.
+
+
+
 ## Objetivo
 
 Adicionar benchmarks internos baseados em quartis históricos aos KPIs do dashboard
@@ -42,7 +76,8 @@ WITH CTE_Esforco_Diario AS (
         CM.ID_USUARIO,
         CAST(CM.DATA AS DATE) AS dia,
         CM.ID_DEV,
-        MAX(CASE WHEN CC.CONTATO = 1 THEN 1 ELSE 0 END) AS teve_contato
+        MAX(CASE WHEN CC.ALO = 1 THEN 1 ELSE 0 END) AS teve_alo,
+        MAX(CASE WHEN CC.ALO = 1 AND CC.CONTATO = 1 THEN 1 ELSE 0 END) AS teve_contato
     FROM dbo.CTO_MASTER CM (NOLOCK)
     LEFT JOIN dbo.CTO_COMPLEMENTO CC (NOLOCK)
         ON CM.ID_COMPLEMENTO = CC.ID_COMPLEMENTO
@@ -137,7 +172,8 @@ WITH CTE_Esforco_Diario AS (
         CM.ID_USUARIO,
         CAST(CM.DATA AS DATE) AS dia,
         CM.ID_DEV,
-        MAX(CASE WHEN CC.CONTATO = 1 THEN 1 ELSE 0 END) AS teve_contato
+        MAX(CASE WHEN CC.ALO = 1 THEN 1 ELSE 0 END) AS teve_alo,
+        MAX(CASE WHEN CC.ALO = 1 AND CC.CONTATO = 1 THEN 1 ELSE 0 END) AS teve_contato
     FROM dbo.CTO_MASTER CM (NOLOCK)
     LEFT JOIN dbo.CTO_COMPLEMENTO CC (NOLOCK)
         ON CM.ID_COMPLEMENTO = CC.ID_COMPLEMENTO

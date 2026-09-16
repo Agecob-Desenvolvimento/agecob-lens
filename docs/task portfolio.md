@@ -1,3 +1,15 @@
+
+> **Nota de auditoria (2026-09-16).** Briefing original; três pontos não descrevem o que
+> foi entregue:
+>
+> - **O PDF não traz nomes de negociadores.** A coluna 4 é `Qtd Negociadores`, um
+>   headcount fracionário; a linha extraída é chaveada só por carteira.
+> - **Entregue na página Carteiras** (rota `/carteiras`, criada para isso), não em
+>   "detalhamento-agentes".
+> - **A linha de resumo soma as metas das carteiras** (meta do escritório); não calcula
+>   a média dos negociadores filtrados.
+> - O log de erro é `dados_metas/erro_extracao.log` (sem acento).
+
 Atue como um Engenheiro de Software Sênior especializado em dashboards de dados e automação de ETL. 
 
 **CONTEXTO DO PROJETO:**

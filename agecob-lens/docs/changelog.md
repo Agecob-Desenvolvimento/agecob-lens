@@ -9,6 +9,14 @@ updated: 2026-05-19
 
 Registro unificado de todas as mudanças significativas no projeto, em ordem cronológica reversa. Substitui o `github-changelog.md` anterior.
 
+> **Nota de leitura (2026-09-16).** Este é um registro cronológico — as entradas abaixo
+> descrevem o que era verdade na data de cada uma e **não** foram reescritas. Duas
+> podem ser mal lidas como estado atual: "Estrutura DDL de `fato_produtividade_portfolio`
+> definida" e "Query base do job de agregação validada em produção" significam que o
+> desenho foi feito e a query medida, **não** que a tabela exista. Em 2026-09-16 não há
+> tabela fato, nem job de agregação, nem arquivo `.sql` no repositório — ver a nota de
+> status em `regras/decisoes-tecnicas.md` ADR-003.
+
 ---
 
 ## 2026-05-19 — Reorganização e enxugamento da documentação

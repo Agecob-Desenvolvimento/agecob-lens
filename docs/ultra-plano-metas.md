@@ -1,5 +1,31 @@
 # Ultra-Plano: Visualização de Metas (PDF → Dashboard)
 
+> **Nota de auditoria (2026-09-16).** Plano escrito antes da implementação; o que shipou
+> difere em pontos que mudam o significado da tela. Antes de reusar:
+>
+> - **A linha de resumo soma, não faz média.** "Total da carteira" é a soma de
+>   `meta_pnt`/`meta_caixa`/`meta_retomadas_valor` de todas as carteiras — a meta do
+>   escritório. O headcount entra só como rótulo. Não há divisão por
+>   `qtd_negociadores`, e o banner de aviso diz o oposto do que este plano previa.
+> - **O painel compara Meta Caixa × Caixa Recebido**, não PNT: o título é "Meta Caixa vs
+>   Caixa Recebido", filtro e ordenação são por `meta_caixa`, e o lado "real" é
+>   `SUM(VR_PAGO)`.
+> - **Ordenação é por `meta_caixa` decrescente** (maior meta primeiro), não por % de
+>   atingimento crescente.
+> - **O painel vive na página Carteiras** (rota `/carteiras`), não em
+>   `DetalhamentoAgentes.tsx`. Não existe nenhum componente `MetaEditor`.
+> - **Os meses vêm do PDF** (`meta.meses`), não da constante
+>   `MESES = ["202604","202605","202606"]`; `MetaMensal` é `Record<string, number>`.
+> - **As chaves de checksum carregam o literal `202604`** (`checksum_pnt_202604`,
+>   `checksum_total_geral_202604`) mesmo em trimestres posteriores.
+> - **A rota declara `@router.get("/metas")`** — o `/dashboard` vem do prefixo do
+>   router. Copiar `@router.get("/dashboard/metas")` montaria em
+>   `/dashboard/dashboard/metas`.
+> - **A pendência do §B3 foi resolvida:** existe `GET /dashboard/real-por-portfolio/{db}`
+>   (`api/routers/dashboard.py:1115`), que resolve a carteira via `CROSS APPLY TOP 1`.
+> - O log de erro é `dados_metas/erro_extracao.log` (sem acento).
+
+
 **Data da análise do PDF:** 2026-06-12
 **Arquivo origem:** `docs/document_pdf.pdf`
 **Período:** 2T26 (abril–junho 2026)

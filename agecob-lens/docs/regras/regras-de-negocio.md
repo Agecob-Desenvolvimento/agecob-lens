@@ -7,7 +7,11 @@ updated: 2026-08-19
 
 # Regras de Negócio COBweb
 
-Fonte de verdade para todas as regras de negócio que governam o agecob-lens. Qualquer mudança aqui deve se propagar para o `main.py`, o `mapa-kpis-dashboard.md`, e os docs de pipeline.
+Fonte de verdade para todas as regras de negócio que governam o agecob-lens. Qualquer mudança aqui deve se propagar para `config/settings.py` (constantes de status, CPC e filtros), os builders de SQL em `dominios/`, o `mapa-kpis-dashboard.md` e os docs de pipeline.
+
+> `main.py` **não** carrega regra de negócio desde a modularização de 2026-05-05
+> ([[decisoes-tecnicas#ADR-014]]): são 115 linhas de bootstrap, sem nenhuma rota nem
+> constante. A referência a propagar para o `main.py` foi corrigida em 2026-09-16.
 
 ---
 
@@ -26,10 +30,17 @@ Um acionamento qualifica como contato (CPC) quando alguém atendeu E o
 complemento está marcado como contato no cadastro (regra vigente desde
 2026-08-19):
 
+```sql
+LEFT JOIN CTO_COMPLEMENTO CC (NOLOCK) ON CM.ID_COMPLEMENTO = CC.ID_COMPLEMENTO
+...
+COUNT(DISTINCT CASE WHEN CC.ALO = 1 THEN CM.ID_DEV END)                     AS qtd_alo,
+COUNT(DISTINCT CASE WHEN CC.ALO = 1 AND CC.CONTATO = 1 THEN CM.ID_DEV END)  AS qtd_contatos
 ```
-JOIN CTO_COMPLEMENTO CC ON CM.ID_COMPLEMENTO = CC.ID_COMPLEMENTO
-... CC.ALO = 1 AND CC.CONTATO = 1
-```
+
+O join é **LEFT** e o predicado vive dentro do agregado condicional, nunca no `WHERE`
+(`dominios/produtividade/queries.py:138-142`). Isso é essencial para o funil: um
+acionamento sem complemento correspondente ainda conta em `qtd_acionamentos`. Um
+`JOIN` interno descartaria essas linhas e quebraria `acionamentos ≥ alô ≥ CPC`.
 
 **Gestão:** dirigido por dado (`CTO_COMPLEMENTO.ALO` + `CTO_COMPLEMENTO.CONTATO`), mantido no cadastro do sistema. O `AND ALO=1` evita que codigos com `CONTATO=1` mas sem atendimento real (ex.: `UNALLOCATED_NUMBER`) quebrem o funil `acionamentos ≥ alô ≥ CPC`. Entre 2026-07 e 2026-08-19 a regra foi uma lista curada de `COD_COMPLEMENTO` (`CPC_COMPLEMENTO_CODS`); ver `data-layer.md` para o histórico.
 
@@ -37,7 +48,7 @@ JOIN CTO_COMPLEMENTO CC ON CM.ID_COMPLEMENTO = CC.ID_COMPLEMENTO
 
 | Termo | Definição | Filtro técnico |
 |---|---|---|
-| **Acionamento** | Qualquer tentativa de contato | Todo `ID_CTO_MASTER` (sem filtro de complemento) |
+| **Acionamento** | Qualquer tentativa de contato | Linhas de `CTO_MASTER` sem filtro de complemento. A **unidade de contagem depende do ramo**: `COUNT(DISTINCT CM.ID_DEV)` (devedores únicos) em `/produtividade-hoje` e `/status-carga`; `COUNT(*)` nos demais. Ver "Granularidade Intencional". |
 | **Contato (CPC)** | Contato efetivado com a pessoa certa | `CTO_COMPLEMENTO.ALO = 1 AND CTO_COMPLEMENTO.CONTATO = 1` (via JOIN por `ID_COMPLEMENTO`) |
 | **Acordo aprovado** | Acordo em status ativo ou baixado | `ID_REC_STATUS IN (1, 3, 12)` |
 | **Exceção** | Acordo pendente de aprovação bancária | `ID_REC_STATUS = 5` (enum REC_MASTER nomeia PENDENTE) |
@@ -67,11 +78,25 @@ Agentes que são contas de sistema e devem ser filtrados de toda exibição:
 
 | Tipo | Valor |
 |---|---|
-| Nomes exatos | `COBDESANTOS`, `NEMBUSUSER` |
+| Nomes exatos (NOME) | `COBDESANTOS`, `FT5SYSTEM`, `NEMBUSUSER` |
+| Nomes exatos (CHAVE) | `NEMBUSUSER` |
 | Prefixos no NOME | `ANTLIA%`, `INTERNA%` |
-| Prefixos na CHAVE | `suporte%`, `SISTEMA%` |
+| Prefixos na CHAVE | `INTERNA%`, `SUPORTE%`, `SISTEMA%` |
 
-Implementação: constante `FILTRO_AGENTES_EXCLUIDOS_SQL` aplicada no `WHERE` de **toda** query, antes da agregação. O filtro Python (`_filter_excluded_agents`) foi removido no refactor por ser redundante.
+São 9 cláusulas, todas comparadas via `UPPER(LTRIM(RTRIM(...)))`
+(`config/settings.py:196-206`).
+
+Implementação: constante `FILTRO_AGENTES_EXCLUIDOS_SQL` aplicada no `WHERE` antes da agregação. O filtro Python (`_filter_excluded_agents`) foi removido no refactor por ser redundante — ver [[decisoes-tecnicas#ADR-005]].
+
+> **Exceção importante (não unificar sem decisão de negócio).** O domínio
+> **Efetividade** usa uma segunda lista, deliberadamente divergente:
+> `FILTRO_AGENTES_EFETIVIDADE_SQL` (`config/settings.py:212-227`). Ela casa por
+> **substring** (`LIKE '%...%'`, não prefixo/exato) e exclui também `SERASA`, `NEMBUS`
+> e `FT5SYSTEM`. Está aplicada em 6 pontos de `dominios/efetividade/queries.py`; um
+> sétimo builder usa de propósito o filtro padrão, com a justificativa no próprio
+> docstring. Unificar as duas muda os números da página Efetividade — o próprio
+> `settings.py:212-216` registra isso como **decisão de negócio pendente**. Portanto
+> "aplicada em **toda** query" era falso e foi corrigido em 2026-09-16.
 
 ## Chave do Agente
 
@@ -88,17 +113,33 @@ O mesmo agente pode existir em `COBwebRCBCONSUMER` e `COBwebRCBAUTOS`. Regra:
 | KPI | Fórmula | Nota |
 |---|---|---|
 | CPC | `Σ qtd_contatos` (contagem) | CPC = Contatos, só que com outro nome. Unidade: count, **não** %. |
-| Taxa de contato % | `CEILING((qtd_alo / qtd_acionamentos) × 10000) / 100` | a razão. Rotular sempre "Taxa de contato", nunca "CPC". Numerador é `qtd_alo` (atendeu), não `qtd_contatos` (CPC). |
+| Taxa de contato % | `round(qtd_alo × 100.0 / qtd_acionamentos, 2)` | a razão. Rotular sempre "Taxa de contato", nunca "CPC". Numerador é `qtd_alo` (atendeu), não `qtd_contatos` (CPC). Implementado em `_ratio_pct` (`dominios/agente/agentes.py:24-27`, usado em `:75`). |
+| Taxa de CPC % | `round(qtd_contatos × 100.0 / qtd_alo, 2)` | etapa seguinte do funil: CPC sobre quem atendeu. No SQL de produtividade sai como `cpc_percentual`, com `CEILING(...)` e `CAST(... AS INT)` (`dominios/produtividade/queries.py:307-309`, `:521`) — arredondamento para cima, inteiro. |
 | Taxa de conversão | `qtd_acordos / qtd_contatos × 100` | acordos gerados sobre CPC (Σ `qtd_contatos`), nunca sobre `qtd_acionamentos` nem boletos emitidos |
-| Desconto médio % | `AVG(valor_total_acordo / VR_SALDO × 100)` | guarda `VR_ORIGINAL > 0` |
-| Valor primeira parcela | produtividade: `AVG(VALOR_P1)` · comparação: `SUM(VALOR_P1)` | granularidade intencional |
-| qtd_acionamentos | produtividade: `COUNT(DISTINCT)` · comparação: `COUNT` sem DISTINCT | diferença intencional |
+| Desconto médio % | `AVG(VALOR_TOTAL_ACORDO / VR_ORIGINAL × 100)` | guarda `VR_ORIGINAL > 0`. `VR_ORIGINAL` é o agregado por acordo — `SUM(ISNULL(DM.VR_SALDO, 0))` na CTE de saldo original (`dominios/produtividade/queries.py:94`) — **não** a coluna `VR_SALDO` crua por dívida. |
+| Valor primeira parcela | `SUM(VALOR_P1)` nos dois ramos | Não há granularidade intencional aqui: ambos somam. `AVG(VALOR_P1)` não existe em `dominios/`. Ver `queries.py:117` e `:472`. |
+| qtd_acionamentos | `use_distinct_esforco=True`: `COUNT(DISTINCT CM.ID_DEV)` · `False`: `COUNT(*)` | diferença intencional, mas **nenhum dos dois conta `ID_CTO_MASTER`** — ver "Granularidade Intencional" abaixo |
 
 ## Granularidade Intencional
 
-Existem diferenças propositais entre endpoints:
-- `/produtividade-hoje` usa `COUNT(DISTINCT ID_CTO_MASTER)` para acionamentos
-- `/comparacao-agentes` usa `COUNT(ID_CTO_MASTER)` sem DISTINCT
+Existem diferenças propositais entre endpoints. O seletor é o parâmetro
+`use_distinct_esforco` de `build_produtividade_query`
+(`dominios/produtividade/queries.py:14-21`):
+
+- `/produtividade-hoje` e `/status-carga` (`use_distinct_esforco=True`) usam
+  `COUNT(DISTINCT CM.ID_DEV)` — **devedores únicos acionados no dia**
+  (`queries.py:138`, comentado em `:300`)
+- `/comparacao-agentes`, `/detalhamento-agentes` e `/produtividade`
+  (`use_distinct_esforco=False`) usam `COUNT(*)` sobre as linhas de `CTO_MASTER` do
+  período (`queries.py:414`)
+
+> **Correção (2026-09-16).** Este bloco dizia `COUNT(DISTINCT ID_CTO_MASTER)` vs
+> `COUNT(ID_CTO_MASTER)`. Nenhuma das duas formas existe no código: o ramo distinct
+> deduplica por **devedor** (`ID_DEV`), não por acionamento, o que muda o significado
+> do KPI — "quantas pessoas diferentes o agente acionou hoje", não "quantas tentativas
+> ele fez". O ramo não-distinct é `COUNT(*)`. Introduzido em `7c04b98` (Ritmo do Dia,
+> KNN Fase 2). `agecob-lens/docs/specs/refactor-main-py.md` repetia o mesmo erro e foi
+> corrigido junto.
 
 Isso afeta números absolutos entre telas. É comportamento esperado e documentado.
 
@@ -111,6 +152,13 @@ Isso afeta números absolutos entre telas. É comportamento esperado e documenta
 | Reshuffle | > 10.000 |
 
 `QTD_NV_CLI` separa clientes genuinamente novos de realocados — volume alto nem sempre significa carteira nova.
+
+> **Não implementado (verificado 2026-09-16).** Esta classificação em três faixas por
+> `QTD_CLI` não existe no código. A única leitura de `CARGA_LOTE` no repositório é
+> `api/routers/ritmo_dia.py:135-138` (`_obter_dias_desde_batimento`), que usa um corte
+> **único** e sobre **outra coluna**: `WHERE ID_USUARIO = 1 AND QTD_NV_CLI > 10000`.
+> Mantido aqui como regra de negócio declarada; se a intenção é que o dashboard
+> classifique cargas, isso ainda é trabalho a fazer, não comportamento atual.
 
 ## Janela de Dados
 

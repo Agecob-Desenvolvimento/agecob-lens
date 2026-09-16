@@ -51,12 +51,24 @@ GROUP BY agente
 ```sql
 -- CORRETO: pega um único portfólio por acordo
 CROSS APPLY (
-    SELECT TOP 1 DA.CAMPO010
+    SELECT TOP 1 DA2.CAMPO010
     FROM REC_DIVIDAS RD (NOLOCK)
-    JOIN DIV_AUX DA (NOLOCK) ON DA.ID_DIVIDA = RD.ID_DIVIDA
+    JOIN DIV_AUX DA2 (NOLOCK) ON RD.ID_DIVIDA = DA2.ID_DIVIDA
     WHERE RD.NR_RECEBIMENTO = R.NR_RECEBIMENTO
-) CA
+      AND RD.ID_CARTEIRA = R.ID_CARTEIRA
+      AND DA2.CAMPO010 IS NOT NULL
+) DA
 ```
+
+Duas cláusulas não são opcionais (`dominios/graficos/queries.py:118-125`):
+
+- **`AND RD.ID_CARTEIRA = R.ID_CARTEIRA`** — a chave real é composta
+  (`NR_RECEBIMENTO` + `ID_CARTEIRA`). Só `NR_RECEBIMENTO` casa linhas de carteiras
+  diferentes. Ver `config/settings.py:163-169` e o commit `0854587`.
+- **`AND DA2.CAMPO010 IS NOT NULL`** — sem a guarda, o `TOP 1` pode trazer `NULL` e o
+  acordo aparece com portfólio vazio. Atenção ao efeito colateral: como é `CROSS APPLY`
+  (não `OUTER APPLY`), um acordo cujas dívidas tenham `CAMPO010` todo nulo é
+  **descartado** da agregação em vez de virar linha com portfólio nulo.
 
 ### ❌ JOIN direto em tabela 1:N
 
@@ -70,13 +82,26 @@ JOIN DIV_AUX DA ON DA.ID_DIVIDA = RD.ID_DIVIDA
 
 ### ✅ Filtro de agentes no SQL (antes da agregação)
 
+Não copie a lista à mão — use a constante. O valor real é
+`FILTRO_AGENTES_EXCLUIDOS_SQL` (`config/settings.py:196-206`), com 9 cláusulas e todas
+as comparações normalizadas por `UPPER(LTRIM(RTRIM(...)))`:
+
 ```sql
-WHERE U.NOME NOT IN ('COBDESANTOS', 'NEMBUSUSER')
-  AND U.NOME NOT LIKE 'ANTLIA%'
-  AND U.NOME NOT LIKE 'INTERNA%'
-  AND U.CHAVE NOT LIKE 'suporte%'
-  AND U.CHAVE NOT LIKE 'SISTEMA%'
+    AND UPPER(LTRIM(RTRIM(U.NOME)))  <> 'COBDESANTOS'
+    AND UPPER(LTRIM(RTRIM(U.NOME)))  <> 'FT5SYSTEM'
+    AND UPPER(LTRIM(RTRIM(U.NOME)))  <> 'NEMBUSUSER'
+    AND UPPER(LTRIM(RTRIM(U.CHAVE))) <> 'NEMBUSUSER'
+    AND UPPER(LTRIM(RTRIM(U.NOME)))  NOT LIKE 'ANTLIA%'
+    AND UPPER(LTRIM(RTRIM(U.NOME)))  NOT LIKE 'INTERNA%'
+    AND UPPER(LTRIM(RTRIM(U.CHAVE))) NOT LIKE 'INTERNA%'
+    AND UPPER(LTRIM(RTRIM(U.CHAVE))) NOT LIKE 'SUPORTE%'
+    AND UPPER(LTRIM(RTRIM(U.CHAVE))) NOT LIKE 'SISTEMA%'
 ```
+
+O snippet anterior deste doc omitia `FT5SYSTEM`, `U.CHAVE <> 'NEMBUSUSER'` e
+`U.CHAVE NOT LIKE 'INTERNA%'`, e não normalizava caixa/espaços — copiá-lo readmitia
+silenciosamente agentes de sistema nos números. Lembre que Efetividade usa outra lista
+de propósito (`FILTRO_AGENTES_EFETIVIDADE_SQL`); ver `regras-de-negocio.md`.
 
 ### ❌ Filtro de agentes em Python (depois da query)
 
@@ -109,10 +134,19 @@ Agregava toda a história de dívidas para depois joinar com acordos do dia. Inv
 
 ### ✅ TTL curto + force_refresh
 
-- TTL padrão: 60 segundos
+- TTL padrão: 60 segundos (`DASHBOARD_CACHE_TTL`, `config/settings.py:308`)
 - Auto-refresh do frontend: 2 minutos
-- Bypass: `?force_refresh=true`
-- `cache_age_seconds` no response para transparência
+- Bypass: `?force_refresh=true` — **existe em um único endpoint**,
+  `/dashboard/produtividade-agentes` (`api/routers/dashboard.py:621`)
+- `cache_age_seconds` no response — idem, só nesse endpoint, servido pelo
+  `ProdutividadeService` (`dominios/produtividade/servico.py:21-30`, `:86`), que tem
+  cache próprio e não passa pelo `cache_manager`
+
+> **Correção (2026-09-16).** O texto original apresentava `force_refresh` e
+> `cache_age_seconds` como padrão geral do cache. Não são: o `cache_manager`
+> (`core/cache/cache_manager.py`) não expõe bypass por query-string nem devolve idade
+> do cache. Os demais endpoints só têm o TTL. O anti-padrão abaixo continua válido como
+> princípio, mas descreve uma capacidade que hoje cobre um endpoint, não a API inteira.
 
 ### ❌ Cache sem bypass
 
@@ -125,10 +159,21 @@ Sem `force_refresh`, o operador não tem como forçar dados frescos após uma a�
 ### ✅ Builder function com flag de comportamento
 
 ```python
-def _build_produtividade_query(db: str, *, use_distinct_esforco: bool) -> str:
+def build_produtividade_query(
+    db: str,
+    *,
+    use_distinct_esforco: bool,
+    date_from: Optional[str] = None,
+    date_to_exclusive: Optional[str] = None,
+    portfolio: Optional[str] = None,
+) -> str:
 ```
 
-Uma única função, dois comportamentos controlados por flag explícito.
+Uma única função, dois comportamentos controlados por flag explícito. A função é
+pública (sem underscore) e vive em `dominios/produtividade/queries.py:14-21`, importada
+por `dominios/produtividade/servico.py:12` e `dominios/agente/agentes.py:20`. Os três
+parâmetros opcionais de janela/portfólio foram acrescentados depois do refactor
+original.
 
 ### ❌ Duas constantes/funções paralelas para a mesma lógica
 

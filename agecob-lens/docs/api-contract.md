@@ -185,10 +185,10 @@ Query params em **camelCase** (`dateFrom`/`dateTo`) — exceto `fetchProdutivida
 | Função | Endpoint | Row | Extra params |
 |---|---|---|---|
 | `fetchPrimeiraParcelaDia(db, assessoria?, dateFrom?, dateTo?)` | `/dashboard/primeira-parcela-dia/{db}` | `PrimeiraParcelaDiaRow` | `assessoria` |
-| `fetchRejeitadosTotais(db, dateFrom?, dateTo?)` | `/dashboard/rejeitados-totais/{db}` | `RejeitadosTotaisRow` | — |
+| ~~`fetchRejeitadosTotais(db, dateFrom?, dateTo?)`~~ | ~~`/dashboard/rejeitados-totais/{db}`~~ | `RejeitadosTotaisRow` | **ROTA INEXISTENTE** — ver nota abaixo |
 | `fetchExcecoesPorPortfolio(db, …)` | `/dashboard/excecoes-por-portfolio/{db}` | `ExcecoesPorPortfolioRow` | — |
 | `fetchExcecoesPorAgente(db, …)` | `/dashboard/excecoes-por-agente/{db}` | `ExcecoesPorAgenteRow` | — |
-| `fetchRejeitadosPorAgente(db, …)` | `/dashboard/rejeitados-por-agente/{db}` | `RejeitadosPorAgenteRow` | — |
+| ~~`fetchRejeitadosPorAgente(db, …)`~~ | ~~`/dashboard/rejeitados-por-agente/{db}`~~ | `RejeitadosPorAgenteRow` | **ROTA INEXISTENTE** — ver nota abaixo |
 | `fetchAcordosPorPortfolio(db, …)` | `/dashboard/acordos-por-portfolio/{db}` | `AcordosPorPortfolioRow` | — |
 | `fetchRejeitadosPorPortfolio(db, …)` | `/dashboard/rejeitados-por-portfolio/{db}` | `RejeitadosPorPortfolioRow` | — |
 | `fetchQuebradosPorPortfolio(db, …)` | `/dashboard/quebrados-por-portfolio/{db}` | `QuebradosPorPortfolioRow` | — |
@@ -200,6 +200,20 @@ Query params em **camelCase** (`dateFrom`/`dateTo`) — exceto `fetchProdutivida
 | `fetchBenchmarks(db, lookbackMonths=9)` | `/dashboard/benchmarks/{db}` | `BenchmarkEnvelope` | `lookback_months` |
 | `fetchStatusCarga(db, assessoria?)` | `/dashboard/status-carga/{db}` | `StatusCargaRow` | `assessoria` |
 | `fetchAcordosHojeAgente(db, agente?, assessoria?)` | `/dashboard/acordos-hoje-agente/{db}` | `AcordoHojeAgenteRow` | `agente`, `assessoria` |
+
+> **Código morto no frontend (achado 2026-09-16, não corrigido — fora do escopo desta
+> auditoria de docs).** `fetchRejeitadosTotais` (`agecob-lens/src/services/api.ts:507`)
+> e `fetchRejeitadosPorAgente` (`:543`) chamam
+> `/dashboard/rejeitados-totais/{db}` e `/dashboard/rejeitados-por-agente/{db}`. **Nenhuma
+> das duas rotas existe** em `api/routers/` — nem hoje nem em nenhum ponto do histórico
+> (`git log --all -S'rejeitados-totais'` não retorna nada). Ambas retornariam 404. As
+> duas funções também **não têm nenhum chamador** em `agecob-lens/src/`, então a falha
+> nunca aparece em produção. As rotas de rejeitados que de fato existem são
+> `/rejeitados-por-portfolio/{db}` (`dashboard.py:769`), `/rejeitados-detalhe/{db}/{portfolio}`
+> (`:849`), `/rejeitados-detalhe-todos/{db}` (`:909`) e
+> `/rejeitados-detalhe-agente/{db}/{agente}` (`:973`). Candidato a remoção num PR de
+> limpeza.
+
 
 ```ts
 PrimeiraParcelaDiaRow         = { total_valor; total_acordos }

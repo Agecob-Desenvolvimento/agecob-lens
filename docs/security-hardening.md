@@ -4,8 +4,30 @@ Complementa o runbook do README (Caddy + HTTPS + Basic Auth). Cobre o que não �
 config direta do Caddyfile: rate limit, CSRF, rotação de credenciais, backup,
 dependências e monitoramento.
 
-Arquitetura: `Browser → Caddy (443, TLS + Basic Auth) → uvicorn (127.0.0.1:8000)`.
+Arquitetura pretendida: `Browser → Caddy (443, TLS + Basic Auth) → uvicorn (127.0.0.1:8000)`.
 Caddy injeta `X-API-Key` + `Bearer` no upstream; o bundle do frontend não embute token.
+
+> ⚠️ **DIVERGÊNCIA CÓDIGO × DOC (auditoria 2026-09-16) — não corrigida aqui, é mudança
+> de infra, fora do escopo de uma auditoria de documentação.**
+>
+> O deploy automatizado **não** faz bind em `127.0.0.1`. `atualizar.bat:43` executa:
+>
+> ```
+> "%NSSM%" set AgecobAPI AppParameters "-m uvicorn main:app --host 0.0.0.0 --port 8000 --workers 4"
+> ```
+>
+> `--host 0.0.0.0` escuta em **todas** as interfaces, e essa linha é reaplicada a cada
+> execução do `atualizar.bat`, então qualquer correção manual é desfeita no próximo
+> deploy. Se nada bloquear TCP/8000 no host, a API responde direto na LAN, **sem passar
+> pelo Caddy** — ou seja, sem o TLS e sem o Basic Auth que esta arquitetura pressupõe.
+> `REQUIRE_API_AUTH=true` ainda protege os seis prefixos autenticados, mas a camada de
+> borda descrita acima não está no caminho.
+>
+> Não foi possível verificar o firewall do servidor a partir do repositório — o que está
+> confirmado é apenas que o script de deploy configura `0.0.0.0`. Decidir entre trocar
+> para `127.0.0.1` ou documentar o firewall como o controle real é decisão de operação.
+
+
 
 ---
 
@@ -53,7 +75,7 @@ o dashboard com a credencial em cache.
 
 - **GET / leitura:** o CORS já bloqueia leitura cross-origin (origin fora da
   whitelist não recebe `Access-Control-Allow-Origin`). Atacante não lê resposta.
-- **POST JSON** (ex.: `/admin/indexes/apply`): content-type JSON dispara preflight
+- **POST JSON** (ex.: `/admin/indexes/apply/{database_name}` — a rota exige o segmento de banco; o caminho nu cai no fallback da SPA): content-type JSON dispara preflight
   → CORS bloqueia origin não-whitelistada → request nem sai.
 - **POST multipart** (`/dashboard/metas/upload`): `multipart/form-data` é
   "simple request", **não** dispara preflight. Um `<form>` cross-origin pode

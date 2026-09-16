@@ -189,12 +189,22 @@ Must be filtered INSIDE SQL.
 Never post-process.
 
 ```sql
+-- por U.NOME
 COBDESANTOS
+FT5SYSTEM
+NEMBUSUSER
 ANTLIA%
 INTERNA%
-suporte%
+-- por U.CHAVE
+NEMBUSUSER
+INTERNA%
+SUPORTE%
 SISTEMA%
 ```
+
+São 9 cláusulas, todas normalizadas com `UPPER(LTRIM(RTRIM(...)))`
+(`config/settings.py:196-206`). A lista anterior deste bloco omitia `FT5SYSTEM` e
+`NEMBUSUSER` e não separava as comparações por `NOME` das por `CHAVE`.
 
 ---
 
@@ -338,7 +348,7 @@ Responsibilities:
 
 Endpoint pattern: `GET /dashboard/{type}-detalhe/{db}/{portfolio}`
 
-Types: `excecoes` (status=5), `rejeitados` (status=7), `quebrados` (status=2), `acordos` (status IN (1,3,12))
+Types: `excecoes` (`STATUS_EXCECAO` = 5), `rejeitados` (`STATUS_REJEITADO` = 7), `quebrados` (`STATUS_QUEBRADO` = 2), `acordos` (`STATUS_GERADOS` = 1, 2, 3, 10, 12 — inclui quebra e quebra automática, conforme o docstring de `build_acordos_detalhe_query`, `dominios/graficos/queries.py:599-601`)
 
 Columns returned per agreement row:
 
@@ -354,7 +364,7 @@ Columns returned per agreement row:
 | `nome_devedor` | DEV_MASTER.NOME_RAZAO | Debtor name |
 | `data_acordo` | REC_MASTER.DT_EMISSAO | Agreement date |
 | `data_vencimento` | REC_MASTER.DT_VENCIMENTO | Due date |
-| `total_parcelas` | COUNT of REC_MASTER rows for same NR/ID_CARTEIRA | Total installment count |
+| `total_parcelas` | `COUNT(DISTINCT R3.PARCELA)` for same NR/ID_CARTEIRA | Total installment count. **DISTINCT on purpose**: an agreement re-written by mistake must not inflate the count (`dominios/graficos/queries.py:438-444`). |
 
 Implemented via `_build_detalhe_por_portfolio()` in `dominios/graficos/queries.py`.
 
@@ -363,6 +373,12 @@ Implemented via `_build_detalhe_por_portfolio()` in `dominios/graficos/queries.p
 Endpoint pattern: `GET /dashboard/{type}-detalhe-agente/{db}/{agente}`
 
 Same columns as portfolio-level, filtered by `U.NOME = ?` instead of portfolio. Implemented via `_build_detalhe_por_agente()`.
+
+> **Escopo (corrigido 2026-09-16).** O padrão cobre **três** tipos, não quatro:
+> `excecoes` (`api/routers/dashboard.py:952`), `rejeitados` (`:973`) e `quebrados`
+> (`:994`). **Não existe** `/dashboard/acordos-detalhe-agente` nem
+> `build_acordos_detalhe_agente_query` — no grão agente, acordos só aparecem via
+> `/dashboard/primeira-parcela-por-agente/{db}`.
 
 Frontend lazy-loads via `AgenteDetalheSection` (in DetalhamentoAgentes page, inside Suspense). Queries have `staleTime: 120_000` (2 min cache).
 

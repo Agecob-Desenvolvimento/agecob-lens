@@ -1,11 +1,19 @@
 # Agreement Effectiveness Queries (COBweb)
 
 **Period:** Issues from 2026 onward  
-**Valid statuses:** `ID_REC_STATUS IN (1, 3, 12)` -> ACTIVE, WRITEOFF BY PAYMENT, SINGLE PAYMENT WRITEOFF  
+**Valid statuses:** `ID_REC_STATUS IN (1, 2, 3, 10, 12)` — `STATUS_GERADOS`: ACTIVE (1), BROKEN (2), WRITEOFF BY PAYMENT (3), AUTO-BREAK (10), SINGLE PAYMENT WRITEOFF (12)  
 **First installment:** `PARCELA = 0`  
 **Cushion (2nd installment onward):** `PARCELA > 0`  
 **On-time conversion:** Payment within 5 days after due date (`DT_PAGAMENTO <= DT_VENCIMENTO + 5`)  
 **Rounding:** Nearest integer (`FLOOR(value + 0.5)`)
+
+> **Correction 2026-09-16.** The status set above was `(1, 3, 12)` in every one of the
+> six query blocks. The shipped queries bind `_EF_STATUS = settings.STATUS_GERADOS_SQL`
+> (`dominios/efetividade/queries.py:15`), i.e. `(1, 2, 3, 10, 12)`: a broken or
+> auto-broken agreement still had its boleto issued, so it belongs in the denominator.
+> Copying the old set would have understated every effectiveness figure.
+
+
 
 ---
 
@@ -27,7 +35,7 @@ SELECT
     ) AS INT) AS Conversao_Prazo_5d
 FROM REC_MASTER
 WHERE PARCELA = 0
-  AND ID_REC_STATUS IN (1, 3, 12)
+  AND ID_REC_STATUS IN (1, 2, 3, 10, 12)
   AND YEAR(DT_EMISSAO) >= 2026
 GROUP BY CAST(DT_EMISSAO AS DATE)
 ORDER BY Dia_Emissao;
@@ -52,7 +60,7 @@ SELECT
     ) AS INT) AS Conversao_Prazo_5d
 FROM REC_MASTER
 WHERE PARCELA = 0
-  AND ID_REC_STATUS IN (1, 3, 12)
+  AND ID_REC_STATUS IN (1, 2, 3, 10, 12)
   AND YEAR(DT_EMISSAO) >= 2026
 GROUP BY YEAR(DT_EMISSAO), MONTH(DT_EMISSAO)
 ORDER BY Ano, Mes;
@@ -76,7 +84,7 @@ SELECT
     ) AS INT) AS Conversao_Colchao
 FROM REC_MASTER
 WHERE PARCELA > 0
-  AND ID_REC_STATUS IN (1, 3, 12)
+  AND ID_REC_STATUS IN (1, 2, 3, 10, 12)
   AND YEAR(DT_EMISSAO) >= 2026
 GROUP BY CAST(DT_EMISSAO AS DATE)
 ORDER BY Dia_Emissao;
@@ -101,7 +109,7 @@ SELECT
     ) AS INT) AS Conversao_Colchao
 FROM REC_MASTER
 WHERE PARCELA > 0
-  AND ID_REC_STATUS IN (1, 3, 12)
+  AND ID_REC_STATUS IN (1, 2, 3, 10, 12)
   AND YEAR(DT_EMISSAO) >= 2026
 GROUP BY YEAR(DT_EMISSAO), MONTH(DT_EMISSAO)
 ORDER BY Ano, Mes;
@@ -109,7 +117,13 @@ ORDER BY Ano, Mes;
 
 ## 5. Monthly View by Agent - 1st Installment
 
-Excluded agents: names containing `'Antlia'`, `'suporte'`, `'Interna'`, `'User'`.
+Excluded agents: this domain uses `FILTRO_AGENTES_EFETIVIDADE_SQL`
+(`config/settings.py:212-227`), **not** the standard `FILTRO_AGENTES_EXCLUIDOS_SQL`.
+It matches by **substring** on `UPPER(U.CHAVE)` — `SERASA`, `COBDESANTOS`, `NEMBUS`,
+`ANTLIA`, `SUPORTE`, `INTERNA`, `SISTEMA`, `FT5SYSTEM` — plus `COBDESANTOS` and
+`NEMBUSUSER` on `UPPER(U.NOME)`. The old note here listed `'User'`, which matches
+nothing in the live filter. The divergence from the standard list is deliberate and
+`settings.py:212-216` records unifying them as a pending business decision.
 
 ```sql
 SELECT 
@@ -130,7 +144,7 @@ SELECT
 FROM REC_MASTER R
 INNER JOIN USU_MASTER U ON R.ID_USUARIO = U.ID_USUARIO
 WHERE R.PARCELA = 0
-  AND R.ID_REC_STATUS IN (1, 3, 12)
+  AND R.ID_REC_STATUS IN (1, 2, 3, 10, 12)
   AND YEAR(R.DT_EMISSAO) >= 2026
   AND (U.CHAVE NOT LIKE '%Antlia%' 
        AND U.CHAVE NOT LIKE '%suporte%' 
@@ -161,7 +175,7 @@ SELECT
 FROM REC_MASTER R
 INNER JOIN USU_MASTER U ON R.ID_USUARIO = U.ID_USUARIO
 WHERE R.PARCELA > 0
-  AND R.ID_REC_STATUS IN (1, 3, 12)
+  AND R.ID_REC_STATUS IN (1, 2, 3, 10, 12)
   AND YEAR(R.DT_EMISSAO) >= 2026
   AND (U.CHAVE NOT LIKE '%Antlia%' 
        AND U.CHAVE NOT LIKE '%suporte%' 

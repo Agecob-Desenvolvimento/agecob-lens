@@ -1,5 +1,24 @@
 # Pipeline — Análise Operacional
 
+> **STATUS (auditoria 2026-09-16): NADA DESTE PIPELINE FOI CONSTRUÍDO.**
+>
+> Este documento continua sendo um **plano**, não a descrição de um sistema. Verificado
+> contra o código:
+>
+> - `fato_produtividade_portfolio` — **0 ocorrências** em `api/`, `dominios/`, `core/`,
+>   `config/`, `scripts/`, `infra/`, `deploy/`, `agecob-lens/src/`. A tabela não existe.
+> - **Nenhum arquivo `.sql`** existe no repositório, então o DDL da §9.1 nunca foi
+>   materializado.
+> - **Não há job de agregação** — nenhum scheduler, nenhum script, nada em `scripts/`.
+> - **Não há rota `/operacional/descritivo`**; o inventário completo de rotas está em
+>   `docs/documentação_API.md` §4.
+> - O `freshness_status` / `last_aggregation_at` do envelope (ADR-011) também não existe
+>   no código.
+>
+> O bloqueio declarado segue o mesmo da §11: **decisão #9, permissão de DDL no Agecob
+> DB**, ainda pendente. Nada aqui foi reescrito — o plano permanece válido como plano.
+
+
 Documento de referência para a área **Análise Operacional** (substituto do placeholder atual em [src/pages/AnaliseProfunda.tsx](../../src/pages/AnaliseProfunda.tsx)).
 
 Este é o source of truth conceitual e técnico da área. Os contratos de endpoint e o mapa de KPIs aqui descritos estão programados para fases futuras. Nenhuma query SQL de produção é incluída neste documento para as seções conceituais (mesmo padrão de "placeholder mode" usado em [missing-endpoints-contracts.md](../specs/missing-endpoints-contracts.md)) — exceto na seção 9, onde queries validadas em produção são registradas.

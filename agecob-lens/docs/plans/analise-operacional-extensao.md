@@ -1,5 +1,14 @@
 # PR: Unify Query Logic and Finalize Production-Ready Data Pipeline
 
+> **STATUS (auditoria 2026-09-16): extensão de um pipeline que não foi construído.**
+>
+> Este documento estende `pipeline-analise-operacional.md`, cuja fase 1 nunca saiu do
+> papel: `fato_produtividade_portfolio` não existe no banco nem no código, não há job de
+> agregação e não há rota `/operacional/descritivo`. As colunas adicionais e o contrato
+> de resposta descritos aqui são, portanto, **design pendente**, não comportamento atual.
+> Mantido como registro de planejamento.
+
+
 ## Summary
 
 This PR consolidates the architectural decisions made during the 2026-04-24 infrastructure validation and unifies the query strategy for both the same-day dashboard and the historical operational analysis. The core change: **one parameterized query replaces the implicit dual-query pattern**, ensuring metric consistency across time windows.

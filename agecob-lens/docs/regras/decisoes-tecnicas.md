@@ -2,7 +2,7 @@
 title: Agecob — Decisões Técnicas
 tags: [agecob, decisao, adr]
 created: 2026-04-27
-updated: 2026-05-29
+updated: 2026-09-16
 ---
 
 # Decisões Técnicas — agecob-lens
@@ -13,13 +13,20 @@ Registro de decisões técnicas significativas no formato leve (ADR simplificado
 
 ## ADR-001: Monolito em main.py (sem split de módulos)
 
-**Data:** 2026-04 · **Status:** ativo
+**Data:** 2026-04 · **Status:** SUPERSEDED por [[#ADR-014]] (2026-05-05) — o split aconteceu em `1ffa747`
 
-**Contexto:** O backend inteiro vive em um único `main.py` (1447 linhas). Splitting em módulos é o próximo passo lógico, mas o refactor de unificação de queries era prioridade.
+**Contexto:** O backend inteiro vivia em um único `main.py` (1447 linhas na data desta decisão). Splitting em módulos era o próximo passo lógico, mas o refactor de unificação de queries era prioridade.
 
 **Decisão:** Manter monolito até que o refactor (Change 1/2/3) esteja validado em produção. Split é PR separado.
 
 **Consequência:** Arquivo grande, mas com fonte de verdade única para queries. Facilita auditorias e diffs. O split será feito quando o volume de endpoints justificar.
+
+> **Nota de supersessão (2026-09-16).** A condição do "Consequência" foi cumprida: o
+> split saiu em `1ffa747` (2026-05-05). Hoje `main.py` tem **115 linhas de bootstrap
+> puro** — app FastAPI, CORS, 2 middlewares, 7 `include_router`, 1 exception handler e
+> o hook de startup; **zero** definição de rota ou de constante de negócio. Ver
+> [[#ADR-014]]. [[#ADR-012]] já registrava isso de passagem ("ADR-001 já superado"),
+> mas o cabeçalho deste ADR continuou marcado `ativo` até esta auditoria.
 
 ---
 
@@ -44,6 +51,14 @@ Registro de decisões técnicas significativas no formato leve (ADR simplificado
 **Decisão:** `fato_produtividade_portfolio` com grão dia × portfólio × banco. Sem `CTO_MASTER` nem `USU_MASTER` na fase 1.
 
 **Consequência:** Cortes diagnósticos por agente ficam para fase futura (tabela separada `fato_produtividade_agente`). Regras prescritivas por agente também adiadas.
+
+> **Status de implementação (2026-09-16).** A decisão continua válida, mas **nada disso
+> foi construído**: `fato_produtividade_portfolio` tem zero ocorrência em `api/`,
+> `dominios/`, `core/`, `config/`, `scripts/`, `infra/`, `deploy/` e
+> `agecob-lens/src/`; não existe nenhum arquivo `.sql` no repositório; e não há rota
+> `/operacional/descritivo`. O nome só aparece em docs de plano. A decisão #9
+> ("Permissão DDL no Agecob DB", ver Decisões em Aberto) segue pendente e é o
+> bloqueio. Ver `agecob-lens/docs/plans/pipeline-analise-operacional.md`.
 
 ---
 
@@ -73,7 +88,15 @@ Registro de decisões técnicas significativas no formato leve (ADR simplificado
 
 ## ADR-006: CPC IDs hardcoded
 
-**Data:** 2026-04 · **Status:** SUPERSEDED por [[#ADR-012]] (2026-05-29), depois por [[#ADR-013]] (2026-08-19) — CPC hoje é `ALO=1 AND CONTATO=1`; constante só sobrevive no monolito legado
+**Data:** 2026-04 · **Status:** SUPERSEDED por [[#ADR-012]] (2026-05-29), depois por [[#ADR-013]] (2026-08-19) — CPC hoje é `ALO=1 AND CONTATO=1`
+
+> **Correção (2026-09-16).** Este cabeçalho dizia que a constante "só sobrevive no
+> monolito legado". Não há monolito legado — `agecob-lens/main.py` não existe — e
+> a allowlist curada foi **retired** em 2026-08-19: `CPC_COMPLEMENTO_CODS` /
+> `CPC_CODS_SQL` / `CPC_COMPLEMENTO_IDS` foram substituídas e removidas de
+> `config/settings.py` em `185dc47`. A única cópia que ainda carrega a constante é o
+> fork de entrega `entrega-api/config/settings.py:201`, registrado como o único
+> achado em aberto do `DRIFT_REPORT.md`.
 
 **Contexto:** Os IDs de complemento que definem CPC poderiam ser configuráveis ou lidos de tabela.
 
@@ -161,6 +184,20 @@ Registro de decisões técnicas significativas no formato leve (ADR simplificado
 3. **D:** **não aplicar como escrito.** Premissa inexistente neste código. O ganho de concorrência genuíno equivalente é mover `fit_all_models` (sklearn, CPU-bound) de `regressao.py:19` para fora do event loop (`def` simples ou `run_in_executor`).
 4. **Calibração de prompts:** prompts de perf futuros devem mirar a arquitetura modular real, referenciar `pool_manager`/`query_executor`, e validar shape de resposta por endpoint antes de propor `response_model`.
 
+> **Atualização (2026-09-16), sem alterar a decisão acima.** Dois fatos citados no
+> Contexto mudaram desde 2026-05-29:
+>
+> - **"O único `async def` (`api/routers/regressao.py:19`) não toca DB"** — hoje não há
+>   `async def` nenhum em `api/routers/`. A rota é `def agent_regression`
+>   (`api/routers/regressao.py:31`), com comentário em `:28-30` explicando que `def`
+>   faz o FastAPI despachar para o threadpool. Ou seja: o item **D** da Decisão
+>   ("mover `fit_all_models` para fora do event loop") **foi implementado**. Os únicos
+>   `async def` restantes são os 2 middlewares (`api/middleware.py:16,22`) e os 2 hooks
+>   de `main.py` (`:72`, `:98`) — nenhum toca DB.
+> - **`pyodbc.connect`** está em `core/database/pool_manager.py:59`, não `:56` (a linha
+>   56 virou a primeira do bloco de comentário sobre `autocommit`). O módulo e o
+>   argumento seguem corretos.
+
 **Consequência:** Os prompts Wave C/D na forma original são parcialmente inválidos contra o backend atual. **Nenhum item de C/D ficou** — C1 foi revertido (FastAPI 0.136 já serializa rápido nativamente; orjson quebrou prod). Premissas sobre monolito, constantes, envelope uniforme e endpoints async ficam registradas como **falsas** para não se repetirem. ADR-006 deve ser revisado (CPC não é mais hardcoded). **Lição:** validar versão da lib (deprecações) e paridade de dependências entre `.venv` local e interpretador do servidor antes de adicionar dep de runtime.
 
 ---
@@ -174,6 +211,34 @@ Registro de decisões técnicas significativas no formato leve (ADR simplificado
 **Decisão:** Negócio decidiu adotar `CTO_COMPLEMENTO.ALO = 1 AND CTO_COMPLEMENTO.CONTATO = 1` como nova regra de CPC, substituindo a lista curada. O `AND ALO=1` é obrigatório — sem ele, alguns códigos legados (`CONTATO=1` com `ALO=0`, ex. `UNALLOCATED_NUMBER`) quebrariam o funil monotônico `acionamentos ≥ alô ≥ CPC`.
 
 **Consequência:** `CPC_COMPLEMENTO_CODS` e `CPC_CODS_SQL` removidos de `config/settings.py`. Todo `CC.COD_COMPLEMENTO IN {...}` nas queries (`dominios/produtividade/queries.py`, `dominios/acordos/queries.py`) virou `CC.CONTATO = 1` (mantendo o `CC.ALO = 1 AND` já existente). CPC deve subir em relação à lista curada anterior — `CONTATO=1` captura mais códigos de voz do que os 6 curados (ex.: `574 Reclamação`, `563 Retorno do Receptivo`), mesmo com o guard de `ALO=1`. Números de CPC/Taxa de CPC no histórico antes de 2026-08-19 não são diretamente comparáveis aos de depois.
+
+---
+
+## ADR-014: Backend modular (`api/` + `core/` + `dominios/` + `config/`)
+
+**Data:** 2026-05-05 · **Status:** ativo · **Supersede:** [[#ADR-001]]
+
+**Contexto:** O refactor de unificação de queries que [[#ADR-001]] esperava foi validado,
+e o volume de endpoints passou do ponto em que o monolito ajudava. `main.py` chegou a
+~2.669 linhas.
+
+**Decisão:** Quebrar o backend em quatro camadas, feito em `1ffa747` ("feat: modular
+backend + efetividade chart fix", 2026-05-05), que reduziu `main.py` de 2.669 para 22
+linhas:
+
+| Camada | Papel |
+|---|---|
+| `api/` | Routers (`api/routers/*.py`), middlewares, dependências, static |
+| `core/` | Database (pool, executor), cache, telemetria, utils de resposta |
+| `dominios/` | Regra de negócio e SQL por domínio (acordos, produtividade, graficos, efetividade, metas, agente) |
+| `config/` | `settings.py` — fonte de verdade das constantes de status/CPC/filtros |
+
+**Consequência:** `main.py` é bootstrap puro (115 linhas em 2026-09-16) e não carrega
+nenhuma regra de negócio — mudanças de KPI ou de status vão em `config/settings.py` e
+nos módulos de `dominios/`, nunca no `main.py`. As rotas são registradas por 7
+`include_router`. Prompts que descrevam "tudo no main.py" estão calibrados contra o
+backend antigo — ver [[#ADR-012]], que catalogou exatamente essa classe de premissa
+falsa.
 
 ---
 

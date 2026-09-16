@@ -1,15 +1,15 @@
 First of all, you only can answer/ask/type in english only.
 
-MANDATORY DATA-WORK READ: any task touching data — fetching, ViewModels, selectors, metrics, adapters, data-layer contract (frontend or backend) — REQUIRES reading docs/data-layer.md IN FULL before editing code. Applies to main session + every subagent. No full read, no data-code edit.
+MANDATORY DATA-WORK READ: any task touching data — fetching, ViewModels, selectors, metrics, adapters, data-layer contract (frontend or backend) — REQUIRES reading docs/data-layer.md IN FULL and ../../docs/data-dictionary.md IN FULL before editing code or writing a query. `data-layer.md` = business rules; `data-dictionary.md` = real column names/types + every status/contact-result code value, per portfolio. Applies to main session + every subagent. No full read of both, no data-code edit.
 
 AgDash — Context for Claude Code
 Project
 Executive redesign of AgDash: make interface executive decision tool. Clear visual hierarchy, consistent KPI semantics, action narrative.
 Current Status
-Restructuring in progress. Before any action, read TASKS.md, execute only items not marked [x].
-On completing item, mark [x] immediately, before next.
-Note: TASKS.md rewritten as Execution Pipeline (Phase 0 → Wave A–E → Phase 5 → Final Checklist). Replaced old Waves A–D. Initial reading rule + [x] marking still apply.
-When last item of Final Delivery Checklist marked, update this file: replace "Current Status" with "Status: redesign completed", remove initial TASKS.md reading obligation (already in checklist).
+Redesign shipped. TASKS.md no longer exists in the repo — do NOT try to read it, and ignore
+the old "[x] marking" protocol; it has no file to act on. (Corrected 2026-09-16: the
+mandatory-read instruction had been unsatisfiable since TASKS.md was removed.)
+The live page/route inventory is the table under "Routes and Responsibilities" below.
 Inclusion Rule — "Wrong or Act"
 Mandatory criterion for any element occupying main viewport space:
 "Does this element answer, without extra interaction, 'What is wrong right now?' or 'What do I do right now?'"
@@ -101,30 +101,36 @@ Explanation: max 2–3 charts per section, separating Volume from Value
 Action: Top opportunities/risks with deep links + preloaded state
 Routes and Responsibilities
 Table
-File	Question it answers
-Dashboard.tsx (Home)	"How are we doing?"
-AnaliseProdutividade.tsx	"Why?"
-DetalhamentoAgentes.tsx	"Who / how is this agent?"
-ComparacaoAgentes.tsx	"Who to prioritize / allocate?"
-Sidebar — zoom hierarchy
-Level 1 (Synthesis): Executive Dashboard
-Level 2 (Analysis): Productivity → sub-items by Office/BU
-Level 3 (Detail): Agent Details
-Level 4 (Deep Dive): Deep Analysis / Comparison
+Route	File	Question it answers
+/	Index.tsx	"How are we doing?"
+/detalhamento-agentes	DetalhamentoAgentes.tsx	"Who / how is this agent?"
+/carteiras	Carteiras.tsx	"Goal vs actual per portfolio?"
+/efetividade-boletos	EfetividadeBoletos.tsx	"Are issued boletos being paid on time?"
+/modo-tv	ModoTV.tsx	Wall panel, scoped to today
+*	NotFound.tsx	404
+Source: agecob-lens/src/App.tsx:127-132. Corrected 2026-09-16 — there is no Dashboard.tsx
+(Home is Index.tsx), and AnaliseProdutividade.tsx / ComparacaoAgentes.tsx were deleted in
+586609c (2026-06-02). The 4-level sidebar zoom hierarchy that used to be documented here
+described levels 2 and 4 as Productivity / Deep Analysis+Comparison pages; those pages no
+longer exist, so the shipped hierarchy is flat over the five routes above.
 Components
-New (build from scratch)
-ExecutiveKpiStrip — KPI strip with asymmetric primary/secondary grid
+Live (components/executive/ unless noted)
+HomeKpiStrip — KPI strip on Home
 ExecutiveInsightCard — hero banner with embedded CTA + automatic omission in neutral state
 SectionHeader — title + description + unit
-ExecutiveRankingTable — ranking with primary column + secondary column + inline actions
-RitmoDiaHeatmap — hours × metric heatmap; tooltip with raw numbers
 KpiDeltaBadge — direction + color + baseline (target / MoM / moving average)
-Existing (refactor, do not rewrite from scratch)
-AnaliseChartsPanel
-DashboardV2ChartsPanel
-DetalhamentoChartsPanel
-AgentComparisonDashboard
-AppSidebar
+RitmoDiaCard — Ritmo do Dia (a card, not a heatmap)
+HandoffFunnelChart, HandoffPortfolioRentabilidade, HandoffPortfolio1aParcela,
+HandoffTopAgentes1aParcela, HandoffEficienciaGroupedBar, HandoffFinanceiroGroupedBar,
+HandoffDiagnosticCards, BuEfficiencyChart, BuValueChart, HomeRiscoQualidade,
+HomeKpiDetalheSheet, ChartShell, BlockHeader, ExecutiveHeader
+AppSidebar (components/AppSidebar.tsx)
+
+Deleted / never built (corrected 2026-09-16 — do not "refactor" these, they are gone):
+ExecutiveKpiStrip and ExecutiveRankingTable were built then deleted in 586609c
+(2026-06-02); RitmoDiaHeatmap was never created; AnaliseChartsPanel,
+DashboardV2ChartsPanel, DetalhamentoChartsPanel and AgentComparisonDashboard were
+deleted in the same commit and components/charts/ no longer exists.
 Global Acceptance Criteria
 Every page answers "result", "efficiency", "risk" without formula ambiguity.
 No redundant card or chart in same viewport context.

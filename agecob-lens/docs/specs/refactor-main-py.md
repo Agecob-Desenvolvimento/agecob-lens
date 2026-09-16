@@ -30,7 +30,7 @@ Before touching anything, read these constraints and treat them as hard limits. 
 - Same agent in CONSUMER and AUTOS databases = treated as two separate agents (by design).
 - KPI formulas in `mapa-kpis-dashboard.md` are the contract. Every formula there must still hold after the refactor. In particular:
   - `desconto_medio_percentual = AVG(VALOR_ACORDO / VR_SALDO_ORIGINAL * 100)` with `VR_ORIGINAL > 0` guard.
-  - `qtd_acionamentos` uses `COUNT(DISTINCT ID_CTO_MASTER)` in the produtividade-hoje query and `COUNT(ID_CTO_MASTER)` in the comparacao-agentes query. This granularity difference is **intentional** — preserve both behaviors.
+  - `qtd_acionamentos` granularity differs per branch and the difference is **intentional** — preserve both behaviors. **Corrected 2026-09-16:** the units are not what this line originally said (`COUNT(DISTINCT ID_CTO_MASTER)` / `COUNT(ID_CTO_MASTER)`). The shipped code counts `COUNT(DISTINCT CM.ID_DEV)` — unique *debtors* — in the `use_distinct_esforco=True` branch (`dominios/produtividade/queries.py:138`, commented at `:300`) and plain `COUNT(*)` in the `False` branch (`:414`). Neither counts `ID_CTO_MASTER`.
   - `taxa_conversao = qtd_acordos / qtd_contatos * 100` — acordos gerados sobre CPC (Σ `qtd_contatos`), never over `qtd_acionamentos` or boletos emitted (2026-07-15, ADR / `data-layer.md`).
 
 ### Endpoints that MUST keep their paths and response shapes

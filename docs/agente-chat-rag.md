@@ -45,7 +45,11 @@ Arquivos:
 | Runner / loop LLM / providers | `dominios/agente/agente.py` |
 | Schemas das tools + dispatch | `dominios/agente/tools.py` |
 | Prompt (contrato com o modelo) | `dominios/agente/system_prompt.md` |
-| Datasets e queries | `dominios/agente/{risco,agentes,series,fases,conversao,cruzamento,detalhe}.py` |
+| Datasets e queries | `dominios/agente/{risco,agentes,series,fases,conversao,cruzamento,detalhe_portfolio,kpi_historico}.py` |
+| Schemas pydantic das tools P1 | `dominios/agente/schemas.py` |
+| RunGuard (tetos de step/wall-clock, retry, cache de tool-result, circuit breaker) | `dominios/agente/guards.py` |
+| Taxonomia de erro de tool | `dominios/agente/errors.py` |
+| Eval golden-set (17 casos) | `dominios/agente/evals/` |
 | Frontend | `agecob-lens/src/components/agente/AgentChatPanel.tsx`, `hooks/useAgentChat.ts`, `contexts/AgentChatContext.tsx` |
 
 ## 2. Datasets base
@@ -84,7 +88,7 @@ funil (ADR-006): `qtd_alo` = **Contato** (alguém atende); `qtd_contatos` =
 | `filter_portfolios_by_value(min, limit?)` | "Onde está o dinheiro?" | idem |
 | `compare_portfolios(names, metric?)` | "X vs Y?" | idem |
 | `get_agent_performance(nome)` | "Como está o agente Y?" | AgentEntry, janela da sessão |
-| `list_agents_performance(order_by?, limit?)` | "Top performers? Maior ticket? Quem gera exceção?" | idem; 12 métricas de ordenação |
+| `list_agents_performance(order_by?, limit?)` | "Top performers? Maior ticket? Quem gera exceção?" | idem; **13** métricas de ordenação (inclui `pagos_por_cpc_pct`) — atenção: `dominios/agente/system_prompt.md:141-143` ainda lista só 12 e omite `pagos_por_cpc_pct`, divergindo de `tools.py:115-125`. Divergência de código, registrada aqui e não corrigida nesta auditoria de docs. |
 | `get_ritmo_acordos_dia()` | "Vamos bater a meta hoje?" | rota KNN `/ritmo-dia` — **sempre o dia corrente** |
 | `get_acordo_status_breakdown()` | "Quanto pendente / rejeitado?" | rollup da sessão, rotulado por status |
 | `get_fase_negociacao(fase?)` | "Final de plano? Quitados?" | acordos aprovados últimos ~6 meses |
@@ -185,11 +189,14 @@ Chaves por tool incluem db + janela + parâmetros:
 ```text
 agente|rollup-rows|{db}|{from}|{to}          ← compartilhada por entries e breakdown
 agente|agent-entries|{db}|{from}|{to}
-agente|daily-rollup|{db}|{from}|{to}|{portfolio|*}
+agente|kpi-historico|{db}|{from}|{to}|{portfolio|*}
 agente|fases|{db}|{from}|{to}
 agente|cruzamento|{db}|{from}|{to}|{filtro}|{valor}
 agente|ranking-status|{db}|{from}|{to}|{dimensao}
-agente|maiores-acordos|{db}|{from}|{to}|{tipo}|{portfolio}
+(removida) agente|maiores-acordos|... — a tool get_maiores_acordos foi
+aposentada no P1 (4fb405e) e substituída por detalhar_portfolio, que não tem
+chave própria no cache_manager: seus resultados são cacheados só pelo ToolCache
+do RunGuard (TTL 60s, 8s em erro).
 ```
 
 Conversão não tem cache próprio: lê o store do ETL de efetividade (refresh
@@ -218,7 +225,7 @@ em background). Ritmo usa o cache interno da rota KNN (30 s).
 .venv\Scripts\python -m pytest tests\test_agente.py -q
 ```
 
-`tests/test_agente.py` (40 testes, sem rede e sem banco):
+`tests/test_agente.py` (59 testes, sem rede e sem banco):
 
 - funções puras: agregação de PortfolioEntry/AgentEntry, série temporal
   (preenchimento de dias, risco diário, tendência), breakdown, fases,

@@ -1,6 +1,21 @@
 # Deploy LAN — runbook de robustez
 
-Itens operacionais para o AgDash na rede local. Rodar **no servidor** (`C:\agecob`), não dá pra automatizar daqui (produção, porta 8000).
+Itens operacionais para o AgDash na rede local. Rodar **no servidor** (`C:\agecob-new`), não dá pra automatizar daqui (produção, porta 8000).
+
+> **Correções 2026-09-16** (o runbook apontava para caminhos que não existem mais — o
+> que o tornaria enganoso durante um incidente):
+>
+> - Raiz do deploy é `C:\agecob-new`, não `C:\agecob`. `atualizar.bat:7` aborta se o
+>   diretório não existir e `:42` reaponta o `AppDirectory` do NSSM para lá a cada run.
+> - O binário do NSSM é `C:\nssm\nssm.exe` — o subdiretório `win64\` foi corrigido em
+>   2026-05-14.
+> - O log da aplicação fica em `C:\agecob-new\logs\api.log` (rotativo, 10 MB × 3
+>   backups, inicializado em `main.py:_init_logging`), independente do stdout/stderr do
+>   NSSM.
+> - Para monitoramento externo, use **`/health/live`** (adicionado em 2026-08-03): não
+>   toca o banco. Um monitor de 30s em `/health/db` abre um login real no SQL Server a
+>   cada batida. E atenção: com `REQUIRE_API_AUTH=true` **todo** `/health/*` exige
+>   credencial — um monitor HTTP simples sem `X-API-Key` e sem `Bearer` recebe 401.
 
 ---
 

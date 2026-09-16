@@ -1,3 +1,24 @@
+> **Nota de auditoria (2026-09-16).** Este documento é a **especificação do redesign**,
+> escrita antes da implementação. Vários artefatos que ele manda criar foram feitos e
+> depois removidos, ou nunca existiram. Antes de usar qualquer trecho como contrato,
+> confira contra o código:
+>
+> - `src/lib/format.ts` **não existe**. `formatBRLCompact` e `formatDelta` vivem em
+>   `src/lib/metrics.ts` (`:204` e `:221`) — como o próprio §0.6.4 deste doc manda.
+> - `formatDelta` **ignora** o argumento de direção (o parâmetro chama-se `_direction`)
+>   e devolve só a magnitude: `"12%"`, não `"↑ 12%"`. A seta é renderizada pelo
+>   `KpiDeltaBadge` (`src/lib/metrics.ts:214-223`).
+> - `src/lib/deep-link.ts` e o hook `useDeepLink` **não existem**; nada os importa.
+>   Deep links são feitos ad hoc com react-router.
+> - `ExecutiveKpiStrip` e `ExecutiveRankingTable` foram construídos e **deletados** em
+>   `586609c` (2026-06-02). Os equivalentes vivos são `HomeKpiStrip.tsx` e
+>   `HandoffTopAgentes1aParcela.tsx`. `RitmoDiaHeatmap` nunca foi criado — o que existe
+>   é `RitmoDiaCard.tsx`.
+> - A página `ComparacaoAgentes` citada nos deep links foi deletada no mesmo commit;
+>   só `/detalhamento-agentes` sobrou como alvo.
+> - O bloco de tokens dark abaixo diverge de `src/index.css:122-134`, que é a fonte de
+>   verdade dos valores em produção.
+
 0 · Tokens consolidados
 Bloco para colar no CLAUDE.md
 Dicionário visual mínimo para que qualquer agente que entre no projeto produza componentes consistentes sem reinterpretar a paleta. Apenas tokens com uso real nos 6 componentes abaixo.
@@ -273,7 +294,7 @@ Adicionar ao src/index.css, dentro dos blocos :root e .dark já existentes. Mant
 --danger-border:  354 96% 89%;   /* rose-200  */
 --danger-fg:      345 83% 41%;   /* rose-700  */
 
---warning:        38 92% 50%;    /* amber-500 */
+--warning:        38 92% 52%;    /* valor real em src/index.css:37 */
 --warning-soft:   48 100% 96%;   /* amber-50  */
 --warning-border: 48 96% 76%;    /* amber-200 */
 --warning-fg:     26 90% 37%;    /* amber-700 */

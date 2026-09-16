@@ -1,4 +1,25 @@
-# Dicionário de Dados — COBweb
+# Dicionário de Dados — COBweb (SUPERSEDED)
+
+> **SUPERSEDED em 2026-09-16 — use [`docs/data-dictionary.md`](data-dictionary.md).**
+>
+> Este arquivo é o extrato de 2026-06-01 da planilha `DICIONARIO DE DADOS.xlsx`: prosa
+> do fornecedor, sem introspecção do schema real. O dicionário canônico, gerado por
+> `scripts/introspect_schema.py` contra o banco vivo, é `docs/data-dictionary.md` —
+> é ele que consta da hierarquia de fontes de verdade do `DRIFT_REPORT.md`.
+>
+> O que falta aqui e pode gerar query errada:
+>
+> - `CTO_COMPLEMENTO.ALO` e `CTO_COMPLEMENTO.CONTATO` (as duas colunas que definem todo
+>   o funil de contato) **não aparecem** na seção 4.5.
+> - Três nomes de coluna estão errados e falham com "Invalid column name":
+>   `CODPARA_DESC` → `CODPARA_DESCR`, `DISC_PARA_DESC` → `DISC_PARA_DESCR`,
+>   `ID_RE_DIVIDAS` → `ID_REC_DIVIDAS`.
+> - `PARCELA` não menciona que a 1ª parcela é `0`, não `1`.
+> - Não há enumeração de `REC_STATUS`, nem os conjuntos de status de negócio, nem a
+>   regra de dedup, nem a resolução de portfólio.
+>
+> Mantido porque a prosa do fornecedor sobre as colunas que ele descreve continua útil
+> e não existe em outro lugar.
 
 > Existem colunas em algumas tabelas que não vamos listar. Essas colunas não listadas têm pouca utilidade ou são utilizadas na maioria das vezes apenas para algumas carteiras.
 
@@ -212,7 +233,7 @@ WHERE DM.NR_OPERACAO = DD.NR_OPERACAO
 |---|---|---|
 | `ID_DIV_AUX` | ID único da tabela (IDENTITY). | `DIV_AUX` |
 | `ID_DIVIDA` | FOREIGN KEY — referência à tabela `DIV_MASTER`. | `DIV_AUX` |
-| `CAMPO010` a `CAMPO330` | Todas as informações referentes à dívida que não são possíveis armazenar em alguma tabela, então são armazenadas nessa tabela auxiliar para que o cliente não perca nenhum dado "importante" em tela. | `DIV_AUX` |
+| `CAMPO001` a `CAMPO330` | 330 slots genéricos para informações da dívida sem coluna dedicada, para que o cliente não perca nenhum dado "importante" em tela. **Apenas `CAMPO010` é mapeado no dashboard (Portfólio/carteira);** o uso dos demais varia por carteira. | `DIV_AUX` |
 
 > **Nota (AgDash):** `DIV_AUX.CAMPO010` é utilizado como campo de **Portfólio** no dashboard.
 
@@ -236,7 +257,7 @@ WHERE DM.NR_OPERACAO = DD.NR_OPERACAO
 | `DT_VENCIMENTO` | Data de vencimento da parcela. | `REC_MASTER` |
 | `DT_PAGAMENTO` | Data de pagamento da parcela. | `REC_MASTER` |
 | `NUMERO` | Nosso número. | `REC_MASTER` |
-| `PARCELA` | Número da parcela. | `REC_MASTER` |
+| `PARCELA` | Número da parcela. **`0` = 1ª parcela / entrada (não `1`) — `config.settings.PRIMEIRA_PARCELA = 0`. Não normalizar esse zero.** | `REC_MASTER` |
 | `PLANO` | Plano do acordo (quantidade de parcelas). | `REC_MASTER` |
 | `VALOR` | Valor da parcela. | `REC_MASTER` |
 | `CD_BARRAS` | Código de barras. | `REC_MASTER` |
@@ -261,7 +282,7 @@ WHERE RM.NR_RECEBIMENTO = RD.NR_RECEBIMENTO
 
 | Coluna | Descrição | Tabela |
 |---|---|---|
-| `ID_RE_DIVIDAS` | ID único da tabela (IDENTITY). | `REC_DIVIDAS` |
+| `ID_REC_DIVIDAS` | ID único da tabela (IDENTITY). | `REC_DIVIDAS` |
 | `ID_CARTEIRA` | FOREIGN KEY — referência à tabela `CART_MASTER`. | `REC_DIVIDAS` |
 | `ID_DIVIDA` | FOREIGN KEY — referência à tabela `DIV_MASTER`. | `REC_DIVIDAS` |
 | `NR_RECEBIMENTO` | Número do acordo. | `REC_DIVIDAS` |
@@ -324,12 +345,14 @@ WHERE RM.NR_RECEBIMENTO = RD.NR_RECEBIMENTO
 |---|---|---|
 | `ID_COMPLEMENTO` | ID único da tabela (IDENTITY). | `CTO_COMPLEMENTO` |
 | `COD_COMPLEMENTO` | Código complemento. | `CTO_COMPLEMENTO` |
+| `ALO` | `bit`. `1` = alguém atendeu a ligação ("Alô"). Base do KPI **Taxa de contato**. | `CTO_COMPLEMENTO` |
+| `CONTATO` | `bit`. Combinado com `ALO = 1`, define **CPC** (contato com a pessoa certa) desde 2026-08-19 — ver `agecob-lens/docs/regras/decisoes-tecnicas.md` ADR-013. Sozinho é largo demais. | `CTO_COMPLEMENTO` |
 | `DESCR` | Descrição. | `CTO_COMPLEMENTO` |
 | `ID_RESULTADO` | FOREIGN KEY — referência à tabela `CTO_RESULTADO`. | `CTO_COMPLEMENTO` |
 | `CODPARA` | Código de DE/PARA para webservice. | `CTO_COMPLEMENTO` |
-| `CODPARA_DESC` | Descrição do código de DE/PARA do WS. | `CTO_COMPLEMENTO` |
+| `CODPARA_DESCR` | Descrição do código de DE/PARA do WS. (Atenção: `_DESCR`, não `_DESC`.) | `CTO_COMPLEMENTO` |
 | `DISC_PARA` | Código de DE/PARA para discador. | `CTO_COMPLEMENTO` |
-| `DISC_PARA_DESC` | Descrição do código de DE/PARA do discador. | `CTO_COMPLEMENTO` |
+| `DISC_PARA_DESCR` | Descrição do código de DE/PARA do discador. (Atenção: `_DESCR`, não `_DESC`.) | `CTO_COMPLEMENTO` |
 
 ---
 

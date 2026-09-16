@@ -24,7 +24,7 @@ A **Agecob** é empresa de cobrança (recuperação de crédito amigável e judi
 | Doc | Função |
 |---|---|
 | [`CLAUDE.md`](CLAUDE.md) | Regras do redesign executivo. Dicionário oficial de métricas, anti-padrões, critérios de aceite. **Ler primeiro.** |
-| [`TASKS.md`](TASKS.md) | Backlog em ondas (A → D). Marcar `[x]` ao concluir cada item. |
+| ~~`TASKS.md`~~ | **Arquivo removido do repositório.** Era o backlog em ondas (A → D). Link morto retirado em 2026-09-16 — não há substituto; o histórico das ondas está nos docs de `plans/` e no `changelog.md`. |
 
 ---
 

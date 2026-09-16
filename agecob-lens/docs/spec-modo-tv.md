@@ -1,5 +1,37 @@
 # Especificação — Modo TV sem slop
 
+> ## Estado da implementação (auditoria 2026-09-16)
+>
+> Este documento é a **especificação de design** do redesign. O que foi implementado
+> diverge dele em quatro pontos concretos — confira o código antes de tratar qualquer
+> trecho como contrato:
+>
+> - **`TvKpi.baseline`** (§3.5) foi especificado como
+>   `{ label: string; value: string }`. O shipped é
+>   `{ label: string; value?: string }` — `value` é **opcional**, porque o ViewModel
+>   passa `undefined` quando o benchmark não traz valor
+>   (`agecob-lens/src/components/tv/tvShared.ts:169`,
+>   `hooks/useTvModeViewModel.ts:169`).
+> - **`TvKpi.delta`** foi especificado como `{ pct: number; dir: 'up' | 'down' }`. O
+>   shipped é `{ pct: number; betterWhen: 'up' | 'down' | 'flat' }` — o campo tem outro
+>   nome e três valores, não dois (`tvShared.ts:171`).
+> - **As 4 tiles KPI** listadas em §3.0/§3.5 como "Acordos, CPC / Conversão, Ticket
+>   médio" conferem com o código (`useTvModeViewModel.ts:176-181`), mas **só a tile
+>   `Conversão` recebe `baseline`/`delta`** — as outras três renderizam sem linha de
+>   baseline. A §3.5 decidiu que "toda tile de KPI ganha linha de baseline + delta
+>   chip"; isso está implementado em 1 de 4.
+> - **Escopo temporal:** as tiles pequenas foram fixadas no dia (`hoje`) por `5cf606a`,
+>   e `07f01ae` estendeu o escopo "hoje" ao painel inteiro, depois de `a9a4223` ter
+>   feito o mesmo para a tabela de agentes. A spec não descreve esse comportamento.
+> - **Componentes posteriores à spec:** `TvOperacional.tsx` (tabela operacional, cards
+>   de pendentes, `U.AGENTE`) foi acrescentado por `eaa8ff7` e `0d0a7da` e não aparece
+>   em §3.
+>
+> Arquivos vivos: `components/tv/{TvMode,TvOperacional,TvAtoms,TvVariants}.tsx` +
+> `tvShared.ts`, montados por `pages/ModoTV.tsx` via `hooks/useTvModeViewModel.ts`.
+
+
+
 Documento único de design para o redesign do "Modo TV / Placar do Dia" (`agecob-lens/src/components/tv/TvMode.tsx`). Alvo: 55" 1080p, visto de 3–6 m, canvas fixo 1920×1080 escalado ao viewport. Implementável só com inline styles React + Google Fonts. Todos os valores Lc abaixo foram computados com a implementação APCA-W3 0.1.9 verificada (`scratchpad/apca.js`, pares de referência batem exatos).
 
 ---
