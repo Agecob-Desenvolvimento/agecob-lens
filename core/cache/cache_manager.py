@@ -107,3 +107,6 @@ class CacheManager:
 
 
 cache_manager = CacheManager(ttl_seconds=settings.CACHE_TTL_SECONDS)
+# Own TTL for /dashboard/benchmarks: expensive to recompute (9-month CTO_MASTER
+# scan), slow-moving data — doesn't need to share the 60s live-KPI cache cycle.
+benchmarks_cache_manager = CacheManager(ttl_seconds=settings.BENCHMARKS_CACHE_TTL_SECONDS)

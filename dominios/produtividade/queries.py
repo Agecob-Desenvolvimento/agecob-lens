@@ -1,3 +1,5 @@
+import calendar
+from datetime import date
 from typing import Any, Optional, Tuple
 
 import config.settings as settings
@@ -9,6 +11,15 @@ def _date_decl(date_from: Optional[str], date_to_exclusive: Optional[str]) -> st
         dt = date_to_exclusive.replace("-", "")
         return f"DECLARE @Hoje DATE = '{df}'; DECLARE @Amanha DATE = '{dt}';"
     return "DECLARE @Hoje DATE = CAST(GETDATE() AS DATE); DECLARE @Amanha DATE = DATEADD(DAY, 1, @Hoje);"
+
+
+def _subtract_months(d: date, months: int) -> date:
+    """Mirrors SQL Server's DATEADD(MONTH, -months, d) day-clamping (e.g. Mar 31 - 1mo = Feb 28)."""
+    month_index = d.month - 1 - months
+    year = d.year + month_index // 12
+    month = month_index % 12 + 1
+    day = min(d.day, calendar.monthrange(year, month)[1])
+    return date(year, month, day)
 
 
 def build_produtividade_query(
@@ -587,9 +598,12 @@ def build_benchmark_query(db: str, lookback_months: int = 3) -> str:
     if db == "todos":
         raise ValueError("Benchmarks devem ser consultados por banco individual")
 
+    hoje = date.today()
+    lookback_start = _subtract_months(hoje, lookback_months)
+
     return f"""
-DECLARE @Hoje DATE = CAST(GETDATE() AS DATE);
-DECLARE @LookbackStart DATE = DATEADD(MONTH, -{lookback_months}, @Hoje);
+DECLARE @Hoje DATE = '{hoje:%Y%m%d}';
+DECLARE @LookbackStart DATE = '{lookback_start:%Y%m%d}';
 
 WITH CTE_Esforco_Diario AS (
     SELECT

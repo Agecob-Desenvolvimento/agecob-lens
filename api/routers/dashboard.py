@@ -10,7 +10,7 @@ import sentry_sdk
 from fastapi import APIRouter, File, HTTPException, Query, Request, UploadFile
 
 import config.settings as settings
-from core.cache.cache_manager import cache_manager
+from core.cache.cache_manager import benchmarks_cache_manager, cache_manager
 from core.database.query_executor import run_query
 from core.telemetry.agent_logger import _agent_ndjson, _sentry_metric
 from core.utils.pagination import extract_total_rows, normalize_pagination
@@ -1027,7 +1027,7 @@ def get_benchmarks(
         return run_query(query, validated_db, run_id=run_id, context="dashboard/benchmarks")
 
     cache_key = f"benchmarks|{validated_db}|{lookback_months}m"
-    rows = cache_manager.get_or_compute(cache_key, _compute)
+    rows = benchmarks_cache_manager.get_or_compute(cache_key, _compute)
 
     def _quartis(values: List[Any]) -> Dict[str, Any]:
         arr = np.array([

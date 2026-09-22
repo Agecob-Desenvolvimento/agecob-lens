@@ -306,6 +306,10 @@ RISK_LEVEL_MID_MAX: float = 50.0   # <= 50 → medio; acima → alto
 # DATABASE POOL
 # ─────────────────────────────────────────────────────────────────
 CACHE_TTL_SECONDS: float = float(os.getenv("DASHBOARD_CACHE_TTL", "60"))
+# /dashboard/benchmarks: 9-month CTO_MASTER scan+group, ~3-6s per (db, lookback_months)
+# combo even warm-cache. Slow-moving historical stat, doesn't need 60s freshness —
+# own longer TTL keeps it off the same 60s recompute cycle as live KPIs.
+BENCHMARKS_CACHE_TTL_SECONDS: float = float(os.getenv("BENCHMARKS_CACHE_TTL", "1800"))
 # Teto de entradas do cache. As chaves embutem string livre do cliente
 # (portfolio, agente, datas), então sem teto o store cresce indefinidamente.
 CACHE_MAX_ENTRIES: int = max(16, int(os.getenv("DASHBOARD_CACHE_MAX_ENTRIES", "500")))

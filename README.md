@@ -128,6 +128,7 @@ DROP INDEX IX_REC_MASTER_DT_EMISSAO ON dbo.REC_MASTER;
 | `DB_POOL_TIMEOUT` | 10 | Segundos de espera por conexão |
 | `DB_POOL_MAX_AGE_SECONDS` | 1800 | Idade máxima de conexão |
 | `DASHBOARD_CACHE_TTL` | 60 | TTL do cache em memória (0 = off) |
+| `BENCHMARKS_CACHE_TTL` | 1800 | TTL próprio de `/dashboard/benchmarks` (scan de 9 meses do CTO_MASTER, ~3-6s por miss) |
 | `REQUIRE_API_AUTH` | false | Exige auth em `/dashboard/*`, `/health/*`, `/admin/*` |
 | `ENABLE_AGENT_TELEMETRY` | false | Habilita rotas de telemetria |
 | `ENABLE_INDEX_ADMIN` | false | Habilita `/admin/indexes/*` |
