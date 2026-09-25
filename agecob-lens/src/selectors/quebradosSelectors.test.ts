@@ -11,10 +11,12 @@ function row(overrides: Partial<QuebradoDetalheRow> = {}): QuebradoDetalheRow {
     valor_primeira_parcela: 1000,
     valor_total: 1500,
     agente: "Fulano",
+    matricula: null,
     cpf_mask: "123.***.***-99",
     nome_devedor: "Devedor X",
     data_acordo: "2026-05-01",
     data_vencimento: "2026-05-20",
+    total_parcelas: 0,
     ...overrides,
   };
 }

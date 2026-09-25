@@ -26,7 +26,7 @@ export function usePortfolioList(db: DatabaseOption): UsePortfolioListResult {
   const loading = queries.some((q) => q.isLoading);
 
   const portfolios = useMemo<PortfolioRow[]>(() => {
-    const seen = new Map<number, PortfolioRow>();
+    const seen = new Map<string, PortfolioRow>();
     queries.forEach((q) => {
       if (q.data?.data) {
         q.data.data.forEach((row) => {

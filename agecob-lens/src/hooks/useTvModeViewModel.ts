@@ -188,7 +188,7 @@ export function useTvModeViewModel(): TvModeViewModel {
     ];
 
     // BU — 1ª parcela (real) + qtd acordos do funil (real); metas sem fonte
-    const funnelByBu = new Map(home.funnelData.map((f) => [f.bu, f]));
+    const funnelByBu = new Map<string, (typeof home.funnelData)[number]>(home.funnelData.map((f) => [f.bu, f]));
     const bu: TvBu[] = home.financeiroData.map((d) => ({
       bu: d.bu,
       valor: d.primeiraParcela ?? null,
@@ -240,11 +240,12 @@ export function useTvModeViewModel(): TvModeViewModel {
     }
     if (cpcCount != null) ticker.push({ kind: "info", chip: "CPC", frase: "contatos com a pessoa certa", valor: tvNum(cpcCount) });
     if (qtdAcordos != null) ticker.push({ kind: "win", chip: "Acordos", frase: `${tvNum(qtdAcordos)} no período · ticket médio`, valor: tvBRLk(ticket) });
-    if (typeof home.insight?.description === "string" && home.insight.description.trim()) {
-      const positivo = home.insight.variant === "positive";
+    const insight = home.insight;
+    if (insight && insight.variant !== "neutral" && insight.description.trim()) {
+      const positivo = insight.variant === "positive";
       // teto no builder, não com ellipsis no CSS: o rodapé pagina uma frase por vez
       // e cortar no meio é justamente o que motivou aposentar o letreiro rolante
-      const d = home.insight.description.trim();
+      const d = insight.description.trim();
       ticker.push({ kind: positivo ? "up" : "alert", chip: positivo ? "Destaque" : "Atenção", frase: d.length > 88 ? d.slice(0, 85).trimEnd() + "…" : d });
     }
     if (ticker.length === 0) ticker.push({ kind: "info", chip: "Aguardando", frase: "sem dados do dia até agora" });

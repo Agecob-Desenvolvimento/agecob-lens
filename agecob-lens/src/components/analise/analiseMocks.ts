@@ -137,7 +137,8 @@ export interface AcordoQuebrado {
   motivo: string;
 }
 
-export { type QuebraFaixa } from "./CurvaQuebraAtrasoChart";
+import type { QuebraFaixa } from "./CurvaQuebraAtrasoChart";
+export type { QuebraFaixa };
 
 export const MOCK_CURVA_QUEBRA_ATRASO: QuebraFaixa[] = [
   { faixa: "0-5 dias", taxaQuebra: 5, total: 1200 },

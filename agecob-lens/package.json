@@ -9,7 +9,7 @@
     "dev:staging": "vite --mode dev",
     "build": "vite build",
     "build:dev": "vite build --mode dev",
-    "check": "tsc --noEmit",
+    "check": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.node.json",
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",

@@ -67,7 +67,8 @@ export function RadarDesempenho({ data, agentName }: RadarDesempenhoProps) {
               <PolarRadiusAxis
                 angle={90}
                 domain={[0, 100]}
-                ticks={GRADE_TICKS}
+                // recharts types `ticks` as computed TickItem[], but reads this prop as raw tick values
+                ticks={GRADE_TICKS as unknown as React.ComponentProps<typeof PolarRadiusAxis>["ticks"]}
                 tickFormatter={(v: number) => GRADE_LABEL[v] ?? ""}
                 tick={{ fontSize: 11, fontWeight: 700, fill: GRID_COLOR }}
                 axisLine={false}

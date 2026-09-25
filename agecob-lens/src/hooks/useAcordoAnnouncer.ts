@@ -21,7 +21,10 @@ const POLL_MS = 20000;
 // anterior ainda "em andamento" (stale, sempre 0 no instante exato da virada).
 const HOUR_BOUNDARY_BUFFER_MS = 120000;
 const MAX_PER_TICK = 5; // teto de anúncios por ciclo — evita avalanche de áudio
-const RITMO_VAZIO: TvRitmoAgg = { real: null, espAteAgora: null, proj: null, meta: null };
+const RITMO_VAZIO: TvRitmoAgg = {
+  real: null, espAteAgora: null, proj: null, meta: null,
+  valorReal: null, valorEspAteAgora: null, valorProj: null, valorMeta: null,
+};
 
 // Frases de motivação no fim do boletim — rotacionadas para não repetir.
 const MOTIV_ACIMA = [

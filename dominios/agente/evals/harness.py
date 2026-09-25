@@ -182,7 +182,9 @@ def run_case(monkeypatch, case: Dict[str, Any]) -> Dict[str, Any]:
 
     sessao = case["sessao"]
     frozen_today = case.get("frozen_today", sessao["date_to"])
-    with freeze_time(frozen_today):
+    # freezegun scans sys.modules on start; touching langfuse.api's lazy
+    # __getattr__ builds pydantic models while datetime is faked and crashes.
+    with freeze_time(frozen_today, ignore=["langfuse"]):
         response = run_agent(
             [{"role": "user", "content": case["pergunta"]}],
             sessao["db"], sessao["date_from"], sessao["date_to"],
