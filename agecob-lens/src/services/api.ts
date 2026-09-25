@@ -414,7 +414,7 @@ export interface ExcecaoSemPortfolioRow {
   valor_primeira_parcela: number;
   valor_total: number;
   agente: string;
-  matricula: string;
+  matricula: string | null;
   cpf_mask: string;
   nome_devedor: string;
   data_acordo: string | null;

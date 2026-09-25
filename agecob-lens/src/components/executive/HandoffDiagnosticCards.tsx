@@ -83,7 +83,7 @@ function buildCards(
   cpcRef: number,
   conversaoRef: number,
 ): DiagnosticCard[] {
-  const funnelMap = new Map(funnelData.map((f) => [f.bu, f]));
+  const funnelMap = new Map<string, FunnelDatum>(funnelData.map((f) => [f.bu, f]));
   return data.map((d) => {
     const bench = benchByBu.get(d.bu);
     const cpcBench = bench?.cpc ?? null;
